@@ -1,6 +1,17 @@
-# 수동 작성과 Recorder → Robot/SPICE 변환
+# GUI 기록을 Robot/SPICE 작업으로 바꾸기
 
-이 도구들은 일반 사용자도 실행할 수 있는 공개 Python CLI입니다. AI 없이 폴더를 만들거나 기록을 변환하고, 필요한 부분만 직접 수정할 수 있습니다. requirements는 기존 설치 안내를 따릅니다. 명령은 저장소 루트의 호스트 터미널에서 실행합니다.
+사용자나 CUA가 수행한 GUI 작업을 지원하는 Python 기록으로 남기고, 검토한 기록을 RPA로 바꾸는 단계입니다. 다음 실행에서는 AI가 클릭 순서를 다시 해석하는 대신 작업 ID와 입력값으로 패키지를 호출하도록 만드는 것이 목적입니다. [전체 사용 흐름](WORKFLOWS.md)
+
+현재 변환기는 지원하는 PyAutoGUI Python 구문을 정적으로 읽어 SPICE용 Robot/Python 패키지를 만듭니다. 임의의 CUA 로그나 동영상은 자동 변환하지 않습니다. VirtualBox 재생은 해당 백엔드의 입력 코드에 맞게 따로 연결해야 합니다. 아래 CLI는 AI 없이도 실행할 수 있으며 명령은 저장소 루트의 호스트 터미널에서 실행합니다.
+
+```mermaid
+flowchart LR
+    R[지원하는 GUI 동작 기록] --> A[AST 정적 분석]
+    A --> P[Robot · Python · manifest]
+    P --> V[민감 정보 · 좌표 · 성공 조건 검토]
+    V --> T[대상 VM에서 검증]
+    T --> U[이름과 입력값으로 재사용]
+```
 
 ## A. 직접 RPA 폴더 만들기
 
@@ -34,7 +45,7 @@
 
 Windows VM 안에서 Recorder를 실행하고 프로그램을 Win+R로 여는 것부터 기록하세요. 기록 당시 게스트 해상도, Windows 배율, 브라우저 확대율을 메모하고 재생 시에도 유지합니다. 기록 파일을 호스트로 복사합니다. 확장자가 없어도 Python 코드이면 읽습니다.
 
-이번 입력 파일은 `/home/ssh1032007/naver_login_rpa`이며 다음 명령으로 변환했습니다.
+개발 때 사용한 기록은 `/home/ssh1032007/naver_login_rpa`입니다. 다음 명령으로 Windows 네이버 로그인 화면 도달 예시를 만들었습니다.
 
 ```bash
 .venv/bin/python scripts/convert_recording.py ~/naver_login_rpa \
@@ -113,4 +124,4 @@ Robot은 현재 데이터 파일의 이벤트 개수를 읽어 순서대로 호�
 
 > 홈 폴더의 naver_login_rpa를 실행하지 말고 정적 분석해서 Windows용 Robot/SPICE 패키지로 변환해줘. Windows는 Win+R을 사용하고, 좌표·대기·성공 검증을 검토해줘.
 
-실패한 좌표를 이후 보정할 때는 `$spice-rpa-repair`로 최신 OCR·YOLO 근거를 확인합니다. 변환 자체는 AI API를 호출하지 않습니다. 동영상/매크로를 직접 기록하는 Recorder도 이 프로젝트에서 새로 구현한 것은 아니며, 사용자가 제공한 코드 파일을 변환합니다.
+실패한 좌표를 이후 보정할 때는 `$spice-rpa-repair`로 최신 OCR·YOLO 근거를 확인합니다. 변환기 자체는 AI API를 호출하지 않습니다. GUI 레코더는 별도 프로그램이며, 변환기는 저장된 Python 동작 코드를 읽습니다. 처음 검토와 화면 검증을 마친 패키지는 작업 설명·실행 변수·결과 요약을 이용해 다시 호출할 수 있습니다.

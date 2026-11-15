@@ -1,8 +1,8 @@
 # VAMP icon
 
-Publisher: `wayfarer6`. Extension ID: `wayfarer6.vamp-mcp` (publication pending).
+Publisher: `wayfarer6`. Extension ID: `wayfarer6.vamp-mcp`.
 
-The project icon is [vscode-extension/icon.png](../vscode-extension/icon.png), generated with the built-in `image_gen` tool and copied into the repository. The extension manifest references this PNG; the VSIX includes it. The design combines a friendly bat with a virtual-machine monitor. It is not copied from a third-party logo.
+[vscode-extension/icon.png](../vscode-extension/icon.png) is the icon used in the VSIX, the GitHub README and the extension README. It was generated with `image_gen` and combines a bat with a virtual-machine monitor. The source prompt is preserved below.
 
 Generation prompt:
 

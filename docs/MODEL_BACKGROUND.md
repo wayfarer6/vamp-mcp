@@ -1,6 +1,6 @@
-# 모델 상주 프로세스 — systemd 없이 실행
+# YOLO·OCR 모델 프로세스
 
-YOLO와 PaddleOCR를 각기 독립 Python 프로세스에 한 번 로드하고 재사용합니다. RPA가 끝나거나 MCP 클라이언트가 종료돼도 모델 프로세스는 유지됩니다. systemd unit이나 부팅 서비스는 설치하지 않습니다.
+YOLO와 PaddleOCR를 각각 별도의 Python 프로세스에 로드해 다음 RPA에서도 재사용합니다. RPA가 끝나거나 MCP 클라이언트가 종료돼도 모델 프로세스는 유지됩니다. systemd unit이나 부팅 서비스는 설치하지 않습니다.
 
 ```bash
 # 두 프로세스를 백그라운드로 띄우고 모델 준비까지 기다린 뒤 반환

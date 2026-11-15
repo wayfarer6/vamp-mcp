@@ -57,6 +57,6 @@ VAMP는 새 VM과 `vm_start` 대상에 `GUI/Scale=true`, `GUI/AutoresizeGuest=fa
 
 이 도구는 게스트 창 크기 자동 변경을 끄고 Scaled Mode를 저장합니다. 실행 중이면 `setvideomodehint 1920 1080 32`를 요청한 뒤 PNG 스크린샷의 실제 픽셀 크기를 확인합니다. 요청은 드라이버 준비/게스트 설정에 따라 즉시 적용되지 않을 수 있습니다. 결과가 `resolution_verified: false`이면 게스트 OS 설정과 드라이버를 확인하고 다시 호출합니다. 즉시 검증이 false라고 VM을 다시 생성하지 않습니다. 해당 검증은 모니터0의 캡처 해상도만 확인하며, OS 배율/글꼴/브라우저 배율까지 자동 확인한 것은 아닙니다.
 
-참고: [Oracle 해상도 힌트/Guest Additions](https://docs.oracle.com/en/virtualization/virtualbox/7.0/user/vboxmanage.html), [Guest Additions 설치](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/guestadditions.html), [VirtualBox GUI 설정 키 원본](https://github.com/VirtualBox/virtualbox/blob/main/src/VBox/Frontends/VirtualBox/src/extradata/UIExtraDataManager.cpp). 실제 VirtualBox/게스트 하드웨어 검증은 사용자 테스트 전입니다.
+참고: [Oracle 해상도 힌트/Guest Additions](https://docs.oracle.com/en/virtualization/virtualbox/7.0/user/vboxmanage.html), [Guest Additions 설치](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/guestadditions.html), [VirtualBox GUI 설정 키 원본](https://github.com/VirtualBox/virtualbox/blob/main/src/VBox/Frontends/VirtualBox/src/extradata/UIExtraDataManager.cpp). Ubuntu 호스트의 Windows·Debian 게스트에서 확인한 결과는 [검증 기록](VALIDATION.md)에 있습니다. 다른 호스트 조합은 별도 시험이 필요합니다.
 
 GNOME Xorg에서는 Mutter가 보고한 설정과 X11 framebuffer가 다를 수 있어 `xrandr`의 실제 연결 출력/루트 크기도 확인·적용합니다. 이는 Debian/Ubuntu의 x11-xserver-utils 패키지를 사용합니다. 게스트 내부 결과와 호스트 PNG 크기는 함께 검증해야 합니다. 관전 영역보다 큰 Full HD 모드를 허용하기 위해 VAMP는 호스트 VirtualBox 사용자 설정 `GUI/MaxGuestResolution=any`도 저장합니다. 다른 VM의 해상도를 강제로 변경하는 설정은 아닙니다.

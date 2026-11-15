@@ -2,10 +2,13 @@
 
 [프로젝트 소개](../README.md) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases)
 
+처음에는 [GUI 작업 기록과 재사용](WORKFLOWS.md)을 읽으면 됩니다. 네이버 로그인 페이지를 여는 예시로 기록·변환·실행·결과 확인 과정을 설명합니다. 설치 방법이 필요하면 사용하는 백엔드의 문서로 넘어가세요.
+
 ## 시작하기
 
 | 문서 | 내용 |
 | --- | --- |
+| [워크플로 재사용](WORKFLOWS.md) | 수동 조작·CUA 기록의 RPA 변환, AI 호출과 결과 확인 |
 | [VS Code 확장](../vscode-extension/README.md) | 설치, 기본 사용과 설정 |
 | [VirtualBox MCP](../backends/virtualbox/README.md) | 호스트 의존성, 도구 목록, MCP 연결과 CLI |
 | [SPICE 설치](INSTALL.md) | 수동·AI 설치, GPU/CPU/NPU 프로필 |

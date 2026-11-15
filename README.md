@@ -1,68 +1,77 @@
-# VAMP — Virtual Agent Machine Platform
+<p align="center">
+  <img src="vscode-extension/icon.png" width="128" height="128" alt="VAMP 박쥐와 VM 아이콘">
+</p>
 
-**로컬 VM 샌드박스에서 반복적인 GUI 작업을 자동화하는 MCP·RPA 프로젝트입니다.**
+# VAMP · Virtual Agent Machine Platform
 
-[다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [전체 문서](docs/README.md) · [데모](docs/DEMOS.md)
+GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
-## 왜 만들었나요?
+[다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md)
 
-로컬 샌드박스에 **OCR과 UI 인식**을 연결하고, 반복적인 GUI 작업을 **Robot Framework·Python RPA**로 실행해 **AI 에이전트의 토큰 비용을 줄이는 것**이 목적입니다. 에이전트가 작업을 구성하고, 정해진 순서와 화면 검증은 로컬 코드가 맡는 방향으로 만들고 있습니다.
+## 만든 이유
 
-> **하루 동안 사용자와 AI 에이전트(Codex)가 바이브 코딩으로 만든 초기 프리뷰입니다.** 기능 완성도·안정성·예외 처리·문서에 아직 부족한 점이 많습니다. 현재 시험한 가상화 환경은 **KVM/SPICE와 VirtualBox 정도**이며, 다른 환경까지 검증한 제품은 아닙니다.
+네이버 로그인 페이지를 여는 일만 해도 브라우저 실행, 주소 입력, 화면 확인이 반복됩니다. 이 과정을 매번 AI가 화면을 보며 판단하고 코드를 다시 읽게 하면 토큰을 계속 쓰게 됩니다.
 
-## 어떻게 동작하나요?
+사용자가 직접 조작하거나 CUA(화면을 보고 컴퓨터를 조작하는 AI)가 수행한 GUI 작업을 기록하고, 검토한 기록을 Robot Framework·Python RPA로 묶어 두려 합니다. 이후에는 AI가 작업 설명과 입력값만 보고 패키지를 골라 실행하고, 결과 요약을 받으면 됩니다. 좌표나 입력 순서 같은 세부 구현은 로컬 코드에 두고, 필요할 때만 로그와 화면을 확인하는 방식으로 토큰 비용을 줄이는 것이 목적입니다.
+
+하루 동안 Codex와 바이브 코딩으로 만들었습니다. 아직 거친 부분과 빠진 기능이 많습니다. 현재 시험한 환경은 KVM/SPICE와 VirtualBox 정도이며, 토큰 절감량을 측정한 상태는 아닙니다.
+
+## 기록한 작업을 다시 쓰는 흐름
 
 ```mermaid
 flowchart LR
-    A[사용자 · AI 에이전트] -->|작업 구성| R[Robot Framework · Python]
-    A -->|도구 호출| M[MCP 서버]
-    R -->|정해진 단계 실행| M
-    M --> H[호스트 가상화 API]
-    H --> V[로컬 VM 샌드박스]
-    V -->|화면 캡처| O[로컬 OCR · UI 인식]
-    O -->|화면 검증 결과| R
-    R -->|실행 결과 요약| A
+    U[사용자 수동 조작 · CUA] --> R[GUI 동작 기록]
+    R --> V[검토 · 변환 · 화면 검증]
+    V --> P[재사용할 RPA 패키지]
+    A[다음 작업을 받은 AI] -->|설명과 입력값으로 선택| P
+    P --> L[로컬 VM에서 실행]
+    L --> S[결과 요약 · 로그 · 실행 이력]
+    S --> A
+    L -. 필요할 때 .-> I[스크린샷 · OCR · UI 인식]
+    I -. 확인 결과 .-> A
 ```
 
-주요 배포 경로는 **VirtualBox MCP + VS Code 확장**입니다. SPICE/KVM은 별도의 Python·Robot 엔진으로 실행하며, SPICE MCP 래퍼는 [`feat/vm-mcp-server`](https://github.com/wayfarer6/vamp-mcp/tree/feat/vm-mcp-server) 브랜치에 있습니다. OCR·UI 인식은 저장소의 선택적 구성으로, VSIX에 포함되지 않습니다.
-
-[구조와 구성 요소](docs/MCP_ARCHITECTURE.md)
+현재 지원하는 기록 변환은 PyAutoGUI 코드에서 SPICE용 RPA를 만드는 경로입니다. 임의의 CUA 기록을 모두 자동 변환하거나, 같은 기록을 VirtualBox에서 바로 재생하는 부분은 아직 연결하지 못했습니다. [예시와 현재 범위](docs/WORKFLOWS.md)
 
 ## 주요 기능
 
-- **화면과 입력:** VM 화면 캡처, 키보드·마우스 제어, OCR·UI 영역 인식.
-- **RPA 실행:** Robot/Python 작업 패키지와 수동 녹화 코드의 검토·변환.
-- **기록과 조회:** 선택적 GUI 레코더, 공유 소스 가져오기, 실행 영상·스크린샷·이력 조회.
-- **VirtualBox 도구:** VM 조회·기동, ISO 무인 설치 시작, 해상도 설정과 명시적 스냅샷 작업.
+| 기능 | 할 수 있는 일 |
+| --- | --- |
+| GUI 작업 기록·재사용 | 클릭과 키 입력을 저장하고, 검토한 작업을 Robot/Python 패키지로 실행 |
+| 로컬 화면 제어 | VM 화면 캡처, 키보드·마우스 입력, 선택적 OCR·UI 영역 인식 |
+| 기록·로그 확인 | 녹화 소스, 실행 요약, Robot 로그·보고서와 SQLite 실행 이력 확인 |
+| 필요한 화면만 보기 | 현재 화면이나 저장한 스크린샷을 확인하고, 켜 둔 실행 영상은 로컬에서 재생 |
+| VirtualBox MCP | VS Code에서 VM 조회·기동, ISO 설치 시작, 해상도·공유폴더·스냅샷 도구 사용 |
 
-## 빠른 시작 — VS Code
+OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualBox MCP가 들어 있으며, SPICE·YOLO·PaddleOCR 전체가 포함되지는 않습니다. [구성도](docs/MCP_ARCHITECTURE.md) · [로그·스크린샷 조회](docs/EXECUTION_HISTORY.md)
 
-1. 호스트에 **VirtualBox 7.x**와 **Python 3.11+**를 설치합니다.
+## 시작하기
+
+1. 호스트에 VirtualBox 7.x와 Python 3.11+를 설치합니다.
 2. [Marketplace](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) 또는 [Release의 VSIX](https://github.com/wayfarer6/vamp-mcp/releases)로 확장을 설치합니다.
 3. 명령 팔레트에서 **VAMP: Set Up Python Environment**를 실행합니다.
 4. MCP 서버 목록에서 **VAMP VirtualBox**를 시작하고 기존 VM을 조회합니다.
 
-새 VM은 **VAMP: Create VM From ISO**로 준비할 수 있습니다. 공개 테스트 계정은 `vboxuser` / `password123!`이며, Windows 라이선스는 사용자가 준비합니다. 설치 시작 응답은 OS 설치 완료를 뜻하지 않습니다.
+새 VM을 만들 때는 **VAMP: Create VM From ISO**를 사용합니다. Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 준비하고, 정품 인증도 직접 진행해야 합니다. VAMP에는 Windows ISO·제품 키·라이선스가 포함되지 않습니다. 기본 계정 `vboxuser` / `password123!`는 공개 테스트용입니다. 설치 시작 응답은 설치 완료를 뜻하지 않습니다.
 
-[확장 사용법](vscode-extension/README.md) · [VirtualBox MCP 직접 연결](backends/virtualbox/README.md) · [SPICE 설치](docs/INSTALL.md)
+[확장 사용법](vscode-extension/README.md) · [VirtualBox MCP 직접 연결](backends/virtualbox/README.md) · [SPICE 설치](docs/INSTALL.md) · [VM 준비사항](docs/GUEST_AUTOMATION.md)
 
-## 실제 실행 영상
+## 실행 영상과 문서
 
 [![키보드 입력과 OCR 시연](docs/media/keyboard-ocr.gif)](docs/media/keyboard-ocr.mp4)
 
 [키보드·OCR](docs/media/keyboard-ocr.mp4) · [녹화 공유](docs/media/recorder-share.mp4) · [Windows 호스트 MCP](docs/media/windows-host-mcp.mp4) · [중첩 VM](docs/media/nested-windows-host.mp4)
 
-실제 FHD 화면을 약 2 fps로 캡처하고 여백을 더한 QHD 영상입니다. [검증 근거·재현 방법](docs/DEMOS.md)
-
-## 문서와 현재 범위
+실제 FHD 화면을 약 2 fps로 캡처한 뒤 여백을 더한 QHD 영상입니다. [재현 방법](docs/DEMOS.md)
 
 | 알아볼 내용 | 문서 |
 | --- | --- |
-| MCP 구조·백엔드별 역할 | [아키텍처](docs/MCP_ARCHITECTURE.md) |
-| 설치·의존성·실행 | [문서 목차](docs/README.md) · [SPICE 실행](docs/SPICE_GUIDE.md) |
-| Robot/Python 작업 작성·녹화 변환 | [RPA 패키지](rpas/README.md) · [녹화 변환](docs/RECORDING_CONVERSION.md) |
-| 실제 시험 결과와 미검증 기능 | [검증 기록](docs/VALIDATION.md) |
+| 작업을 기록하고 AI가 다시 실행하는 방법 | [워크플로 재사용](docs/WORKFLOWS.md) |
+| RPA 작성과 녹화 변환 | [패키지 규격](rpas/README.md) · [변환 가이드](docs/RECORDING_CONVERSION.md) |
+| 실행 결과·로그·영상·스크린샷 | [실행 이력](docs/EXECUTION_HISTORY.md) |
+| 설치와 백엔드 구성 | [문서 목차](docs/README.md) · [아키텍처](docs/MCP_ARCHITECTURE.md) |
+| 시험한 기능과 남은 문제 | [검증 기록](docs/VALIDATION.md) |
 
-**KVM/SPICE·VirtualBox 시험 경험을 바탕으로 개발 중입니다.** 새 OS 무인 설치 완료, 스냅샷 복원과 다양한 호스트·가속기 조합은 추가 검증이 필요합니다. [Hyper-V](backends/hyperv/README.md)는 실험적 기동 코드이며 실제 동작은 검증하지 않았습니다.
+새 OS 무인 설치 완료와 스냅샷 복원은 미검증입니다. Hyper-V는 실험적 기동 코드만 있으며 실제 동작을 시험하지 않았습니다. SPICE MCP 래퍼는 [`feat/vm-mcp-server`](https://github.com/wayfarer6/vamp-mcp/tree/feat/vm-mcp-server) 브랜치에 있습니다.
 
 직접 작성한 코드와 문서는 [MIT](LICENSE)입니다. 게스트 레코더의 GPL-3.0 등 외부 라이선스는 [별도 고지](THIRD_PARTY_NOTICES.md)를 확인하세요.

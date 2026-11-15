@@ -1,10 +1,16 @@
-# 설치: 수동 실행과 AI 에이전트
+# SPICE 설치
 
-이 프로젝트는 사용자가 요구사항을 제시하고 AI 에이전트(Codex)와 바이브 코딩으로 개발한 프로젝트입니다. **실제 실행·검증 환경은 Ubuntu 26.04.1 LTS + NVIDIA GeForce RTX 3050 Laptop GPU입니다.** AMD·Apple·NPU 설치 구성은 실행 경로를 제공하지만, 별도 장비에서 설치·추론·전체 RPA를 검증하지 않았습니다.
+이 문서는 SPICE 화면 제어와 YOLO·OCR을 호스트에 설치하는 방법입니다. VS Code 확장이나 VirtualBox MCP만 쓰려면 [확장 안내](../vscode-extension/README.md)와 [VirtualBox 설치](../backends/virtualbox/README.md)를 참고하세요.
 
-## 호스트와 게스트를 구분하세요
+실제로 시험한 호스트는 Ubuntu 26.04.1 LTS와 NVIDIA GeForce RTX 3050 Laptop GPU입니다. AMD·Apple·NPU용 설정도 있지만 해당 장비에서는 설치와 전체 RPA를 검증하지 않았습니다.
 
-requirements는 SPICE를 제어하는 **호스트**에 설치합니다. 게스트인 Debian VM과 Windows 11 VM에는 Python RPA를 설치하지 않습니다. 두 VM은 1920×1080 기준이며, OS별 실행 절차와 좌표 검증은 별개입니다. 현재 GNOME 실행창·`su root`·`apt update` 예시는 Debian용입니다. Windows 전용 기동·로그인 시나리오는 별도 작성·검증이 필요합니다.
+## 호스트와 게스트 준비
+
+requirements는 VM을 제어하는 호스트에 설치합니다. SPICE 입력에는 게스트 RPA 에이전트가 필요하지 않습니다. GUI 동작을 기록하려면 [레코더](GUEST_RECORDER.md)를 게스트에 별도로 설치할 수 있습니다.
+
+Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 준비해야 합니다. VAMP에는 Windows ISO·제품 키·라이선스가 없으며 정품 인증은 사용자가 진행합니다. 공개 테스트 계정과 Windows 라이선스는 별개입니다. [VM 초기 설정](GUEST_AUTOMATION.md)
+
+Debian과 Windows 예시는 1920×1080을 기준으로 합니다. OS·배율·화면 배치가 다르면 좌표를 다시 확인해야 합니다. GNOME 실행창·`su root`·`apt update` 예시는 Debian용이며 Windows 녹화 작업의 검증 결과는 [워크플로 예시](WORKFLOWS.md)에 있습니다.
 
 ## 1. 수동 설치 — Ubuntu 호스트
 

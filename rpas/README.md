@@ -1,8 +1,10 @@
 # RPA 패키지 규격 v1
 
-이 프로젝트는 AI 에이전트와 바이브 코딩으로 개발했습니다. 실제 실행·검증 호스트는 Ubuntu + NVIDIA입니다. [호스트 설치와 가속기 프로필](../docs/INSTALL.md)을 참고하세요.
+이 패키지는 AI가 같은 GUI 작업의 세부 구현을 매번 다시 읽지 않고, 작업 ID와 입력값으로 호출할 수 있도록 묶은 실행 단위입니다. 네이버 로그인 페이지를 여는 수동 기록 예시는 [워크플로 재사용](../docs/WORKFLOWS.md)에 있습니다. 결과 요약을 먼저 읽고 필요할 때 Robot 로그·OCR·스크린샷을 확인합니다.
 
-게스트 대상은 Debian(`debian13`)과 Windows 11(`windows-RPA`)로 구분하고 둘 다 1920×1080 기준을 사용합니다. 동일 해상도가 동일 좌표·UI를 보장하지는 않습니다. 현재 GNOME Firefox 기동·로그인 준비와 apt update는 Debian용이며, Windows 전용 작업은 별도로 작성·검증해야 합니다. 패키지 선택과 호스트 GPU/NPU 프로필 선택은 별개입니다.
+실제 시험한 호스트는 Ubuntu + NVIDIA이며 설치는 [호스트와 가속기 프로필](../docs/INSTALL.md)을 참고하세요.
+
+게스트 대상은 Debian(`debian13`)과 Windows 11(`windows-RPA`)로 구분하고 둘 다 1920×1080 기준을 사용합니다. 동일 해상도가 동일 좌표·UI를 보장하지는 않습니다. GNOME Firefox 기동·로그인 준비와 apt update 예시는 Debian용입니다. Windows 수동 기록의 로그인 화면 도달 예시는 별도로 검증했습니다. 패키지 선택과 호스트 GPU/NPU 프로필 선택은 별개입니다.
 
 RPA 한 개를 폴더 하나로 관리합니다. 각 폴더에는 하나 이상의 `.robot` 실행 파일, RPA 전용 Python 라이브러리, 실행 메타데이터가 들어갑니다. Robot Framework의 표준 확장자는 `.robot`입니다.
 
@@ -139,7 +141,7 @@ Robot의 작업·키워드 시작/종료 경계를 녹화 시작·종료나 타�
 .venv/bin/python scripts/run_rpa.py firefox_launch --listener my_recorder.py
 ```
 
-`--listener`에는 사용자가 구현·설치한 Robot listener를 전달합니다. **현재 동영상 녹화나 수동 조작을 Robot 파일로 바꾸는 매크로 녹화기는 구현하지 않았습니다.** Python 내부의 세부 동작을 별도 타임라인으로 남기려면 해당 라이브러리에도 계측을 추가해야 합니다. SPICE 영상 녹화는 기존 세션의 화면을 재사용해야 하며, 별도 SPICE 클라이언트 연결은 제어 연결을 대체할 수 있습니다. 개인 계정 입력 구간은 녹화·자동 캡처 대상에서 제외하세요.
+`--listener`에는 사용자가 구현·설치한 Robot listener를 전달합니다. 수동 PyAutoGUI 기록의 SPICE 변환은 [변환기](../docs/RECORDING_CONVERSION.md), VirtualBox 실행 영상은 [RecordingListener](../docs/EXECUTION_HISTORY.md)를 사용합니다. 임의의 CUA 기록 자동 변환과 SPICE 자체 영상 Listener는 아직 없습니다. Python 내부의 세부 동작을 별도 타임라인으로 남기려면 해당 라이브러리에도 계측을 추가해야 합니다. SPICE 영상 녹화는 기존 세션의 화면을 재사용해야 하며, 별도 SPICE 클라이언트 연결은 제어 연결을 대체할 수 있습니다. 개인 계정 입력 구간은 녹화·자동 캡처 대상에서 제외하세요.
 
 [Robot listener 공식 문서](https://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html#listener-interface)
 

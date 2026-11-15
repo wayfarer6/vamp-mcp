@@ -1,45 +1,55 @@
-# VAMP MCP architecture
+# VAMP 구성과 실행 경로
 
-Prototype motivation: use a local VM sandbox, OCR/UI recognition and reusable Robot/Python workflows to reduce AI token use on repetitive GUI work. Built in one day with user-directed vibe coding; completeness, reliability and documentation remain limited. Only KVM/SPICE and VirtualBox have been tried so far; Hyper-V is experimental and untested.
+VAMP는 한 번 검토한 GUI 작업을 로컬 RPA로 보관하고, AI가 다음 요청에서 그 작업을 다시 실행하도록 만드는 프로젝트입니다. [워크플로 예시](WORKFLOWS.md)에서 기록·검토·재사용 과정을 설명합니다.
 
-VAMP exposes host-side VM tools to an AI agent through MCP over stdio. Robot Framework controls scenario order and assertions; Python implements VM operations and optional vision. Guest input is delivered through the hypervisor rather than a guest RPA agent.
+## AI가 선택하는 부분과 로컬에서 실행하는 부분
+
+AI는 작업의 설명·입력값·성공 조건을 보고 실행할 패키지를 고릅니다. Robot과 Python이 VM 입력과 화면 검증을 맡고, 결과 요약과 상세 파일 경로를 돌려줍니다. 새 작업을 만들거나 실패 원인을 고칠 때는 코드와 화면을 더 살펴볼 수 있습니다.
 
 ```mermaid
-flowchart TD
-  A[AI agent / VS Code MCP client] -->|stdio JSON-RPC| B[VAMP VirtualBox server.mjs]
-  B --> C[Pinned mcp-virtualbox display and input adapter]
-  B --> D[First-party Python lifecycle and evidence helpers]
-  C --> E[Host VBoxManage / matching VirtualBox Python SDK]
-  D --> E
-  E --> F[Windows or Linux guest: native 1920 x 1080]
-  F -->|PNG| G[Optional persistent YOLO and PaddleOCR workers]
-  G --> A
-  H[Robot suite: run.robot] --> I[workflow.py / client.py]
-  I -->|same MCP tools| B
-  H --> J[RecordingListener]
-  J --> K[SQLite history + screenshots + optional VM video]
-  F --> L[Optional GUI action recorder]
-  L -->|VAMPRecords shared folder| M[Host recording source and handoff JSON]
-  M -->|inspect only; no source execution| B
+flowchart TB
+    A[AI 에이전트] -->|작업 ID · 입력값| R[Robot 시나리오]
+    R --> P[Python 동작 · 검증]
+    P --> B{백엔드}
+    B -->|VirtualBox| M[MCP stdio · 호스트 VBoxManage와 SDK]
+    B -->|KVM| S[SPICE 화면 · 입력 채널]
+    M --> V[로컬 VM]
+    S --> V
+    V --> C[화면 캡처]
+    C --> O[선택적 로컬 YOLO · OCR]
+    O --> P
+    R --> Q[결과 요약 · 상세 기록 경로]
+    Q --> A
+    A -. 직접 VM 도구 호출 .-> M
 ```
 
-## Components and boundaries
+VirtualBox MCP는 `main`, SPICE MCP 래퍼는 `feat/vm-mcp-server` 브랜치에 있습니다. SPICE Robot 작업은 MCP 없이도 SPICE 엔진을 직접 사용합니다. Hyper-V는 실험적 VMConnect 기동 코드이며 이 경로의 실제 검증 대상에는 포함되지 않습니다.
 
-| Component | Location | Responsibility |
+## 구성 요소
+
+| 구성 | 위치 | 역할 |
 | --- | --- | --- |
-| VirtualBox MCP | `backends/virtualbox/server.mjs` | 19 tools; VM inventory, lifecycle, display/input, recording imports and evidence |
-| Robot client | `backends/virtualbox/client.py` | Starts a lightweight Node MCP server and saves image payloads locally |
-| RPA package | `backends/virtualbox/rpas/<id>/` | `.robot`, Python workflow and manifest per task |
-| Guest preparation | `guest_setup/recorder/` | Optional recorder, login display hooks and Debian mirrors |
-| Execution evidence | `history.py`, `recording_listener.py` | Host SQLite, PNGs and opt-in low quality video |
-| VS Code distribution | `vscode-extension/` | Bundled Node server, host Python environment setup and onboarding |
-| Other backends | SPICE main code / Hyper-V folder | Separate transports; Hyper-V console launch remains experimental |
+| VirtualBox MCP | `backends/virtualbox/server.mjs` | 화면·입력·VM 관리·녹화 소스·실행 이력 도구 19개 |
+| Robot 클라이언트 | `backends/virtualbox/client.py` | Node MCP 서버 호출과 이미지 파일 저장 |
+| 작업 패키지 | `rpas/<id>/`, `backends/virtualbox/rpas/<id>/` | Robot 순서, Python 구현, manifest와 작업 설명 |
+| 화면 인식 | `vision.py`, `model_daemon.py` | 선택적으로 설치하는 YOLO·PaddleOCR 프로세스 |
+| 게스트 준비 | `guest_setup/recorder/` | 레코더, 로그인 시 해상도 설정과 Debian 미러 설정 |
+| 실행 기록 | `history.py`, `recording_listener.py` | SQLite 이력, 스크린샷과 선택적 영상 |
+| VS Code 확장 | `vscode-extension/` | VirtualBox MCP 번들, 호스트 Python 환경 준비와 명령 |
 
-Ordinary screenshots, keyboard and mouse operations do not need Guest Additions commands. Shared folders, recorder installation and explicitly selected guest-file imports do use Guest Additions. Mouse injection needs the matching **host** VirtualBox SDK, and on Windows its COM Python support. Installing Python alone does not install hypervisor drivers or the SDK.
+## 녹화와 실행 기록
 
-The guest GUI recorder captures user actions into Python. Execution video records what a Robot scenario did. They are separate features. Imported Python is parsed and reviewed before conversion; the import tool does not execute it.
+동작 레코더는 클릭·키 입력을 Python 소스로 저장합니다. 저장한 코드를 가져와 검토하고 변환해야 재생 가능한 RPA가 됩니다. 가져오기 도구는 소스를 실행하지 않습니다. 현재 자동 변환 런타임은 SPICE용이며 VirtualBox용 재생 연결은 별도로 작성해야 합니다.
 
-The SPICE FastMCP server lives on `feat/vm-mcp-server`; the VirtualBox entrypoint above is available on `main`. The extension bundles the VirtualBox tools, not the entire SPICE/YOLO/PaddleOCR environment.
+실행 이력은 RPA를 돌렸을 때의 결과입니다. Robot 로그·보고서, 관찰 세션의 SQLite 이벤트, PNG와 선택적 영상이 남습니다. AI는 먼저 요약을 읽고 필요할 때 로그나 스크린샷을 확인할 수 있습니다. [기록 종류와 조회 방법](EXECUTION_HISTORY.md)
+
+## 호스트와 게스트에 필요한 것
+
+일반 화면 캡처와 키보드 입력은 호스트 VirtualBox를 사용합니다. 마우스 입력에는 VirtualBox 버전에 맞는 호스트 Python SDK가 필요하고, Windows 호스트는 COM Python 지원도 필요합니다. 공유폴더·게스트 파일 가져오기는 Guest Additions 지원을 사용합니다.
+
+VSIX에는 VirtualBox MCP가 들어 있습니다. SPICE, YOLO와 PaddleOCR는 저장소에서 따로 설치합니다. Windows 11 게스트의 ISO와 유효한 라이선스는 사용자가 준비하고 정품 인증도 직접 진행합니다. VAMP는 Windows 이미지나 제품 키를 제공하지 않습니다.
+
+하루 동안 Codex와 바이브 코딩으로 만든 초기 버전입니다. 시험한 환경은 KVM/SPICE와 VirtualBox 정도입니다. 토큰 비용을 줄이려는 설계이며 실제 절감량은 측정하지 않았습니다.
 
 ## Windows host validation
 

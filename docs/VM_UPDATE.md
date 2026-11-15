@@ -1,6 +1,6 @@
 # Debian VM apt update RPA 실행 가이드
 
-새 작업의 표준 진입점은 RPA 패키지입니다.
+`debian_update` 패키지를 호출하면 로컬 SPICE·OCR 코드가 Debian의 패키지 목록을 갱신하고 결과를 요약해 반환합니다. 상세 구현을 매번 읽지 않고 작업을 다시 쓰는 예시입니다.
 
 ```bash
 cd /home/ssh1032007/spice_kvm_based_rpa
@@ -13,14 +13,14 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 
 ## 1. 실행 전 준비
 
-현재 호스트에는 `.venv`와 `.venv-ocr`가 준비되어 있습니다. **호스트 터미널**에서 다음 디렉터리로 이동하세요.
+[설치 절차](INSTALL.md)로 `.venv`와 `.venv-ocr`를 준비한 뒤 호스트 터미널에서 저장소로 이동합니다. 아래 경로와 VM 주소는 개발 환경의 예시입니다.
 
 ```bash
 cd /home/ssh1032007/spice_kvm_based_rpa
 ```
 
 - `debian13` VM이 실행 중이고 Debian GNOME 데스크톱에 로그인되어 있어야 합니다. 잠금 화면은 먼저 해제하세요.
-- SPICE 주소는 `spice://127.0.0.1:5900`입니다.
+- 예시 SPICE 주소는 `spice://127.0.0.1:5900`입니다. 실제 VM 주소를 확인해 설정 파일과 실행 인자를 맞추세요.
 - 게스트 키보드는 US 영문 입력 상태로 두세요.
 - 실행 중에는 VM에 직접 키보드·마우스 입력을 하지 마세요. 다른 RPA도 동시에 실행하지 마세요.
 - 새 SPICE 연결은 기존 virt-manager 뷰어 연결을 대체할 수 있습니다. 실행 중 뷰어를 재연결하면 RPA가 끊길 수 있습니다.

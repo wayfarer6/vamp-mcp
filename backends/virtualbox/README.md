@@ -1,6 +1,10 @@
-# VirtualBox RPA (Ubuntu 호스트에서 기존 VM 검증)
+# VirtualBox MCP와 Robot 실행
 
-SPICE/KVM과 별도로 동작하는 호스트용 백엔드입니다. 원본 [chryaner/mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox)의 화면·입력 구현을 실제 호출합니다. VM 게스트에 RPA 에이전트를 설치하지 않습니다. Windows/Linux 호스트에서 사용하도록 작성했으며, 현재 Ubuntu 호스트의 Win-RPA/Windows 11과 Debian-RPA/Debian 13에서 실행·입력·해상도·공유 녹화·Robot 이력을 검증했습니다. 오프라인 스냅샷 생성·조회·삭제도 확인했습니다. 실제 새 OS 무인 설치 완료와 스냅샷 복원은 미검증입니다. Windows 호스트의 실제 MCP stdio 목록·설정·이력 조회를 추가 검증했으며, macOS 호스트는 테스트 전입니다. 자세한 범위는 [검증 기록](../../docs/VALIDATION.md)을 확인하세요.
+VS Code와 다른 MCP 클라이언트에서 VirtualBox의 화면·입력·VM 관리 도구를 호출하는 백엔드입니다. 상류 [mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox)의 화면·입력 코드를 사용합니다. 일반 제어에는 게스트 RPA 에이전트가 필요하지 않습니다.
+
+저장한 GUI 동작 소스와 실행 기록을 조회하고, Robot 작업에서 이 도구들을 사용할 수 있습니다. 기록을 RPA로 바꿔 AI가 나중에 다시 호출하는 사용 흐름은 [워크플로 예시](../../docs/WORKFLOWS.md)에 있습니다. 현재 녹화 변환 런타임은 SPICE용이며 VirtualBox 재생 코드는 별도로 작성해야 합니다.
+
+Ubuntu 호스트의 Windows 11·Debian 13 게스트와 Windows 내부 MCP·중첩 EFI VM을 시험했습니다. 새 OS 무인 설치 완료, 스냅샷 복원과 물리 Windows/macOS 호스트는 미검증입니다. [검증 기록](../../docs/VALIDATION.md)
 
 ## 설치
 
@@ -15,7 +19,7 @@ npm run build
 cd ../..
 ```
 
-Windows에서는 `python -m venv .venv-virtualbox`, `.venv-virtualbox\Scripts\python.exe`를 사용하세요. Node와 VBoxManage가 PATH에 있어야 하며, 다른 경로면 `VBOXMANAGE_PATH` 환경 변수에 VBoxManage 실행 파일의 절대 경로를 지정합니다. 마우스 클릭은 별도로 VirtualBox SDK의 호스트 Python 바인딩(`vboxapi`)과 VM의 **USB Tablet** 설정이 필요합니다. `PYTHON_PATH`는 이 SDK를 import할 수 있는 호스트 Python 실행 파일을 가리킵니다. SDK를 설치한 Python과 RPA venv가 달라도 됩니다. 키보드/스크린샷에는 마우스 SDK가 필요하지 않습니다. Guest Additions의 게스트 명령 실행이나 SSH는 사용하지 않습니다.
+Windows에서는 `python -m venv .venv-virtualbox`, `.venv-virtualbox\Scripts\python.exe`를 사용하세요. Node와 VBoxManage가 PATH에 있어야 하며, 다른 경로면 `VBOXMANAGE_PATH` 환경 변수에 VBoxManage 실행 파일의 절대 경로를 지정합니다. 마우스 클릭은 별도로 VirtualBox SDK의 호스트 Python 바인딩(`vboxapi`)과 VM의 **USB Tablet** 설정이 필요합니다. `PYTHON_PATH`는 이 SDK를 import할 수 있는 호스트 Python 실행 파일을 가리킵니다. SDK를 설치한 Python과 RPA venv가 달라도 됩니다. 키보드·스크린샷에는 마우스 SDK가 필요하지 않습니다. 일반 제어에는 게스트 명령 실행이나 SSH를 쓰지 않습니다. 공유폴더와 선택한 게스트 녹화 파일 가져오기는 Guest Additions 지원이 필요합니다.
 
 ## 실시간 관전: separate 기본값
 
@@ -84,12 +88,12 @@ VM 목록/정보 → `separate` 시작 → 관리자 Show → 관전 창 detach 
 
 AI는 먼저 사용자에게 **VirtualBox 호스트의 ISO 파일 경로**를 받고 이 도구를 한 번 호출합니다. 감지한 Debian amd64/Windows11 x64만 초기 프로필에서 허용합니다. 기본 계정 **vboxuser**, 비밀번호 **password123!**는 공개 샌드박스 기본값이며 Linux root/Windows 관리자에도 동일 비밀번호가 적용될 수 있음을 고지합니다. `installation_started` 이후 설치기는 AI 없이 계속 실행됩니다. `separate`로 관전하며, 결과의 `installation_verified`와 `recorder_installed_verified`는 실제 검증 전 false입니다.
 
-Windows ISO에 따라 에디션 image_index 및 정당한 product_key가 필요할 수 있습니다. 기존 VM 이름/폴더는 덮어쓰지 않습니다. 오류 발생 시 `vamp-install.json`과 일부 생성된 VM/디스크를 보존합니다. 재실행 전에 원인을 확인하고 새 이름 또는 수동 정리를 선택하세요. 실행 도중 호스트의 MCP 클라이언트가 취소되면 이미 시작한 VM은 남아 있을 수 있습니다. OS 설치 전체 완료가 아니라 7분 이내의 호스트 준비/설치 시작 단계만 기다립니다.
+Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 준비하고 정품 인증도 직접 진행해야 합니다. VAMP에는 Windows ISO·제품 키·라이선스가 포함되지 않습니다. ISO에 따라 에디션 image_index 및 product_key가 필요할 수 있습니다. 기존 VM 이름/폴더는 덮어쓰지 않습니다. 오류 발생 시 `vamp-install.json`과 일부 생성된 VM/디스크를 보존합니다. 재실행 전에 원인을 확인하고 새 이름 또는 수동 정리를 선택하세요. 실행 도중 호스트의 MCP 클라이언트가 취소되면 이미 시작한 VM은 남아 있을 수 있습니다. OS 설치 전체 완료가 아니라 7분 이내의 호스트 준비/설치 시작 단계만 기다립니다.
 
 [Oracle unattended 문서](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/vboxmanage.html)를 기준으로 버전별 password 플래그를 선택합니다. 레코더는 전용 DVD 미디어와 post-install hook을 연결합니다. 자세한 라이선스·동작은 [게스트 레코더 안내](../../docs/GUEST_RECORDER.md)에 있습니다.
 
 게스트 OS 자체 **1920×1080 / 배율 100%** 및 호스트 관전 **View → Scaled Mode** 설정은 [해상도 안내](../../docs/VM_DISPLAY.md)를 참고하세요. Windows Guest Additions ISO 삽입은 스크립트로, 설치/UAC 승인과 재부팅은 사용자가 수행합니다.
 
-[초기 설정·매 로그인 해상도·GUI 녹화 공유·스냅샷 안내](../../docs/GUEST_AUTOMATION.md)를 추가했습니다. Debian 네트워크 미러를 자동 설정하고, Windows는 생성 전에 별도 선택과 라이선스 고지를 합니다.
+[초기 설정 안내](../../docs/GUEST_AUTOMATION.md)에서 매 로그인 해상도·GUI 녹화 공유·스냅샷 설정을 확인할 수 있습니다. Debian 네트워크 미러를 자동 설정하고, Windows는 생성 전에 별도 선택과 라이선스 고지를 합니다.
 
 [Robot Listener·영상·SQLite 실행 이력](../../docs/EXECUTION_HISTORY.md)을 참고하세요.

@@ -2,7 +2,7 @@
 
 [프로젝트 소개](../README.md) · [설치](INSTALL.md) · [RPA 패키지 규격](../rpas/README.md)
 
-SPICE 화면·입력, YOLO/PaddleOCR, Debian GNOME 예제와 사용자 인증 인계를 다룹니다. VirtualBox MCP는 [별도 가이드](../backends/virtualbox/README.md)를 사용하세요. 아래 `debian13` / `windows-RPA`는 개발 당시 libvirt 이름이며 현재 VirtualBox VM 이름과 다릅니다.
+SPICE로 화면을 읽고 입력을 보내는 방법과 Debian GNOME 예제입니다. 기록한 작업을 패키지로 만들어 다시 실행하는 흐름은 [워크플로 재사용](WORKFLOWS.md)에 있습니다. VirtualBox MCP는 [별도 가이드](../backends/virtualbox/README.md)를 사용하세요. 아래 `debian13` / `windows-RPA`는 개발 당시 libvirt 이름이며 현재 VirtualBox VM 이름과 다릅니다.
 
 ## 대상 VM: Debian / Windows 11
 
@@ -20,7 +20,7 @@ virsh -c qemu:///system domdisplay debian13
 virsh -c qemu:///system domdisplay windows-RPA
 ```
 
-## Firefox 실행 — Debian GNOME
+## Firefox 실행: Debian GNOME
 
 Debian 검증 예제: `debian13`, 당시 SPICE 주소 `spice://127.0.0.1:5900`, 기준 화면 1920×1080. 실제 실행 주소는 위 VM 구분 절차로 확인하세요.
 
@@ -63,7 +63,7 @@ YOLO는 접근성 API가 아니므로 영역이 실제 버튼인지는 화면과
 
 ### 실패한 RPA의 AI 보정
 
-`$spice-rpa-repair` 스킬을 추가했습니다. 예: “네이버 로그인 RPA가 실패했으니 `$spice-rpa-repair`로 원인을 확인하고 좌표·탐지 규칙을 보정해줘.”
+실패한 작업은 `$spice-rpa-repair`로 원인을 확인하고 보정할 수 있습니다. 예: “네이버 로그인 RPA가 실패했으니 `$spice-rpa-repair`로 원인을 확인하고 좌표·탐지 규칙을 보정해줘.”
 
 AI가 짧은 실패 결과와 Robot 키워드 기록을 읽고, 필요한 경우 현재 OCR·YOLO 좌표를 다시 관찰합니다. UI 위치 변경이면 해당 패키지의 `workflow.py`나 탐지 규칙을 수정하고, Robot 순서 문제이면 `.robot`을 수정합니다. 단위 테스트·dry-run 후 승인된 범위의 안전한 단계만 재검증합니다. CAPTCHA·자격 증명 대기는 사용자에게 넘기고, 로그인 제출 같은 동작을 무조건 반복하지 않습니다.
 
@@ -122,7 +122,7 @@ AI 로그인 스킬은 `.agents/skills/spice-naver-login/SKILL.md`이며 현재 
 
 재현용 의존성 목록은 `requirements.lock.txt`와 `requirements-ocr.lock.txt`에 있습니다. 전자는 현재 Linux/Python 3.14/CUDA 13.2 환경을 기록하므로 다른 Python·GPU 환경에서는 `requirements.txt`를 기준으로 호환 Torch를 선택하세요. 시스템 GI/Pillow는 OS 패키지에서 제공됩니다.
 
-## 공개 Debian VM에서 root apt update — OCR 전용
+## 공개 Debian VM의 apt update: OCR 전용
 
 직접 실행하는 순서는 [VM 업데이트 실행 가이드](VM_UPDATE.md)에 정리했습니다.
 
