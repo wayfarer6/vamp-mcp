@@ -104,6 +104,8 @@ AI 로그인 스킬은 `.agents/skills/spice-naver-login/SKILL.md`이며 현재 
 
 ## 공개 Debian VM에서 root apt update — OCR 전용
 
+직접 실행하는 순서는 [VM 업데이트 실행 가이드](docs/VM_UPDATE.md)에 정리했습니다.
+
 소유자가 공개 배포를 명시적으로 요청한 테스트 자격 증명입니다. `config/sandbox-vm.json`에 VM 이름 `debian13`, SPICE 주소, root 계정과 공개 비밀번호 `password123!`를 기록했습니다. 이 공개 VM 설정과 네이버 등 개인 계정 정보는 별도로 취급합니다.
 
 ```bash
