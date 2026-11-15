@@ -1,0 +1,37 @@
+{
+  "source": "https://github.com/chryaner/mcp-virtualbox",
+  "revision": "b51349126d34824cb211d412fc815f1e2e4ed2a5",
+  "license": "MIT",
+  "modifications": "Source files unchanged. package.json upgrades zod to ^4.6.7 and package-lock.json refreshes compatible dependencies to address npm audit findings; original hashes below are retained.",
+  "sha256": {
+    "LICENSE": "a1478b1ed56a83fd9ae8bc092381c2fa2473d15669b9c6e3e4d21d8ef77db774",
+    "README.md": "14079b20dd9035b368f2767ec08de87d4f39741be038c102a7647707a18c207e",
+    "package-lock.json": "1aab3ac569d6e8b3878bc9288bfa49940277c9b9d06b77b23328c897bb3080fe",
+    "package.json": "f6ce1e680568b7a84cbda3d047046fa741913d2771d6eeed39bef17be81bbef7",
+    "scripts/mouse_click.py": "e7bdc74936a46185be94ce9a7d8b1a687266d18cf1d9a82159e517e623fe87e6",
+    "src/index.ts": "724477c07ec3709038680003d85432f29e72e01f781bbd04515762025e143e5d",
+    "src/scancodes.test.ts": "8b553e87b46cae75318aaae5b0459f34f4be6e6c207b65d6f037664758a6f0eb",
+    "src/scancodes.ts": "240cf9b487808004edad67d57edca3b35f8f9004a7302e615ebeafc2d208e688",
+    "src/tools/display.test.ts": "2f2648bf2cd117237f8060c077cbacf2d362bbfb34907f51358f86c77b8558dc",
+    "src/tools/display.ts": "e8094ef9153da58dca55d8b03412b04afe7fc4e248ff45ac8cd4e49ba8d226a2",
+    "src/tools/guest-control.test.ts": "d46108bcb6fe59214a2dea8e8f49e3bc31eb774dcdca98b7f894c61c4e09b155",
+    "src/tools/guest-control.ts": "e2de9476be733eb63de1a82a56056bb3f912a9ae2fcfd664b5d1d9a795866219",
+    "src/tools/input.test.ts": "07ce6c54d224ade7d7aad8aa4b96fc7f5a8ea590d79347122cd5d18084ab5b37",
+    "src/tools/input.ts": "2dc56ad387e108728fc6121d681799711f485256877044ac10a50d741120ce9c",
+    "src/tools/knowledge.test.ts": "75fafb5c7aba2df08bf0e632d579bd45e1485563f688bbb4ff1f7cfe296136a4",
+    "src/tools/knowledge.ts": "2b876287ef21617b7e9c1af7e62901335451333a7917bbf21a95b96e4ef6280b",
+    "src/tools/lifecycle.test.ts": "e3876d908d5a504847c0181a8ba3bd0834db8e1118fb384ddc5606535696613e",
+    "src/tools/lifecycle.ts": "c937a764874d89c21ab1b9b57e7ff880ac02fe285fd3d4c038f888497950a681",
+    "src/tools/network-exec.test.ts": "51ff0a60c26a595b1b9e2085258386af46f11e031636212170b70a4c13fe84aa",
+    "src/tools/network-exec.ts": "54501de073106ef26330f8e87b14a677265fc9b52adffae95168d460d1f8db4b",
+    "src/types.ts": "b1fddc295d2a1581e242ee5c3beef83d9e93e646d12b8d568fe76c2b0ac9c20f",
+    "src/vbox.test.ts": "b006248019fd671c45b877825c07359215ffaaf6da0602ef72cea3fcd633f63e",
+    "src/vbox.ts": "53f0757141fde327169f87fd0b1a1ebf6c1f46835691a3ff74682da00f4bd1e0",
+    "tsconfig.json": "458b0ce8cb41f22fad5a1ddc521f1f1afc2956bbb338b360b96854baec1d58ba",
+    "vitest.config.ts": "aa7858f05b2261348f1502fa076550b0930672e0df3f054a22e8a8d9b68fb32e"
+  },
+  "modified_sha256": {
+    "package.json": "4c52d63e261b9220c1f81d5ebf4b620253d793ae615c433cabab10bc8991d38f",
+    "package-lock.json": "ac616d4cb0b4c4e7177b2c255ae52396b4ef0c69df8927bcd6fc2b76c7ba27b6"
+  }
+}

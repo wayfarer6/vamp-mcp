@@ -1,0 +1,95 @@
+{
+  "name": "vamp-mcp",
+  "displayName": "VAMP — Virtual Agent Machine Platform",
+  "description": "Local VirtualBox MCP tools for AI agents and RPA, with detachable observation and unattended VM provisioning.",
+  "version": "0.1.0",
+  "publisher": "wayfarer6",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wayfarer6/spice_kvm_based_rpa.git"
+  },
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "MCP",
+    "VirtualBox",
+    "RPA",
+    "AI agent",
+    "VAMP"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "vamp.setupPython",
+        "title": "VAMP: Set Up Python Environment"
+      },
+      {
+        "command": "vamp.openGuide",
+        "title": "VAMP: Open Setup Guide"
+      },
+      {
+        "command": "vamp.createVM",
+        "title": "VAMP: Create VM From ISO"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "vamp.virtualbox",
+        "label": "VAMP VirtualBox"
+      }
+    ],
+    "configuration": {
+      "title": "VAMP",
+      "properties": {
+        "vamp.pythonExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Optional host Python executable path. Otherwise detect Python 3 automatically."
+        },
+        "vamp.vboxManagePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional VBoxManage executable path."
+        },
+        "vamp.mousePythonExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "Optional host Python with VirtualBox SDK vboxapi for mouse input."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.0.vsix",
+    "vscode:prepublish": "npm run build"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.25.0"
+  },
+  "preview": true,
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "^11.0.1"
+    }
+  }
+}

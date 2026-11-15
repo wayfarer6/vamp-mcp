@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from mcp_vm.controller import VMController
 
-mcp=FastMCP('VM RPA',instructions='Use VM profiles to keep Debian and Windows RPAs separate. Prefer compact results and OCR. Hyper-V console launch is not RDP input automation. Credentials stay in dedicated local flows.')
+mcp=FastMCP('VAMP',instructions='Use VM profiles to keep Debian and Windows RPAs separate. Prefer compact results and OCR. Hyper-V console launch is not RDP input automation. Credentials stay in dedicated local flows.')
 controller=VMController()
 READ=ToolAnnotations(readOnlyHint=True,destructiveHint=False)
 WRITE=ToolAnnotations(readOnlyHint=False,destructiveHint=True)
@@ -78,6 +78,22 @@ async def vm_models(action:Literal['start','status','stop','restart']='status') 
 async def hyperv_open_console(vm_name:str,server:str='localhost',start_vm:bool=False) -> dict[str,Any]:
     """Windows-only code: normal UAC -> optional VM startup -> vmconnect.exe. Not tested on Windows; no RDP screen/input implementation is claimed."""
     return await invoke(controller.hyperv_console,vm_name,server,start_vm)
+
+
+@mcp.tool(annotations=WRITE,structured_output=True)
+async def vm_recorder_media() -> dict[str,Any]:
+    """Build independent GPL guest recorder setup ISO. Does not install, mount or start recording in a VM."""
+    from scripts.build_recorder_media import build
+    return await invoke(build)
+
+
+@mcp.tool(annotations=WRITE,structured_output=True)
+async def virtualbox_create(iso_path:str,name:str|None=None,memory_mb:int=4096,cpus:int=2,
+                            disk_mb:int=65536,image_index:int=1) -> dict[str,Any]:
+    """Create a NEW VirtualBox VM and launch unattended install. Disclose public vboxuser/password123! defaults. Starts separate frontend; returns started, not installation verified."""
+    from backends.virtualbox.provision import create
+    return await invoke(create,iso_path=iso_path,name=name,memory_mb=memory_mb,cpus=cpus,
+                        disk_mb=disk_mb,image_index=image_index)
 
 
 if __name__=='__main__':mcp.run(transport='stdio')

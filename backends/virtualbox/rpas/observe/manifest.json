@@ -1,0 +1,7 @@
+{
+  "id": "virtualbox_observe",
+  "backend": "virtualbox",
+  "entry": "run.robot",
+  "python": "workflow.py",
+  "description": "Capture an already-running VirtualBox VM; no application success claim."
+}

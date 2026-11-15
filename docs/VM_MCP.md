@@ -88,3 +88,9 @@ Hyper-V는 [별도 폴더](../backends/hyperv/README.md)와 `$hyperv-rpa` 스킬
 - 단위 테스트와 Robot dry-run.
 - VM이 정지된 뒤 vm_inspect 호출이 입력 없이 차단되는 상태 확인. 실제 MCP 도구 경유 화면 관찰은 실행 중인 VM에서 추가 확인할 대상입니다.
 - Hyper-V/UAC/VMConnect, RDP, AMD·Apple·NPU 장비 실행은 검증하지 않음.
+
+## VAMP 게스트 레코더와 VirtualBox 생성
+
+서버 이름은 VAMP (Virtual Agent Machine Platform)입니다. `vm_recorder_media`는 Windows/Debian용 레코더 ISO를 만들며, SPICE VM에서는 사용자가/libvirt 관리자가 연결한 뒤 게스트 사용자 세션에서 설치기를 실행합니다. 자동 녹화는 하지 않습니다.
+
+`virtualbox_create`는 VirtualBox 호스트의 ISO 경로를 받아 VM 생성·무인 설치 시작·레코더 후속 구성을 스크립트로 처리합니다. 기본 계정 **vboxuser / password123!**는 공개 정보라고 고지합니다. 이 도구는 libvirt VM을 생성하지 않습니다. `installation_started`는 설치 완료 검증이 아니며 실제 VM 시험이 필요합니다. [게스트 레코더](GUEST_RECORDER.md), [VirtualBox](../backends/virtualbox/README.md), [VS Code Marketplace 패키지](VSCODE_MARKETPLACE.md)를 참고하세요.

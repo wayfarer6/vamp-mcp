@@ -1,0 +1,4 @@
+node_modules/**
+build.mjs
+package-lock.json
+*.vsix

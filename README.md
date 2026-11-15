@@ -1,48 +1,19 @@
-# VM RPA MCP Server
+# VAMP — Virtual Agent Machine Platform
 
-호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내는 RPA 프로젝트입니다. 실행 대상은 **Debian VM과 Windows 11 VM으로 구분**합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
+**RPA 및 AI Agent용 VM MCP 플랫폼**입니다. 기존 SPICE/KVM 엔진과 별도의 VirtualBox 백엔드, 실험적 Hyper-V 기동 코드를 제공합니다.
+
+SPICE 엔진은 호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내는 RPA 프로젝트입니다. 실행 대상은 **Debian VM과 Windows 11 VM으로 구분**합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
 
 이 프로젝트는 사용자가 요구사항과 방향을 제시하고 **AI 에이전트(Codex)와 바이브 코딩으로 개발**했습니다. Python·Robot Framework 코드, 스킬과 문서를 AI의 도움으로 작성·수정했습니다.
 
 **실제 실행·검증 환경: Ubuntu 26.04.1 LTS + NVIDIA GeForce RTX 3050 Laptop GPU.** AMD·Apple·NPU는 설치 프로필과 백엔드 경로를 제공하지만 해당 장비에서 별도 검증하지 않았습니다.
-
-## MCP 서버 브랜치
-
-`feat/vm-mcp-server`에서 기존 RPA를 **VM 기반 MCP 서버**로 묶었습니다. AI는 VM 조회·OCR/YOLO 관찰·입력·Robot 패키지 실행을 도구로 호출하고, 짧은 JSON 결과만 받습니다.
-
-```bash
-.venv/bin/python -m pip install -r requirements-mcp.txt
-.venv/bin/python vm_mcp_server.py
-```
-
-stdio MCP 클라이언트에 위 실행 명령을 등록합니다. [MCP 서버 README/설정 안내](docs/VM_MCP.md) · [클라이언트 설정 예시](examples/mcp-client.json)
-
-| 경로 | 구현 범위 | 검증 |
-| --- | --- | --- |
-| Linux QEMU/KVM + SPICE | 화면·키보드·마우스·OCR/YOLO·Robot RPA·MCP | Ubuntu + NVIDIA |
-| Windows Hyper-V | 별도 Python/PowerShell/Robot으로 정상 UAC 요청·선택적 VM 기동·VMConnect 실행 | 코드 작성만; 사용자가 Windows에서 테스트 예정 |
-| Hyper-V RDP 입력·화면 | 별도 어댑터가 필요한 확장 대상 | 미구현 |
-
-[Hyper-V 전용 폴더와 실행법](backends/hyperv/README.md)을 분리했습니다. Windows 게스트를 KVM에서 쓰는 것과 Windows 호스트의 Hyper-V는 다른 구성입니다.
-
-## YOLO·OCR 모델 백그라운드 상주
-
-systemd 없이 독립 Python 프로세스로 실행합니다. 실제 SPICE RPA의 첫 연결에서 자동 시작하고 RPA/MCP 호출이 끝나도 모델을 유지합니다. 미리 로드하거나 상태를 확인하고 명시적으로 종료할 수도 있습니다.
-
-```bash
-.venv/bin/python scripts/model_service.py start
-.venv/bin/python scripts/model_service.py status
-.venv/bin/python scripts/model_service.py stop
-```
-
-별도 `nohup`/`&`는 필요 없습니다. YOLO와 3개 OCR 파이프라인을 유지하고, 일본어·중국어는 같은 인식 모델을 공유합니다. 모델 초기화 비용을 반복하지 않지만 전체 화면 OCR 연산 비용은 남습니다. [백그라운드 실행·성능·로그 안내](docs/MODEL_BACKGROUND.md)
 
 ## 대상 VM: Debian / Windows 11
 
 | 대상 | 현재 libvirt VM 이름 | 공통 기준 해상도 | 현재 시나리오 상태 |
 | --- | --- | --- | --- |
 | Debian VM | `debian13` | 1920×1080 | GNOME Firefox·네이버·root apt update 예제 구현 및 실제 실행 확인 |
-| Windows 11 VM | `windows-RPA` | 1920×1080 | Win+R 기반 기록 재생·네이버 로그인 화면 도달 확인; Hyper-V 테스트는 아님 |
+| Windows 11 VM | `windows-RPA` | 1920×1080 | 녹화 기반 네이버 로그인 화면 도달 검증; Windows 업데이트 절차는 미구현 |
 
 해상도가 같아도 OS·브라우저 배율·글꼴·UI 배치는 다르므로 좌표와 탐지 규칙을 검증 없이 공유하지 않습니다. 공통 SPICE/OCR 엔진을 재사용하고, OS별 `.robot`과 Python 동작은 구분해 관리합니다. 현재 GNOME `Alt+F2`, `su root`, `apt update`를 쓰는 패키지는 Debian용입니다. 게스트 Windows 11과 RPA를 설치하는 호스트 OS는 별개입니다.
 
@@ -78,8 +49,7 @@ rpas/
 | `naver_login` | Debian GNOME 기동 절차 | 로그인 폼 검출 또는 명시적으로 선택한 로그인 제출 |
 | `debian_update` | Debian 전용 | root apt update |
 | `captcha_handoff` | 공통 OCR; Windows 미검증 | CAPTCHA·추가 인증 감지 후 사용자 인계 |
-| `desktop_control` | 공통 SPICE | 화면·OCR·YOLO·좌표·키보드 작업 |
-| `windows_naver_recorded` | Windows 11 KVM | 수동 기록 변환·네이버 로그인 화면 도달 검증 |
+| `desktop_control` | 공통 SPICE; Windows 미검증 | 화면·OCR·YOLO·좌표·키보드 작업 |
 
 ```bash
 cd /home/ssh1032007/spice_kvm_based_rpa
@@ -303,6 +273,22 @@ Error: The repository 'cdrom://[Debian GNU/Linux 13.7.0 ...] trixie Release' doe
 
 사용자의 완료 통보 뒤 한 번 재검사하고 예상하는 다음 화면의 긍정적인 OCR 증거를 확인한 후 이어갑니다. `no_challenge_text`는 안내 문구를 찾지 못했다는 뜻이며, CAPTCHA 해제나 로그인 성공을 보장하지 않습니다. 문구가 없는 이미지형 CAPTCHA, 누락된 폰트, 낮은 OCR 품질은 감지를 방해할 수 있습니다. CAPTCHA의 정답을 읽거나 자동으로 풀지 않습니다.
 
-## 라이선스
+## 라이선스와 추가 백엔드
 
-직접 작성한 코드와 문서는 [MIT](LICENSE)입니다. 가져온 소스·모델·의존성의 원래 라이선스는 유지하며 [별도 고지](THIRD_PARTY_NOTICES.md)를 따릅니다. 전체 YOLO/가중치 의존성까지 MIT로 재허가한 것은 아닙니다.
+직접 작성한 코드와 문서는 [MIT](LICENSE)입니다. 외부 모델·라이브러리·가상화 제품의 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)처럼 별도로 유지합니다.
+
+- [VirtualBox](backends/virtualbox/README.md): main에서 제공. 상류 MIT `mcp-virtualbox`를 포함하며, 기본 `separate` 기동으로 사용자 관전 창과 RPA 실행을 분리합니다. 빌드·단위 테스트·MCP 프로토콜 검증 범위이며 실제 VM은 사용자 테스트 대기입니다.
+- [Hyper-V](backends/hyperv/README.md): 실험적 VMConnect/UAC 기동 코드. RDP 화면·입력 어댑터는 미구현이며 Windows 장비 테스트가 필요합니다.
+- SPICE VM 전체를 MCP로 묶은 구현은 별도 `feat/vm-mcp-server` 브랜치에 있습니다. VirtualBox MCP 엔트리는 main에도 독립적으로 있습니다.
+
+YOLO/OCR은 [별도 백그라운드 Python 프로세스](docs/MODEL_BACKGROUND.md)에서 모델을 유지합니다. systemd 등록 없이 `scripts/model_service.py start/status/stop`으로 관리하며, 실제 SPICE 연결 시 자동으로 시작합니다.
+
+## VS Code Marketplace용 확장
+
+[VAMP 확장 안내](vscode-extension/README.md), [패키징·게시 절차](docs/VSCODE_MARKETPLACE.md). `.vsix` 형식으로 패키징하며 Node MCP 서버를 번들합니다. **VAMP: Set Up Python Environment**가 호스트 전용 venv를 만들고, **VAMP: Create VM From ISO**가 ISO 파일을 선택받아 AI 루프 없이 무인 설치를 시작합니다. 기본 공개 계정은 `vboxuser` / `password123!`입니다. 게시자 인증과 실제 Marketplace 업로드는 별도입니다.
+
+VirtualBox MCP `vm_create`도 ISO 경로 하나로 자동 이름·기본 사양을 선택할 수 있습니다. VM 생성 후 설치를 `separate` 모드로 시작하며, 레코더는 [게스트 설치 안내](docs/GUEST_RECORDER.md)에 따라 Debian postinstall / Windows 최초 바탕화면 로그인 시 구성합니다. 실제 설치 완료를 자동 검증한 상태는 아닙니다.
+
+## 이 브랜치의 통합 MCP
+
+`feat/vm-mcp-server`에는 SPICE 관찰·입력·Robot 실행과 실험적 Hyper-V 도구를 묶은 `vm_mcp_server.py`도 있습니다. [실행·설정](docs/VM_MCP.md) 및 [클라이언트 예시](examples/mcp-client.json)를 참고하세요. VirtualBox 전용 서버/VS Code 확장은 main과 공유하며, 통합 서버에서는 `virtualbox_create`로 무인 VM 생성, `vm_recorder_media`로 게스트 레코더 ISO 생성을 호출할 수 있습니다.

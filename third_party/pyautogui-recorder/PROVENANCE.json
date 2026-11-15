@@ -1,0 +1,16 @@
+{
+  "source": "https://github.com/axel-magard/PyAutoGUI-Recorder",
+  "revision": "6cd48a3bee4ef4dd382e3484feaa4360a37a0a5d",
+  "license": "GPL-3.0",
+  "modifications": "None. Runs as a separate guest program; not imported by MIT host code.",
+  "sha256": {
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "PyAutoGuiRecorder.py": "df3abff4f2904823eae22c687203e92cae39593f7a65595a1f72e2f10437bab5",
+    "README.md": "f0cc6809485e04809134ff6737b592baaa5baadb51213c56021715b03b2d2ec9",
+    "images/Download.png": "242dc02436608bec0c8677ba927b7bddfbeddb8b698834be00048f22eb2d4d3b",
+    "images/Play.png": "d0a418494d846ddbdd385f5b1738c2c52e9313ca3673c19bbc038f88936c4b98",
+    "images/PyAutoGUI-Recorder.png": "81ebe18c73025b810162c3b0582571d41d8fff72d4a22a35ddc413da4da8a0bf",
+    "images/Record.png": "0175e93f558261a1e90e11b9b3617e83c4ba323dd1332dc8e75ae528afa4dcfc",
+    "images/Stop.png": "c9293f53b9ae60986218b14bfce4bfe1ca353948c4b091bc48d0258d6b5564d9"
+  }
+}
