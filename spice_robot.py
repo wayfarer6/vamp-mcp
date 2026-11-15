@@ -92,6 +92,8 @@ class SpiceRobot:
             self._lock.close()
             self._lock = None
             raise RuntimeError('Another RPA session controls this SPICE endpoint; wait for it to finish')
+        from model_daemon import ensure_services
+        ensure_services(wait=False)
         self.session = Spice.Session()
         self.session.set_property('uri', uri)
         self.session.set_property('enable-audio', False)
@@ -221,22 +223,20 @@ class SpiceRobot:
     @keyword
     def detect_guest_targets(self, model='models/omniparser-icon.pt', device='auto', confidence=0.35,
                              output='artifacts/detections.json', image_path=None):
-        from inference_device import prepare_detector
-        requested_device = device
-        detector,device = prepare_detector(model,device,self.models)
-        result = detector.predict(Image.open(image_path) if image_path else self._image(), device=device, imgsz=1280,
-                                          conf=float(confidence), verbose=False)[0]
-        targets = []
-        for index, box in enumerate(result.boxes):
-            coords = [float(v) for v in box.xyxy[0].tolist()]
-            targets.append({'id': index, 'label': result.names[int(box.cls.item())],
-                            'confidence': float(box.conf.item()), 'xyxy': coords,
-                            'center': [(coords[0]+coords[2])/2, (coords[1]+coords[3])/2]})
-        target = Path(output)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps({'device':device,'requested_device':requested_device,'targets':targets}, indent=2))
-        result.save(filename=str(target.with_suffix('.jpg')))
-        return targets
+        from model_daemon import request
+        from tempfile import TemporaryDirectory
+        target=Path(output).resolve();target.parent.mkdir(parents=True,exist_ok=True)
+        def predict(path):
+            return request('yolo',{'op':'predict','image':str(Path(path).resolve()),
+                'model':str(Path(model).resolve()),'device':device,'confidence':float(confidence),
+                'annotated':str(target.with_suffix('.jpg'))},pump=self._pump)
+        if image_path:
+            result=predict(image_path)
+        else:
+            with TemporaryDirectory(prefix='spice-yolo-') as directory:
+                image=Path(directory)/'screen.png';self._image().save(image);result=predict(image)
+        target.write_text(json.dumps({**result,'requested_device':device},indent=2))
+        return result['targets']
 
     @keyword
     def click_detected_target(self, label, model='models/omniparser-icon.pt', device='auto', confidence=0.5):

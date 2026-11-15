@@ -38,7 +38,9 @@ def choose_device(requested='auto'):
 
 
 def prepare_detector(model,requested,cache):
+    from pathlib import Path
     from ultralytics import YOLO
+    model=str(Path(model).expanduser().resolve())
     selected=choose_device(requested)
     key=(str(model),selected)
     if key not in cache:

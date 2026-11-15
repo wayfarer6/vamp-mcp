@@ -20,3 +20,5 @@ Report `succeeded`, `completed_with_warnings`, `failed` or the exact unverified 
 Future recording hooks belong around Robot tasks/keywords (`--listener`); the current package does not implement video recording.
 
 For a genuine workflow/locator failure within an authorized repair task, use `spice-rpa-repair/SKILL.md` to diagnose the saved run before changing coordinates. Preserve this skill's verification and credential boundaries; a system error or user handoff is not automatically a broken locator.
+
+Model lifetime: real SPICE connections auto-start detached YOLO/OCR processes. Keep them running across RPA/skill calls; do not stop/restart after each task. Use `scripts/model_service.py status` or explicit start/stop only when needed. See `docs/MODEL_BACKGROUND.md`; no systemd service is installed. Hyper-V uses its separate experimental `hyperv-rpa` skill/backend, not SPICE transport.

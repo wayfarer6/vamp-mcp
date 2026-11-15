@@ -1,0 +1,4 @@
+interface:
+  display_name: "Hyper-V RPA"
+  short_description: "Open Hyper-V consoles with normal UAC elevation"
+  default_prompt: "Use $hyperv-rpa to prepare or open the requested Hyper-V VM console on my Windows host."

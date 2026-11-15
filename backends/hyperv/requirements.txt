@@ -1,0 +1,2 @@
+# Windows Hyper-V console launcher only; no Linux GI/SPICE dependency.
+robotframework==7.5.1
