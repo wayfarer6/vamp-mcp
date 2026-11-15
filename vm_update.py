@@ -76,8 +76,26 @@ class UpdateRun:
     def finish(self, status, **details):
         result = {'status':status,'verification':'ocr_only','command':'apt update',
                   'events':self.events,**details}
-        (self.directory/'result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2))
-        return result
+        details_path = self.directory/'result.json'
+        details_path.write_text(json.dumps(result,ensure_ascii=False,indent=2))
+        summary = {
+            'status':status, 'verification':'ocr_only', 'command':'apt update',
+            'root_verified':details.get('root_verified',False),
+            'root_shell_exited':details.get('root_shell_exited'),
+            'details_path':str(details_path),
+        }
+        if status != 'succeeded':
+            messages = []
+            for event in reversed(self.events):
+                messages = [text.strip() for text in event['texts']
+                            if re.match(r'^(?:error:|err:|[we]:|warning:|su:)',text.strip(),re.I)
+                            and 'apt does not have a stable cli interface' not in text.casefold()]
+                if messages:
+                    break
+            summary['error_summary'] = (' | '.join(messages[:2]) or details.get('note')
+                                        or status.replace('_',' '))[:300]
+        (self.directory/'summary.json').write_text(json.dumps(summary,ensure_ascii=False,indent=2))
+        return summary
 
     def command(self, text):
         type_text(self.robot, text)

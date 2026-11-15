@@ -115,7 +115,7 @@ AI 로그인 스킬은 `.agents/skills/spice-naver-login/SKILL.md`이며 현재 
 
 `Ctrl+Alt+T`로 터미널을 열고 OCR로 확인합니다. 단축키가 설정되지 않은 Debian GNOME 환경에서는 `Alt+F2` → `gnome-terminal --maximize`로 전환합니다. 이후 `su root` → `Password:` 프롬프트 확인 → 설정 비밀번호 입력 → root 프롬프트 및 `id -u` 확인 → `apt update` 실행 순서입니다. 완료 후 `exit`로 root 셸을 나옵니다.
 
-AI는 화면 이미지를 보지 않고 로컬 PaddleOCR의 텍스트만 읽습니다. 실행 결과 표식은 printf의 8진수 이스케이프로 출력하므로, 명령어가 화면에 에코된 것을 성공 결과로 오인하지 않습니다. 결과는 `artifacts/vm-update/result.json`에 저장됩니다. `succeeded`, `completed_with_warnings`, `failed`, 검증 불가·타임아웃 상태를 구분하며, Robot 예시는 `succeeded`일 때만 통과합니다. `apt update`는 패키지 목록을 갱신하며 패키지 업그레이드를 수행하지 않습니다.
+AI는 화면 이미지를 보지 않고 로컬 PaddleOCR의 텍스트만 읽습니다. 실행 결과 표식은 printf의 8진수 이스케이프로 출력하므로, 명령어가 화면에 에코된 것을 성공 결과로 오인하지 않습니다. 콘솔과 라이브러리는 요약 결과만 반환합니다. 요약은 `artifacts/vm-update/summary.json`, 전체 OCR 기록은 `artifacts/vm-update/result.json`에 저장됩니다. `--full-result` 옵션으로 실행하면 콘솔에도 전체 기록을 출력합니다. `succeeded`, `completed_with_warnings`, `failed`, 검증 불가·타임아웃 상태를 구분하며, Robot 예시는 `succeeded`일 때만 통과합니다. `apt update`는 패키지 목록을 갱신하며 패키지 업그레이드를 수행하지 않습니다.
 
 2026-11-15 실제 VM 검증: OCR로 `Password:`, `root@debian`과 root 확인 표식을 인식했고 `apt update`를 실행했습니다. 최종 결과는 **failed**였습니다. 온라인 Debian 저장소에는 접속했지만, 설치 DVD 저장소의 다음 오류와 실패 표식이 검출됐습니다.
 

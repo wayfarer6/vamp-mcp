@@ -3,7 +3,7 @@ name: spice-vm-update
 description: Run apt update as root in the authorized Debian sandbox VM using SPICE keyboard input and OCR-only terminal verification. Use for VM package-index refresh and its Robot Framework workflow.
 ---
 
-Work from `/home/ssh1032007/spice_kvm_based_rpa` or the checkout containing this skill. Run `.venv/bin/python rpa.py vm-update`, or the Robot scenario `tests/vm_update.robot`. Read the JSON status and `artifacts/vm-update/result.json`.
+Work from `/home/ssh1032007/spice_kvm_based_rpa` or the checkout containing this skill. Run `.venv/bin/python rpa.py vm-update`, or the Robot scenario `tests/vm_update.robot`. Read the compact JSON status first. `summary.json` contains the same summary; `artifacts/vm-update/result.json` retains the full OCR history. Read details only for an unresolved failure. `--full-result` opts into verbose CLI output when running the workflow.
 
 This workflow refreshes package indexes with `apt update`. Package upgrades, source-list changes, installs and reboot are separate actions requiring task-specific authorization.
 

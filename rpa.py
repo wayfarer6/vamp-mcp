@@ -32,6 +32,7 @@ def main():
     update.add_argument('--config', default='config/sandbox-vm.json')
     update.add_argument('--output', default='artifacts/vm-update')
     update.add_argument('--timeout', type=float, default=300)
+    update.add_argument('--full-result', action='store_true', help='Print full OCR event history instead of the default summary')
     verification = sub.add_parser('check-verification')
     verification.add_argument('--languages', default='ko,en,ja,zh')
     hotkey = sub.add_parser('hotkey')
@@ -59,6 +60,9 @@ def main():
                     username = password = None
         elif args.command == 'vm-update':
             result = robot.update_sandbox_vm(args.config, args.output, args.timeout)
+            if args.full_result:
+                from pathlib import Path
+                result = json.loads(Path(result['details_path']).read_text())
         elif args.command == 'check-verification':
             result = robot.check_guest_verification(args.languages)
         elif args.command == 'click':

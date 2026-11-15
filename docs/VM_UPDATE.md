@@ -39,7 +39,7 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 .venv/bin/python rpa.py vm-update
 ```
 
-활성화 명령(`source .venv/bin/activate`)은 생략해도 됩니다. 콘솔에 최종 JSON 결과가 출력되며, 상세 결과는 `artifacts/vm-update/result.json`에 저장됩니다. 여러 OCR 단계를 처리하므로 실행 중 출력이 한동안 없을 수 있습니다.
+활성화 명령(`source .venv/bin/activate`)은 생략해도 됩니다. 콘솔에는 짧은 요약 JSON만 출력되며, 상세 결과는 `artifacts/vm-update/result.json`에 저장됩니다. 여러 OCR 단계를 처리하므로 실행 중 출력이 한동안 없을 수 있습니다.
 
 실행 흐름은 다음과 같습니다.
 
@@ -54,6 +54,31 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 표식은 8진수 이스케이프로 출력합니다. 화면에 입력 명령이 에코된 것만으로 성공했다고 판정하지 않습니다. `apt update`는 패키지 목록 갱신이며, 패키지 업그레이드나 재부팅은 수행하지 않습니다.
 
 ## 4. 결과 확인
+
+기본 반환값은 다음 형태입니다. `events`와 전체 OCR 텍스트는 콘솔에 출력하지 않습니다.
+
+```json
+{
+  "status": "succeeded",
+  "verification": "ocr_only",
+  "command": "apt update",
+  "root_verified": true,
+  "root_shell_exited": true,
+  "details_path": "/home/ssh1032007/spice_kvm_based_rpa/artifacts/vm-update/result.json"
+}
+```
+
+실패·경고·검증 불가 상태에는 최대 300자의 `error_summary`가 추가됩니다. root 셸 종료를 확인하지 못한 단계에서는 `root_shell_exited`가 `null`입니다. 요약은 `artifacts/vm-update/summary.json`, 전체 단계별 기록은 기존 `artifacts/vm-update/result.json`에 저장됩니다. Robot 라이브러리 반환값도 동일한 요약 형식입니다.
+
+```bash
+# 저장된 요약 확인: VM 작업을 다시 실행하지 않음
+.venv/bin/python -m json.tool artifacts/vm-update/summary.json
+
+# 디버깅: VM 업데이트를 실행하고 콘솔에도 전체 OCR 기록 출력
+.venv/bin/python rpa.py vm-update --full-result
+```
+
+전체 기록만 확인하려면 아래 명령을 사용하세요. VM 작업을 다시 실행하지 않습니다.
 
 ```bash
 .venv/bin/python -m json.tool artifacts/vm-update/result.json
@@ -70,7 +95,7 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 | `root_authentication_not_verified` / `root_identity_not_verified` | root 인증·UID 검증 실패 |
 | `timed_out_unverified` | 제한 시간 내 종료 표식을 확인하지 못함 |
 
-`verification`은 `ocr_only`, root 검증 후에는 `root_verified`가 `true`로 기록됩니다. 정상적으로 완료된 흐름에서는 `root_shell_exited`로 일반 사용자 셸 복귀 확인 여부도 기록합니다. `events`에는 단계별 OCR 텍스트와 캡처 파일 경로가 있습니다.
+`verification`은 `ocr_only`, root 검증 후에는 `root_verified`가 `true`로 기록됩니다. 정상적으로 완료된 흐름에서는 `root_shell_exited`로 일반 사용자 셸 복귀 확인 여부도 기록합니다. 상세 파일의 `events`에는 단계별 OCR 텍스트와 캡처 파일 경로가 있습니다.
 
 **CLI 프로세스의 종료 코드 0만으로 apt 성공을 판단하지 마세요.** 현재 CLI는 `status: failed` 결과도 JSON으로 출력하고 정상 종료할 수 있습니다. `status`를 확인해야 합니다. 연결 오류 등은 Python 예외로 종료됩니다.
 
