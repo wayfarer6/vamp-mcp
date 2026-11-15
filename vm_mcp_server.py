@@ -88,12 +88,14 @@ async def vm_recorder_media() -> dict[str,Any]:
 
 
 @mcp.tool(annotations=WRITE,structured_output=True)
-async def virtualbox_create(iso_path:str,name:str|None=None,memory_mb:int=4096,cpus:int=2,
-                            disk_mb:int=65536,image_index:int=1) -> dict[str,Any]:
+async def virtualbox_create(iso_path:str,name:str|None=None,memory_mb:int|None=None,cpus:int|None=None,
+                            disk_mb:int|None=None,image_index:int=1,windows_confirmed:bool=False,
+                            guest_os:str|None=None,preflight_only:bool=False) -> dict[str,Any]:
     """Create a NEW VirtualBox VM and launch unattended install. Disclose public vboxuser/password123! defaults. Starts separate frontend; returns started, not installation verified."""
     from backends.virtualbox.provision import create
     return await invoke(create,iso_path=iso_path,name=name,memory_mb=memory_mb,cpus=cpus,
-                        disk_mb=disk_mb,image_index=image_index)
+                        disk_mb=disk_mb,image_index=image_index,windows_confirmed=windows_confirmed,
+                        guest_os=guest_os,preflight_only=preflight_only)
 
 
 if __name__=='__main__':mcp.run(transport='stdio')
