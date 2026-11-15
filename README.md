@@ -277,7 +277,7 @@ Error: The repository 'cdrom://[Debian GNU/Linux 13.7.0 ...] trixie Release' doe
 
 직접 작성한 코드와 문서는 [MIT](LICENSE)입니다. 외부 모델·라이브러리·가상화 제품의 라이선스는 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)처럼 별도로 유지합니다.
 
-- [VirtualBox](backends/virtualbox/README.md): main에서 제공. 상류 MIT `mcp-virtualbox`를 포함하며, 기본 `separate` 기동으로 사용자 관전 창과 RPA 실행을 분리합니다. 빌드·단위 테스트·MCP 프로토콜 검증 범위이며 실제 VM은 사용자 테스트 대기입니다.
+- [VirtualBox](backends/virtualbox/README.md): main에서 제공. 상류 MIT `mcp-virtualbox`를 포함하며, 기본 `separate` 기동으로 사용자 관전 창과 RPA 실행을 분리합니다. Ubuntu 호스트의 기존 Windows/Debian VM에서 실제 실행 검증했습니다. 새 VM 생성·스냅샷 촬영·복원은 실행하지 않았습니다.
 - [Hyper-V](backends/hyperv/README.md): 실험적 VMConnect/UAC 기동 코드. RDP 화면·입력 어댑터는 미구현이며 Windows 장비 테스트가 필요합니다.
 - SPICE VM 전체를 MCP로 묶은 구현은 별도 `feat/vm-mcp-server` 브랜치에 있습니다. VirtualBox MCP 엔트리는 main에도 독립적으로 있습니다.
 
@@ -290,3 +290,11 @@ YOLO/OCR은 [별도 백그라운드 Python 프로세스](docs/MODEL_BACKGROUND.m
 VirtualBox MCP `vm_create`도 ISO 경로 하나로 자동 이름·기본 사양을 선택할 수 있습니다. VM 생성 후 설치를 `separate` 모드로 시작하며, 레코더는 [게스트 설치 안내](docs/GUEST_RECORDER.md)에 따라 Debian postinstall / Windows 최초 바탕화면 로그인 시 구성합니다. 실제 설치 완료를 자동 검증한 상태는 아닙니다.
 
 게스트 OS 자체 **1920×1080 / 배율 100%** 및 호스트 관전 **View → Scaled Mode** 설정은 [해상도 안내](docs/VM_DISPLAY.md)를 참고하세요. Windows Guest Additions ISO 삽입은 스크립트로, 설치/UAC 승인과 재부팅은 사용자가 수행합니다.
+
+[초기 설정·매 로그인 해상도·GUI 녹화 공유·스냅샷 안내](docs/GUEST_AUTOMATION.md)를 추가했습니다. Debian 네트워크 미러를 자동 설정하고, Windows는 생성 전에 별도 선택과 라이선스 고지를 합니다.
+
+[Robot 실행 영상·스크린샷·SQLite 이력](docs/EXECUTION_HISTORY.md): 선택적 저화질 녹화와 MCP 이력·이미지 조회를 제공합니다.
+
+현재 실제 VirtualBox 검증 대상은 **Win-RPA / Debian-RPA**입니다. 위의 libvirt VM 이름은 기존 SPICE 개발 구성의 이름이며 현재 호스트에서 실행 중이라고 가정하지 않습니다. GUI 레코더는 선택적으로 게스트에 설치하는 프로그램이고, 기존 SPICE 입력 실행 자체에 게스트 자동화 에이전트가 필요한 것은 아닙니다.
+
+현재 환경의 실제 검증 결과와 미검증 범위는 [검증 기록](docs/VALIDATION.md)에 정리했습니다.

@@ -2,7 +2,7 @@
   "name": "vamp-mcp",
   "displayName": "VAMP \u2014 Virtual Agent Machine Platform",
   "description": "Local VirtualBox MCP tools for AI agents and RPA, with detachable observation and unattended VM provisioning.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -48,6 +48,10 @@
       {
         "command": "vamp.createVM",
         "title": "VAMP: Create VM From ISO"
+      },
+      {
+        "command": "vamp.onboard",
+        "title": "VAMP: First-Time VM Setup"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -79,7 +83,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.1.vsix",
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.2.vsix",
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {

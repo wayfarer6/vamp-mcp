@@ -11,7 +11,7 @@ const built=await build({metafile:true,entryPoints:[path.join(root,'backends/vir
   outfile:path.join(runtime,'backends/virtualbox/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',
   banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
 for(const name of ['scripts/build_recorder_media.py','guest_setup/recorder','third_party/pyautogui-recorder',
-  'third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
+  'third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/rpas','backends/virtualbox/history.py','backends/virtualbox/recording_listener.py','backends/virtualbox/mouse_click.py','backends/virtualbox/shares.py','backends/virtualbox/recordings.py','backends/virtualbox/snapshots.py','backends/virtualbox/profiles.json','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
   const destination=path.join(runtime,name);
   await mkdir(path.dirname(destination),{recursive:true});
   await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__')});

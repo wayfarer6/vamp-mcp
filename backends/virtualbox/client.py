@@ -12,7 +12,7 @@ import sys
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-TOOLS = {'vm_list','vm_info','vm_start','vm_screenshot','vm_screen_info',
+TOOLS = {'vm_run_observation','vm_run_history','vm_run_artifact','vm_recording_share','vm_import_recording','vm_snapshot','vamp_setup','vm_list','vm_info','vm_start','vm_screenshot','vm_screen_info',
          'vm_keyboard_scancode','vm_keyboard_type','vm_mouse_click','vm_prepare_recorder','vm_create','vm_configure_display','vm_insert_guest_additions'}
 
 async def request(tool: str, arguments: dict, screenshot: str | None = None):
@@ -29,13 +29,14 @@ async def request(tool: str, arguments: dict, screenshot: str | None = None):
     # Avoid upstream debug logs recording typed secrets.
     env['VBOXMANAGE_DEBUG'] = 'false'
     env['RPA_HOST_PYTHON'] = sys.executable
+    env.setdefault('PYTHON_PATH',sys.executable)
     env['SCREENSHOT_DIR'] = tempfile.gettempdir()
     params = StdioServerParameters(command=node, args=[str(ROOT/'backends/virtualbox/server.mjs')], env=env)
-    async with asyncio.timeout(450 if tool == 'vm_create' else 90):
-        async with stdio_client(params) as streams:
+    async with asyncio.timeout(450 if tool in ('vm_create','vm_snapshot') else 90):
+        async with stdio_client(params,errlog=sys.__stderr__) as streams:
             async with ClientSession(*streams) as session:
                 await session.initialize()
-                response = await session.call_tool(tool, arguments, read_timeout_seconds=timedelta(seconds=450 if tool == 'vm_create' else 90))
+                response = await session.call_tool(tool, arguments, read_timeout_seconds=timedelta(seconds=450 if tool in ('vm_create','vm_snapshot') else 90))
     if response.isError:
         raise RuntimeError('; '.join(getattr(c,'text','') for c in response.content))
     output = {'status':'completed', 'tool':tool, 'texts':[]}

@@ -1,6 +1,7 @@
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import tempfile
@@ -15,6 +16,7 @@ class ProvisioningTests(unittest.TestCase):
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.iso=self.root/'installer.iso';self.iso.write_bytes(b'test')
+        env=patch.dict(os.environ,{'VAMP_DATA_DIR':str(self.root/'vamp-data')});env.start();self.addCleanup(env.stop)
         self.calls=[];self.os_type='Debian_64';self.listed='';self.supported=True
     def command(self,args,**kwargs):
         self.calls.append(list(map(str,args[1:])))
@@ -27,7 +29,7 @@ class ProvisioningTests(unittest.TestCase):
         return subprocess.CompletedProcess(args,0,output,'')
     def create(self):
         with patch.object(provision.subprocess,'run',self.command):
-            return provision.create(iso_path=str(self.iso),name='test-vm',basedir=str(self.root/'vms'))
+            return provision.create(iso_path=str(self.iso),name='test-vm',basedir=str(self.root/'vms'),windows_confirmed=self.os_type=='Windows11_64')
     def test_unattended_request_and_real_recorder_media(self):
         result=self.create()
         self.assertEqual(result['status'],'installation_started')
@@ -56,3 +58,17 @@ class ProvisioningTests(unittest.TestCase):
         self.assertIn('--tpm-type',modify)
         install=next(args for args in self.calls if args[:2]==['unattended','install'] and '--help' not in args)
         self.assertIn('postwin.cmd',install[install.index('--post-install-command')+1])
+
+    def test_preflight_does_not_create_vm_or_directory(self):
+        with patch.object(provision.subprocess,'run',self.command):
+            result=provision.create(iso_path=str(self.iso),name='preflight',basedir=str(self.root/'never-create'),preflight_only=True)
+        self.assertEqual(result['status'],'preflight_ready')
+        self.assertFalse((self.root/'never-create').exists())
+        self.assertFalse(any(args[0]=='createvm' for args in self.calls))
+
+    def test_windows_requires_explicit_choice_before_creating(self):
+        self.os_type='Windows11_64'
+        with patch.object(provision.subprocess,'run',self.command):
+            result=provision.create(iso_path=str(self.iso),name='windows-confirm',basedir=str(self.root/'never-create'))
+        self.assertEqual(result['status'],'needs_windows_confirmation')
+        self.assertFalse(any(args[0]=='createvm' for args in self.calls))

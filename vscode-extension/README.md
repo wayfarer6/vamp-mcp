@@ -32,7 +32,7 @@ An existing VM can use `vm_prepare_recorder` to build media and optionally attac
 
 ## Platform and dependency limits
 
-The extension is designed for Windows, Linux and macOS hosts, but has **not been hardware-tested across those platforms**. Apple Silicon/ARM guests are outside the initial amd64 unattended profile. The current developer validation covers Ubuntu + NVIDIA for the existing SPICE stack; VirtualBox uses build/unit/protocol tests with a fake VBoxManage.
+The extension is designed for Windows, Linux and macOS hosts, but has **not been hardware-tested across those platforms**. Apple Silicon/ARM guests are outside the initial amd64 unattended profile. The current developer validation covers Ubuntu + NVIDIA for the existing SPICE stack; VirtualBox also has live Ubuntu-host tests with existing Windows 11/Debian 13 guests, including native input, shared recording and Robot evidence. New VM creation and actual snapshot/restore were not executed.
 
 Keyboard and screenshots use VBoxManage. Mouse clicks additionally require a matching host **VirtualBox Python SDK (`vboxapi`)** and USB tablet configuration. Set `vamp.mousePythonExecutable` to the SDK-capable Python. System drivers/VirtualBox/SDK are not installed by pip.
 
@@ -56,7 +56,7 @@ The independent guest recorder is from [axel-magard/PyAutoGUI-Recorder](https://
 
 No telemetry is implemented by VAMP. Dependency downloads use their package registries, and the MCP client determines what tool results are sent to a model provider.
 
-This project was developed with user direction and AI-assisted coding. This is an experimental preview; live guest installation and VS Code UI behavior still require testing before a production release.
+This project was developed with user direction and AI-assisted coding. This is an experimental preview; fresh unattended OS installation and Windows/macOS host UI behavior still require testing before a production release. Existing Ubuntu-host guest setup was exercised.
 
 ## Native resolution and scaled observation
 
@@ -65,3 +65,13 @@ Both Debian GNOME and Windows guests use **1920×1080 native resolution, OS scal
 The VirtualBox **View → Scaled Mode** frontend can be small while the guest framebuffer remains full HD. Guest auto-resize is disabled by default. An already-open frontend may require detach/reopen or a manual View menu change.
 
 For Windows, VAMP tries to insert the host's Guest Additions ISO into a reserved DVD slot. After OS installation, open the CD in Windows, run **VBoxWindowsAdditions.exe**, approve UAC, install and reboot. Installation is manual. If the matching host ISO is unavailable, pass its path to `vm_insert_guest_additions`; occupied media is never replaced. Then call `vm_configure_display` to send a resolution hint and check actual screenshot pixels. A configured hint is not proof that the guest accepted the mode.
+
+## Onboarding, recordings and history
+
+First-time setup checks VirtualBox, offers Debian by default, and asks separately before Windows creation. Current defaults match the observed VirtualBox guests: Windows 4096 MB/2 CPUs/250 GiB dynamic disk; Debian 2048 MB/2 CPUs/250 GiB. Ubuntu reuses Debian resources but is unverified. Windows requires your own valid license and activation after installation.
+
+The guest GUI recorder offers visible Start/Stop/Save/Open Folder/Copy Path controls. VAMPRecords shares save Python recordings directly to host `~/VAMP/recordings`; fallback local saving is explicitly labeled. Modified GUI recorder code remains GPL-3.0 with source/license included. Guest display scripts reapply native full HD at each user login. Debian setup disables APT CD-ROM entries and configures official network mirrors.
+
+Robot RecordingListener optionally captures low-resolution VM video and screenshots with SQLite execution history at `~/VAMP/history.sqlite3`. MCP tools `vm_run_history` and `vm_run_artifact` provide bounded viewing. Video is opt-in, 640×360/5fps/180s/20MB/no audio; it uses VirtualBox, not an additional host recorder. Snapshots are separate: ask first, explain storage use, and restore only a confirmed target on a powered-off VM.
+
+VirtualBox ISO detection can fail for particular media/build combinations. Preflight failure is not an installation success; no VM is created by `preflight_only:true`. Host Windows/macOS/ARM compatibility remains unverified hardware coverage.

@@ -8,7 +8,10 @@ import struct
 import subprocess
 import sys
 import tempfile
-from provision import executable, parse
+try:
+    from .provision import executable, parse
+except ImportError:
+    from provision import executable, parse
 
 WIDTH,HEIGHT=1920,1080
 DISPLAY_DATA={'GUI/Fullscreen':'','GUI/Seamless':'','GUI/Scale':'true',
@@ -21,6 +24,8 @@ def command(*args):
     return result.stdout
 
 def preferences(vm,run=command):
+    # Permit full HD even when the host viewer's available area is smaller.
+    run('setextradata','global','GUI/MaxGuestResolution','any')
     for key,value in DISPLAY_DATA.items():run('setextradata',vm,key,value)
     return {'native_target':[WIDTH,HEIGHT],'viewer':'scaled','auto_resize_guest':False,
             'resolution_verified':False,'viewer_reopen_may_be_required':True}

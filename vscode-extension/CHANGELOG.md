@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.2
+
+Guest login display hooks, Debian network mirrors, optional Windows onboarding/licensing, GUI recording shares, explicit snapshots and Robot video/screenshot SQLite evidence.
+
 ## 0.1.1
 
 Guest-native full HD defaults, scaled observation, screenshot resolution verification and Windows Guest Additions ISO/manual install handoff.
