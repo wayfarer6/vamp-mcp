@@ -28,11 +28,9 @@ def executable():
         if candidate.is_file():return str(candidate)
     return shutil.which('VBoxManage') or 'VBoxManage'
 
-def create(iso_path,name=None,memory_mb=4096,cpus=2,disk_mb=65536,basedir=None,image_index=1,product_key=''):
+def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False):
     name=name or ('VAMP-'+uuid.uuid4().hex[:8])
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',name):raise ValueError('Use 1-64 letters/digits/underscore/hyphen for name')
-    if not (2048<=memory_mb<=131072 and 1<=cpus<=64 and 32768<=disk_mb<=2097152 and image_index>=1):
-        raise ValueError('Invalid VM resource/image limits')
     iso=Path(iso_path).expanduser().resolve(strict=True)
     if not iso.is_file():raise ValueError('ISO path must be a readable local file on the VM host')
     journal={'status':'preparing','vm':name,'credentials':PUBLIC_CREDENTIALS,'events':[],
@@ -45,11 +43,31 @@ def create(iso_path,name=None,memory_mb=4096,cpus=2,disk_mb=65536,basedir=None,i
     listed=run('list','vms')
     if any(line.startswith('"'+name+'" ') for line in listed.splitlines()):raise ValueError('VM name already exists; refusing to modify it')
     detected=parse(run('unattended','detect','--iso',iso,'--machine-readable'))
-    os_type=detected.get('detectedOSTypeId','')
-    if not (re.fullmatch(r'Debian[0-9]*_64',os_type) or os_type=='Windows11_64'):
-        raise ValueError(f'Only detected Debian_64 / Windows11_64 ISO supported by this initial profile: {os_type or "unknown"}')
-    if detected.get('isInstallSupported','true').lower() not in ('true','1','yes'):
+    os_type=detected.get('OSTypeId',detected.get('detectedOSTypeId',''))
+    if not (re.fullmatch(r'Debian[0-9]*_64',os_type) or re.fullmatch(r'Ubuntu[0-9]*_64',os_type) or os_type=='Windows11_64'):
+        raise ValueError(f'Only detected Debian/Ubuntu amd64 or Windows11 x64 ISO supported by this initial profile: {os_type or "unknown"}')
+    if detected.get('IsInstallSupported',detected.get('isInstallSupported','true')).lower() not in ('true','1','yes','on'):
         raise ValueError('VirtualBox reports this ISO does not support unattended installation')
+    selected='windows11' if os_type=='Windows11_64' else ('ubuntu' if os_type.startswith('Ubuntu') else 'debian')
+    if guest_os and guest_os!=selected:raise ValueError('Selected guest OS does not match detected ISO')
+    profile=json.loads(Path(__file__).with_name('profiles.json').read_text())['profiles'][selected]
+    memory_mb=memory_mb if memory_mb is not None else profile['memory_mb']
+    cpus=cpus if cpus is not None else profile['cpus']
+    disk_mb=disk_mb if disk_mb is not None else profile['disk_mb']
+    if not (2048<=memory_mb<=131072 and 1<=cpus<=64 and 32768<=disk_mb<=2097152 and image_index>=1):
+        raise ValueError('Invalid VM resource/image limits')
+    if preflight_only:
+        return {'status':'preflight_ready','vm_created':False,'guest_os':selected,
+                'resource_profile':{'memory_mb':memory_mb,'cpus':cpus,'disk_mb':disk_mb},
+                'windows_confirmation_required':selected=='windows11' and not windows_confirmed,
+                'credentials':PUBLIC_CREDENTIALS,'iso':str(iso)}
+    if selected=='windows11' and not windows_confirmed:
+        return {'status':'needs_windows_confirmation','no_vm_created':True,'profile':profile,
+          'action_required':'Ask the user whether to create Windows with these specs. Windows requires a valid license; activate it yourself after installation in Settings > System > Activation. VAMP does not include a Windows license.',
+          'credentials':PUBLIC_CREDENTIALS}
+    journal['resource_profile']={'guest_os':selected,'memory_mb':memory_mb,'cpus':cpus,'disk_mb':disk_mb,
+                                'native_resolution':[1920,1080]}
+    if selected=='windows11':journal['license_notice']='Windows requires a valid license. Activate Windows yourself after installation; VAMP supplies no license or activation bypass.'
     if os_type=='Windows11_64' and memory_mb<4096:raise ValueError('Windows 11 requires at least 4096 MB')
     # Check version-specific password option before creating any VM.
     help_proc=subprocess.run([executable(),'unattended','install','--help'],capture_output=True,text=True)
@@ -67,6 +85,8 @@ def create(iso_path,name=None,memory_mb=4096,cpus=2,disk_mb=65536,basedir=None,i
         record('vm-created')
         from display import preferences
         journal['display']=preferences(name,run)
+        from shares import prepare
+        journal['recording_share']=prepare(name,run)
         options=['modifyvm',name,'--memory',memory_mb,'--cpus',cpus,'--vram',128,
                  '--mouse','usbtablet','--nic1','nat','--boot1','dvd','--boot2','disk',
                  '--graphicscontroller','vboxsvga' if os_type=='Windows11_64' else 'vmsvga']

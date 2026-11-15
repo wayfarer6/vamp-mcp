@@ -1,0 +1,1 @@
+{"id":"debian_first_boot","backend":"virtualbox","entry":"run.robot","python":"workflow.py","description":"English OCR guarded first login, su root and official Debian network mirror setup; opt-in login only."}

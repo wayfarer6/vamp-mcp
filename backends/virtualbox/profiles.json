@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "observed_at": "2026-11-15",
+  "source": "Read-only VirtualBox showvminfo/showmediuminfo on current running user VMs, 2026-11-15. Capacity is virtual disk capacity, not allocated host space.",
+  "profiles": {
+    "windows11": {
+      "memory_mb": 4096,
+      "cpus": 2,
+      "disk_mb": 256000,
+      "firmware": "efi",
+      "disk_allocation": "dynamic",
+      "native_resolution": [
+        1920,
+        1080
+      ],
+      "reference_guest": "Win-RPA",
+      "windows_license_required": true
+    },
+    "debian": {
+      "memory_mb": 2048,
+      "cpus": 2,
+      "disk_mb": 256000,
+      "firmware": "bios",
+      "disk_allocation": "dynamic",
+      "native_resolution": [
+        1920,
+        1080
+      ],
+      "reference_guest": "Debian-RPA",
+      "windows_license_required": false
+    },
+    "ubuntu": {
+      "memory_mb": 2048,
+      "cpus": 2,
+      "disk_mb": 256000,
+      "firmware": "bios",
+      "disk_allocation": "dynamic",
+      "native_resolution": [
+        1920,
+        1080
+      ],
+      "reference_guest": "Debian-RPA resources only; Ubuntu guest not observed",
+      "windows_license_required": false
+    }
+  }
+}

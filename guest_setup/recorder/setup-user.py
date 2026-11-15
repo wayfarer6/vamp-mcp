@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 import subprocess
 import sys
+import shutil
 import venv
 import zipfile
 
@@ -16,10 +17,14 @@ folder.mkdir(parents=True,exist_ok=True)
 if not (folder/'PyAutoGuiRecorder.py').exists():
     with zipfile.ZipFile(media/'recorder.zip') as archive:
         archive.extractall(folder)
+for name in ['prepare-recording.py','RECORDING-GUIDE.txt','vamp-recorder.py','RECORDER-LICENSE']:
+    shutil.copy2(media/name,folder/name)
+subprocess.run([sys.executable,str(media/'install-display-startup.py')],check=True)
 venv.create(folder/'.venv',with_pip=True)
 python = folder/'.venv/Scripts/python.exe'
 subprocess.run([str(python),'-m','pip','install','-r',str(media/'requirements-recorder.txt')],check=True)
-(folder/'Start-Recorder.cmd').write_text('@echo off\ncd /d "%~dp0"\n".venv\\Scripts\\python.exe" PyAutoGuiRecorder.py\npause\n')
+(folder/'Start-Recorder.cmd').write_text('@echo off\ncd /d "%~dp0"\n".venv\\Scripts\\python.exe" vamp-recorder.py\npause\n')
+subprocess.run([sys.executable,str(Path(os.environ['LOCALAPPDATA'])/'VAMP/display/apply-display.py'),'--attempts','2','--delay','3'],check=False)
 (folder/'installation.json').write_text(json.dumps({'status':'installed','recording_started':False}))
 # Remove the one-time provisioning launcher only after successful installation.
 startup = Path(os.environ['APPDATA'])/'Microsoft/Windows/Start Menu/Programs/Startup/RPA-Recorder-Setup.cmd'

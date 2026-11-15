@@ -21,3 +21,7 @@ Any vendored adapter must include its original LICENSE and source URL, pinned re
 ## Independent guest recorder (GPL-3.0)
 
 [axel-magard/PyAutoGUI-Recorder](https://github.com/axel-magard/PyAutoGUI-Recorder), revision `6cd48a3bee4ef4dd382e3484feaa4360a37a0a5d`, is preserved unmodified with its full [GPL-3.0 LICENSE](third_party/pyautogui-recorder/LICENSE), Python source and image assets. Original hashes are in its `PROVENANCE.json`. The MIT host installer packages this independent program for execution in a guest process; it does not import or relicense its code. Distributed recorder source and notices must remain available under its original license. The VSIX includes that source. Bundled Node dependency notices are generated under the extension's `dist/notices`.
+
+## VAMP guest recorder adaptation
+
+`guest_setup/recorder/vamp-recorder.py` is an explicitly GPL-3.0-only UI adaptation of the recorder workflow, not covered by the root MIT license. It is distributed as source with `RECORDER-LICENSE` (full GPL-3.0 text) and the original recorder source/provenance. It uses thread-safe UI queues, explicit user recording controls and shared-folder saving. The host/server code remains separately MIT licensed.

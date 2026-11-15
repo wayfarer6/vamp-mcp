@@ -1,6 +1,6 @@
-# VirtualBox RPA (사용자 장비 검증 대기)
+# VirtualBox RPA (Ubuntu 호스트에서 기존 VM 검증)
 
-SPICE/KVM과 별도로 동작하는 호스트용 백엔드입니다. 원본 [chryaner/mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox)의 화면·입력 구현을 실제 호출합니다. VM 게스트에 RPA 에이전트를 설치하지 않습니다. Windows/Linux 호스트에서 사용하도록 작성했으며, 현재 개발 장비에서는 빌드·단위 테스트·MCP 프로토콜만 확인했습니다. 실제 VirtualBox VM은 사용자가 테스트해야 합니다.
+SPICE/KVM과 별도로 동작하는 호스트용 백엔드입니다. 원본 [chryaner/mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox)의 화면·입력 구현을 실제 호출합니다. VM 게스트에 RPA 에이전트를 설치하지 않습니다. Windows/Linux 호스트에서 사용하도록 작성했으며, 현재 Ubuntu 호스트의 Win-RPA/Windows 11과 Debian-RPA/Debian 13에서 실행·입력·해상도·공유 녹화·Robot 이력을 검증했습니다. 실제 새 VM 생성과 스냅샷 촬영·복원은 사용자 요청에 따라 실행하지 않았습니다. Windows/macOS 호스트는 별도 테스트 전입니다.
 
 ## 설치
 
@@ -62,7 +62,7 @@ MCP 클라이언트 설정에서 경로를 실제 절대 경로로 바꾸세요.
 }
 ```
 
-12개 도구: `vm_configure_display`, `vm_insert_guest_additions`, `vm_create`, `vm_prepare_recorder`, `vm_list`, `vm_info`, `vm_start`, `vm_screenshot`, `vm_screen_info`, `vm_keyboard_scancode`, `vm_keyboard_type`, `vm_mouse_click`. 상류 전체 서버의 VM 삭제/게스트 명령/SSH 도구는 이 엔트리에서 등록하지 않습니다. Python CLI는 스크린샷을 파일로 저장해 큰 base64를 JSON에 출력하지 않습니다. 직접 MCP의 스크린샷 도구는 상류 형식대로 image 콘텐츠를 반환합니다. Python 도구 호출마다 경량 Node 서버를 실행하며 YOLO/OCR 모델 프로세스는 별개로 유지됩니다.
+19개 도구: `vm_run_observation`, `vm_run_history`, `vm_run_artifact`, `vamp_setup`, `vm_snapshot`, `vm_recording_share`, `vm_import_recording`, `vm_configure_display`, `vm_insert_guest_additions`, `vm_create`, `vm_prepare_recorder`, `vm_list`, `vm_info`, `vm_start`, `vm_screenshot`, `vm_screen_info`, `vm_keyboard_scancode`, `vm_keyboard_type`, `vm_mouse_click`. 상류 전체 서버의 VM 삭제/게스트 명령/SSH 도구는 이 엔트리에서 등록하지 않습니다. Python CLI는 스크린샷을 파일로 저장해 큰 base64를 JSON에 출력하지 않습니다. 직접 MCP의 스크린샷 도구는 상류 형식대로 image 콘텐츠를 반환합니다. Python 도구 호출마다 경량 Node 서버를 실행하며 YOLO/OCR 모델 프로세스는 별개로 유지됩니다.
 
 ## 출처와 라이선스
 
@@ -89,3 +89,7 @@ Windows ISO에 따라 에디션 image_index 및 정당한 product_key가 필요�
 [Oracle unattended 문서](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/vboxmanage.html)를 기준으로 버전별 password 플래그를 선택합니다. 레코더는 전용 DVD 미디어와 post-install hook을 연결합니다. 자세한 라이선스·동작은 [게스트 레코더 안내](../../docs/GUEST_RECORDER.md)에 있습니다.
 
 게스트 OS 자체 **1920×1080 / 배율 100%** 및 호스트 관전 **View → Scaled Mode** 설정은 [해상도 안내](../../docs/VM_DISPLAY.md)를 참고하세요. Windows Guest Additions ISO 삽입은 스크립트로, 설치/UAC 승인과 재부팅은 사용자가 수행합니다.
+
+[초기 설정·매 로그인 해상도·GUI 녹화 공유·스냅샷 안내](../../docs/GUEST_AUTOMATION.md)를 추가했습니다. Debian 네트워크 미러를 자동 설정하고, Windows는 생성 전에 별도 선택과 라이선스 고지를 합니다.
+
+[Robot Listener·영상·SQLite 실행 이력](../../docs/EXECUTION_HISTORY.md)을 참고하세요.

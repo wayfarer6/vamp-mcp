@@ -12,6 +12,7 @@ if (-not $python -or $python.Source -like '*WindowsApps*') {
 if (-not (Test-Path (Join-Path $folder 'PyAutoGuiRecorder.py'))) {
     Expand-Archive -LiteralPath (Join-Path $PSScriptRoot 'recorder.zip') -DestinationPath $folder
 }
+Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'prepare-recording.py'), (Join-Path $PSScriptRoot 'RECORDING-GUIDE.txt'), (Join-Path $PSScriptRoot 'vamp-recorder.py'), (Join-Path $PSScriptRoot 'RECORDER-LICENSE') -Destination $folder -Force
 & $pythonPath -m venv (Join-Path $folder '.venv')
 if ($LASTEXITCODE -ne 0) { throw 'venv creation failed' }
 $venvPython = Join-Path $folder '.venv\Scripts\python.exe'
@@ -20,8 +21,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Recorder dependency installation failed' }
 @'
 @echo off
 cd /d "%~dp0"
-".venv\Scripts\python.exe" PyAutoGuiRecorder.py
+".venv\Scripts\python.exe" vamp-recorder.py
 pause
 '@ | Set-Content -Encoding ascii -LiteralPath (Join-Path $folder 'Start-Recorder.cmd')
+& $venvPython (Join-Path $PSScriptRoot 'install-display-startup.py')
+if ($LASTEXITCODE -ne 0) { throw 'Display login hook registration failed' }
 Write-Output "Recorder installed: $folder"
 Write-Output 'Run Start-Recorder.cmd. Save recordings under recordings/. Do not record passwords.'
