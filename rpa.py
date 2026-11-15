@@ -28,6 +28,12 @@ def main():
     credentials.add_argument('--use-env', action='store_true')
     login.add_argument('--languages', default='en')
     login.add_argument('--device', default='auto')
+    update = sub.add_parser('vm-update')
+    update.add_argument('--config', default='config/sandbox-vm.json')
+    update.add_argument('--output', default='artifacts/vm-update')
+    update.add_argument('--timeout', type=float, default=300)
+    verification = sub.add_parser('check-verification')
+    verification.add_argument('--languages', default='ko,en,ja,zh')
     hotkey = sub.add_parser('hotkey')
     hotkey.add_argument('keys', nargs='+')
     write = sub.add_parser('write')
@@ -51,6 +57,10 @@ def main():
                     result = fill_and_submit(robot, result, username, password)
                 finally:
                     username = password = None
+        elif args.command == 'vm-update':
+            result = robot.update_sandbox_vm(args.config, args.output, args.timeout)
+        elif args.command == 'check-verification':
+            result = robot.check_guest_verification(args.languages)
         elif args.command == 'click':
             robot.guest_click(args.x, args.y)
             result = {'clicked':[args.x,args.y]}

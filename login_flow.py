@@ -59,7 +59,9 @@ def prepare(robot, languages='en', device='auto'):
     robot.guest_hotkey('enter'); robot._pump(6)
     robot.guest_hotkey('esc')
     analysis = robot.analyze_guest_ui('artifacts/login/ui.json', languages, device)
-    state = detect_login_form(analysis)
+    from verification import detect_verification
+    challenge = detect_verification([reading for element in analysis['elements'] for reading in element.get('readings',[])])
+    state = challenge if challenge['status'] != 'no_challenge_text' else detect_login_form(analysis)
     path = Path('artifacts/login/state.json')
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
     return state
@@ -127,6 +129,10 @@ def fill_and_submit(robot, state, username, password):
         screen = robot.capture_guest_screen(Path(directory)/'screen.png')
         lines = run_ocr(robot, screen, 'ko,en,ja,zh', Path(directory)/'ocr.json')
     text = ' '.join(line['text'] for line in lines if line['confidence'] >= 0.7).casefold()
+    from verification import detect_verification
+    challenge = detect_verification(lines)
+    if challenge['status'] != 'no_challenge_text':
+        return {**challenge, 'submitted':True}
     if any(term in text for term in ['로그아웃','log out','sign out','logout']):
         status = 'logged_in'
     elif any(term in text for term in ['captcha','인증','verification','验证码','認証','otp']):

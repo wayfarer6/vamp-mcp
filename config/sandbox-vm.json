@@ -1,0 +1,9 @@
+{
+  "name": "debian13",
+  "uri": "spice://127.0.0.1:5900",
+  "hostname": "debian",
+  "username": "root",
+  "root_password": "password123!",
+  "public_test_credentials": true,
+  "purpose": "Intentionally public credentials for the user's disposable sandbox VM."
+}

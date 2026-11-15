@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE VM Update"
+  short_description: "Run Debian apt update with SPICE and OCR-only checks"
+  default_prompt: "Use $spice-vm-update to refresh the Debian sandbox package indexes and report the OCR result."

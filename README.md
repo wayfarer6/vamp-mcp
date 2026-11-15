@@ -101,3 +101,39 @@ AI 로그인 스킬은 `.agents/skills/spice-naver-login/SKILL.md`이며 현재 
 라이브 VM 검증은 한 프로세스씩 실행하세요. 같은 엔드포인트의 RPA 세션은 파일 잠금으로 동시 제어를 막고, 다른 뷰어가 연결을 끊으면 중단합니다. 사용자의 직접 입력과 자동화 입력도 섞이지 않게 하세요.
 
 재현용 의존성 목록은 `requirements.lock.txt`와 `requirements-ocr.lock.txt`에 있습니다. 전자는 현재 Linux/Python 3.14/CUDA 13.2 환경을 기록하므로 다른 Python·GPU 환경에서는 `requirements.txt`를 기준으로 호환 Torch를 선택하세요. 시스템 GI/Pillow는 OS 패키지에서 제공됩니다.
+
+## 공개 Debian VM에서 root apt update — OCR 전용
+
+소유자가 공개 배포를 명시적으로 요청한 테스트 자격 증명입니다. `config/sandbox-vm.json`에 VM 이름 `debian13`, SPICE 주소, root 계정과 공개 비밀번호 `password123!`를 기록했습니다. 이 공개 VM 설정과 네이버 등 개인 계정 정보는 별도로 취급합니다.
+
+```bash
+.venv/bin/python rpa.py vm-update
+.venv/bin/python -m robot --outputdir artifacts/update-run tests/vm_update.robot
+```
+
+`Ctrl+Alt+T`로 터미널을 열고 OCR로 확인합니다. 단축키가 설정되지 않은 Debian GNOME 환경에서는 `Alt+F2` → `gnome-terminal --maximize`로 전환합니다. 이후 `su root` → `Password:` 프롬프트 확인 → 설정 비밀번호 입력 → root 프롬프트 및 `id -u` 확인 → `apt update` 실행 순서입니다. 완료 후 `exit`로 root 셸을 나옵니다.
+
+AI는 화면 이미지를 보지 않고 로컬 PaddleOCR의 텍스트만 읽습니다. 실행 결과 표식은 printf의 8진수 이스케이프로 출력하므로, 명령어가 화면에 에코된 것을 성공 결과로 오인하지 않습니다. 결과는 `artifacts/vm-update/result.json`에 저장됩니다. `succeeded`, `completed_with_warnings`, `failed`, 검증 불가·타임아웃 상태를 구분하며, Robot 예시는 `succeeded`일 때만 통과합니다. `apt update`는 패키지 목록을 갱신하며 패키지 업그레이드를 수행하지 않습니다.
+
+2026-11-15 실제 VM 검증: OCR로 `Password:`, `root@debian`과 root 확인 표식을 인식했고 `apt update`를 실행했습니다. 최종 결과는 **failed**였습니다. 온라인 Debian 저장소에는 접속했지만, 설치 DVD 저장소의 다음 오류와 실패 표식이 검출됐습니다.
+
+```text
+Error: The repository 'cdrom://[Debian GNU/Linux 13.7.0 ...] trixie Release' does not have a Release file.
+```
+
+게스트 상세 로그: `/tmp/spice-rpa-apt-qrfpzy.log`. 이 검증에서는 APT 저장소 설정을 변경하지 않았습니다. `$spice-vm-update` 스킬은 같은 OCR 전용 절차와 실패 처리 방법을 제공합니다.
+
+## CAPTCHA·추가 인증의 사용자 인계
+
+```bash
+.venv/bin/python rpa.py check-verification
+.venv/bin/python scripts/check_verification_ocr.py
+```
+
+첫 명령은 현재 VM 화면을 OCR로만 검사하고 이동·클릭·타이핑하지 않습니다. 두 번째는 실제 CAPTCHA 대신 4개 언어의 **안내 문구만** 그린 합성 이미지로 OCR 감지를 검증합니다.
+
+로그인 RPA는 계정 입력 전과 제출 후 `CAPTCHA`, `I'm not a robot`, `보안문자`, `画像認証`, `图形验证码` 등의 안내를 검사합니다. 결과가 `needs_user_captcha` 또는 `needs_user_verification`이면 자동 입력을 멈추고 다음과 같이 안내하는 `$spice-captcha-handoff` 스킬을 제공합니다.
+
+> 보안 확인 화면이 감지되어 자동화를 멈췄습니다. VM 창에서 CAPTCHA나 추가 인증을 직접 완료한 뒤 ‘완료’라고 알려주세요. 완료 후 제가 화면 상태를 다시 확인하겠습니다.
+
+사용자의 완료 통보 뒤 한 번 재검사하고 예상하는 다음 화면의 긍정적인 OCR 증거를 확인한 후 이어갑니다. `no_challenge_text`는 안내 문구를 찾지 못했다는 뜻이며, CAPTCHA 해제나 로그인 성공을 보장하지 않습니다. 문구가 없는 이미지형 CAPTCHA, 누락된 폰트, 낮은 OCR 품질은 감지를 방해할 수 있습니다. CAPTCHA의 정답을 읽거나 자동으로 풀지 않습니다.

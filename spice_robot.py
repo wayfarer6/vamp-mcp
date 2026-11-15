@@ -295,3 +295,13 @@ class SpiceRobot:
             return fill_and_submit(self, state, username, password)
         finally:
             username = password = None
+
+    @keyword
+    def update_sandbox_vm(self, config='config/sandbox-vm.json', output='artifacts/vm-update', timeout=300):
+        from vm_update import run_update
+        return run_update(self, config, output, timeout)
+
+    @keyword
+    def check_guest_verification(self, languages='ko,en,ja,zh'):
+        from verification import check_guest_verification
+        return check_guest_verification(self, languages)

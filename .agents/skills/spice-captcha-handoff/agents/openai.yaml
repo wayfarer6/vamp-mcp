@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE CAPTCHA Handoff"
+  short_description: "Pause at CAPTCHA and guide manual user verification"
+  default_prompt: "Use $spice-captcha-handoff to pause the RPA and guide me through manual verification."

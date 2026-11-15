@@ -15,6 +15,8 @@ If the current execution environment already supplies the authorized account thr
 
 The submit routine verifies that the form has not changed, fills each detected field via SPICE physical keys, clicks the detected submit button once, and checks the result using temporary OCR files that are removed. It does not persist a screenshot containing the entered ID. Do not add screenshots or generic Robot input keywords around credential entry.
 
-Only report successful login for `logged_in` (a visible logout control was recognized). `submitted_unverified` means submission happened but success is unproven. `needs_user_verification` means the user must finish CAPTCHA/OTP or another verification in the guest. Do not auto-retry credentials or bypass verification. When only asked to build the RPA, validate through form detection and leave credential submission for an authorized execution.
+Only report successful login for `logged_in` (a visible logout control was recognized). `submitted_unverified` means submission happened but success is unproven. `needs_user_captcha` or `needs_user_verification` means the user must finish CAPTCHA/OTP or another verification in the guest. Do not auto-retry credentials or bypass verification. When only asked to build the RPA, validate through form detection and leave credential submission for an authorized execution.
 
 The current key backend accepts printable ASCII with a US guest keyboard layout. Validate before entering either field; do not claim CJK password entry support. Avoid using the host mouse/keyboard through PyAutoGUI: it is only for guest image matching. Do not control the VM concurrently with the user or a second SPICE client.
+
+For either handoff state, apply the adjacent `spice-captcha-handoff/SKILL.md`: stop automated input, ask the user to complete the challenge in the VM, and recheck only after they report completion. The `check-verification` CLI performs OCR only and does not navigate or resubmit.
