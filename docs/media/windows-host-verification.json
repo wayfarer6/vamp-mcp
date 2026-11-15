@@ -1,0 +1,38 @@
+{
+  "host": "Windows-11-10.0.26300-SP0",
+  "python": "3.12.10",
+  "checks": [
+    {
+      "tool": "vm_list",
+      "result": {
+        "status": "completed",
+        "tool": "vm_list",
+        "texts": [
+          "[{\"name\":\"VAMP-Nested-Smoke-20261115-235230\",\"uuid\":\"0dd673c4-e4b0-4109-be55-e7c1d4d7f673\"}]"
+        ]
+      }
+    },
+    {
+      "tool": "vamp_setup",
+      "result": {
+        "status": "completed",
+        "tool": "vamp_setup",
+        "texts": [
+          "{\"status\":\"needs_user_input\",\"virtualbox_installed\":true,\"virtualbox_version\":\"7.2.6r172322\",\"default_guest\":\"debian\",\"profiles\":{\"windows11\":{\"memory_mb\":4096,\"cpus\":2,\"disk_mb\":256000,\"firmware\":\"efi\",\"disk_allocation\":\"dynamic\",\"native_resolution\":[1920,1080],\"reference_guest\":\"Win-RPA\",\"windows_license_required\":true},\"debian\":{\"memory_mb\":2048,\"cpus\":2,\"disk_mb\":256000,\"firmware\":\"bios\",\"disk_allocation\":\"dynamic\",\"native_resolution\":[1920,1080],\"reference_guest\":\"Debian-RPA\",\"windows_license_required\":false},\"ubuntu\":{\"memory_mb\":2048,\"cpus\":2,\"disk_mb\":256000,\"firmware\":\"bios\",\"disk_allocation\":\"dynamic\",\"native_resolution\":[1920,1080],\"reference_guest\":\"Debian-RPA resources only; Ubuntu guest not observed\",\"windows_license_required\":false}},\"questions\":[\"At this session, take a snapshot before changes? It uses additional disk space and only preserves the captured point in time.\",\"Set up the VM environment now?\",\"Provide the host OS installation ISO path. Debian is the default.\",\"Create a Windows VM too? Recommend it when your certificate workflow needs Windows-only security software.\"],\"windows_notice\":\"Windows requires a valid license. Activate it yourself after installation. No license is included.\",\"public_credentials\":{\"username\":\"vboxuser\",\"password\":\"password123!\"},\"install_guide\":\"https://www.virtualbox.org/wiki/Downloads\",\"next_action\":\"After user setup consent and ISO/spec confirmation, call vm_create once.\",\"vm_created\":false}"
+        ]
+      }
+    },
+    {
+      "tool": "vm_run_history",
+      "result": {
+        "status": "completed",
+        "tool": "vm_run_history",
+        "texts": [
+          "{\"status\":\"observed\",\"database\":\"C:\\\\Users\\\\vboxuser\\\\VAMP\\\\history.sqlite3\",\"runs\":[]}"
+        ]
+      }
+    }
+  ],
+  "status": "passed",
+  "vm_created": false
+}

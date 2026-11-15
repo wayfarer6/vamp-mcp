@@ -1,0 +1,41 @@
+{
+  "robot_passed": true,
+  "capture_method": "timestamped VM screenshots, nominal 2 fps",
+  "captured_frames": 53,
+  "native_resolution": [
+    1920,
+    1080
+  ],
+  "delivery_resolution": [
+    2560,
+    1440
+  ],
+  "upscaled": false,
+  "bytes": 1103341,
+  "timeline": [
+    {
+      "seconds": 0.62,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 5.14,
+      "text": "vm_keyboard_type completed"
+    },
+    {
+      "seconds": 5.4,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 14.4,
+      "text": "Fresh Windows-host JSON verified: inventory, setup and history"
+    },
+    {
+      "seconds": 24.49,
+      "text": "OCR verified: WINDOWS MCP PASS"
+    },
+    {
+      "seconds": 26.49,
+      "text": "Robot PASS"
+    }
+  ]
+}

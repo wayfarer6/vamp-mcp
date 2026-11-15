@@ -1,6 +1,6 @@
 # VirtualBox RPA (Ubuntu 호스트에서 기존 VM 검증)
 
-SPICE/KVM과 별도로 동작하는 호스트용 백엔드입니다. 원본 [chryaner/mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox)의 화면·입력 구현을 실제 호출합니다. VM 게스트에 RPA 에이전트를 설치하지 않습니다. Windows/Linux 호스트에서 사용하도록 작성했으며, 현재 Ubuntu 호스트의 Win-RPA/Windows 11과 Debian-RPA/Debian 13에서 실행·입력·해상도·공유 녹화·Robot 이력을 검증했습니다. 실제 새 VM 생성과 스냅샷 촬영·복원은 사용자 요청에 따라 실행하지 않았습니다. Windows/macOS 호스트는 별도 테스트 전입니다.
+SPICE/KVM과 별도로 동작하는 호스트용 백엔드입니다. 원본 [chryaner/mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox)의 화면·입력 구현을 실제 호출합니다. VM 게스트에 RPA 에이전트를 설치하지 않습니다. Windows/Linux 호스트에서 사용하도록 작성했으며, 현재 Ubuntu 호스트의 Win-RPA/Windows 11과 Debian-RPA/Debian 13에서 실행·입력·해상도·공유 녹화·Robot 이력을 검증했습니다. 오프라인 스냅샷 생성·조회·삭제도 확인했습니다. 실제 새 OS 무인 설치 완료와 스냅샷 복원은 미검증입니다. Windows 호스트의 실제 MCP stdio 목록·설정·이력 조회를 추가 검증했으며, macOS 호스트는 테스트 전입니다. 자세한 범위는 [검증 기록](../../docs/VALIDATION.md)을 확인하세요.
 
 ## 설치
 

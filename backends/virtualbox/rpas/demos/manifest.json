@@ -1,0 +1,7 @@
+{
+  "id": "virtualbox_demos",
+  "backend": "virtualbox",
+  "entry": "input.robot",
+  "python": "workflow.py",
+  "description": "Explicitly record short real VM demonstrations; deliver native FHD footage padded to QHD."
+}

@@ -1,0 +1,49 @@
+{
+  "robot_passed": true,
+  "capture_method": "timestamped VM screenshots, nominal 2 fps",
+  "captured_frames": 41,
+  "native_resolution": [
+    1920,
+    1080
+  ],
+  "delivery_resolution": [
+    2560,
+    1440
+  ],
+  "upscaled": false,
+  "bytes": 434512,
+  "timeline": [
+    {
+      "seconds": 11.62,
+      "text": "OCR verified: SHARED WITH HOST"
+    },
+    {
+      "seconds": 12.3,
+      "text": "vm_mouse_click completed"
+    },
+    {
+      "seconds": 13.64,
+      "text": "vm_mouse_click completed"
+    },
+    {
+      "seconds": 14.92,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 16.25,
+      "text": "vm_mouse_click completed"
+    },
+    {
+      "seconds": 18.49,
+      "text": "vm_recording_share completed"
+    },
+    {
+      "seconds": 18.49,
+      "text": "Saved source verified without execution: click (1800, 800)"
+    },
+    {
+      "seconds": 20.49,
+      "text": "Robot PASS"
+    }
+  ]
+}

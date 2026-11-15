@@ -1,0 +1,41 @@
+{
+  "robot_passed": true,
+  "capture_method": "timestamped VM screenshots, nominal 2 fps",
+  "captured_frames": 36,
+  "native_resolution": [
+    1920,
+    1080
+  ],
+  "delivery_resolution": [
+    2560,
+    1440
+  ],
+  "upscaled": false,
+  "bytes": 823412,
+  "timeline": [
+    {
+      "seconds": 0.62,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 2.09,
+      "text": "vm_keyboard_type completed"
+    },
+    {
+      "seconds": 2.35,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 7.29,
+      "text": "vm_keyboard_type completed"
+    },
+    {
+      "seconds": 15.99,
+      "text": "OCR verified: VAMP Robot Framework"
+    },
+    {
+      "seconds": 18.02,
+      "text": "Robot PASS"
+    }
+  ]
+}

@@ -14,7 +14,7 @@ for(const name of ['scripts/build_recorder_media.py','guest_setup/recorder','thi
   'third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/rpas','backends/virtualbox/history.py','backends/virtualbox/recording_listener.py','backends/virtualbox/mouse_click.py','backends/virtualbox/shares.py','backends/virtualbox/recordings.py','backends/virtualbox/snapshots.py','backends/virtualbox/profiles.json','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
   const destination=path.join(runtime,name);
   await mkdir(path.dirname(destination),{recursive:true});
-  await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__')});
+  await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__') && source!==path.join(root,'backends/virtualbox/rpas/demos')});
 }
 await mkdir(path.join(here,'dist/notices'),{recursive:true});
 for(const name of ['LICENSE','THIRD_PARTY_NOTICES.md']) await copyFile(path.join(root,name),path.join(here,name));

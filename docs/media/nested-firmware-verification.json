@@ -1,0 +1,488 @@
+{
+  "windows_report": {
+    "vm": "VAMP-Nested-Smoke-20261115-235230",
+    "status": "transport_passed_visual_assertion_pending",
+    "guest": "diskless EFI firmware; no installed OS",
+    "checks": [
+      {
+        "tool": "vm_list",
+        "result": {
+          "status": "completed",
+          "tool": "vm_list",
+          "texts": [
+            "[{\"name\":\"VAMP-Nested-Smoke-20261115-235230\",\"uuid\":\"0dd673c4-e4b0-4109-be55-e7c1d4d7f673\"}]"
+          ]
+        }
+      },
+      {
+        "tool": "vm_info",
+        "result": {
+          "status": "completed",
+          "tool": "vm_info",
+          "texts": [
+            "{\"name\":\"VAMP-Nested-Smoke-20261115-235230\",\"encryption\":\"disabled\",\"groups\":\"/\",\"platformArchitecture\":\"x86\",\"ostype\":\"Other Linux (64-bit)\",\"UUID\":\"0dd673c4-e4b0-4109-be55-e7c1d4d7f673\",\"CfgFile\":\"C:\\\\Users\\\\vboxuser\\\\VirtualBox VMs\\\\VAMP-Nested-Smoke-20261115-235230\\\\VAMP-Nested-Smoke-20261115-235230.vbox\",\"SnapFldr\":\"C:\\\\Users\\\\vboxuser\\\\VirtualBox VMs\\\\VAMP-Nested-Smoke-20261115-235230\\\\Snapshots\",\"LogFldr\":\"C:\\\\Users\\\\vboxuser\\\\VirtualBox VMs\\\\VAMP-Nested-Smoke-20261115-235230\\\\Logs\",\"hardwareuuid\":\"0dd673c4-e4b0-4109-be55-e7c1d4d7f673\",\"memory\":\"256\",\"pagefusion\":\"off\",\"vram\":\"16\",\"cpuexecutioncap\":\"100\",\"cpu-profile\":\"host\",\"chipset\":\"piix3\",\"firmware\":\"EFI\",\"cpus\":\"1\",\"hpet\":\"off\",\"pae\":\"on\",\"longmode\":\"on\",\"triplefaultreset\":\"off\",\"apic\":\"on\",\"x2apic\":\"on\",\"nested-hw-virt\":\"off\",\"hwvirtex\":\"on\",\"nestedpaging\":\"on\",\"largepages\":\"on\",\"vtxvpid\":\"on\",\"vtxux\":\"on\",\"virtvmsavevmload\":\"on\",\"cpuid-portability-level\":\"0\",\"bootmenu\":\"messageandmenu\",\"boot1\":\"none\",\"boot2\":\"none\",\"boot3\":\"none\",\"boot4\":\"none\",\"acpi\":\"on\",\"ioapic\":\"on\",\"biosapic\":\"apic\",\"biossystemtimeoffset\":\"0\",\"NvramFile\":\"C:\\\\Users\\\\vboxuser\\\\VirtualBox VMs\\\\VAMP-Nested-Smoke-20261115-235230\\\\VAMP-Nested-Smoke-20261115-235230.nvram\",\"rtcuseutc\":\"on\",\"iommu\":\"none\",\"paravirtprovider\":\"default\",\"effparavirtprovider\":\"kvm\",\"VMState\":\"running\",\"VMStateChangeTime\":\"2026-11-15T15:42:48.497000000\",\"graphicscontroller\":\"vboxvga\",\"monitorcount\":\"1\",\"accelerate3d\":\"off\",\"teleporterenabled\":\"off\",\"teleporterport\":\"0\",\"teleporteraddress\":\"\",\"teleporterpassword\":\"\",\"tracing-enabled\":\"off\",\"tracing-allow-vm-access\":\"off\",\"tracing-config\":\"\",\"autostart-enabled\":\"off\",\"autostart-delay\":\"0\",\"defaultfrontend\":\"\",\"vmprocpriority\":\"default\",\"nic1\":\"none\",\"nic2\":\"none\",\"nic3\":\"none\",\"nic4\":\"none\",\"nic5\":\"none\",\"nic6\":\"none\",\"nic7\":\"none\",\"nic8\":\"none\",\"hidpointing\":\"usbtablet\",\"hidkeyboard\":\"ps2kbd\",\"uart1\":\"off\",\"uart2\":\"off\",\"uart3\":\"off\",\"uart4\":\"off\",\"lpt1\":\"off\",\"lpt2\":\"off\",\"audio\":\"default\",\"audio_out\":\"off\",\"audio_in\":\"off\",\"clipboard\":\"disabled\",\"clipboard_file_transfers\":\"off\",\"draganddrop\":\"disabled\",\"SessionName\":\"headless\",\"VideoMode\":\"1280,800,32\\\"@0,0 1\",\"vrde\":\"off\",\"usb\":\"on\",\"ehci\":\"off\",\"xhci\":\"on\",\"SharedFolderNameMachineMapping1\":\"VAMPRecords\",\"SharedFolderPathMachineMapping1\":\"C:\\\\Users\\\\vboxuser\\\\VAMP\\\\recordings\\\\VAMP-Nested-Smoke-20261115-235230-f4a722bc\",\"VRDEActiveConnection\":\"off\",\"VRDEClients\":\"=0\",\"recording_started\":\"off\",\"recording_enabled\":\"off\",\"recording_screens\":\"1\",\"rec_screen_enabled\":\"on\",\"rec_screen_id\":\"0\",\"rec_screen_video_enabled\":\"on\",\"rec_screen_audio_enabled\":\"off\",\"rec_screen_dest\":\"File\",\"rec_screen_dest_filename\":\"C:\\\\Users\\\\vboxuser\\\\VirtualBox VMs\\\\VAMP-Nested-Smoke-20261115-235230\\\\VAMP-Nested-Smoke-20261115-235230-screen0.webm\",\"rec_screen_opts\":\"ac_profile=med\",\"rec_screen_video_res_xy\":\"1024x768\",\"rec_screen_video_rate_kbps\":\"512\",\"rec_screen_video_fps\":\"25\",\"GuestMemoryBalloon\":\"0\",\"GuestOSType\":\"Linux_64\",\"GuestAdditionsRunLevel\":\"0\"}"
+          ]
+        }
+      },
+      {
+        "tool": "vm_start",
+        "result": {
+          "status": "completed",
+          "tool": "vm_start",
+          "texts": [
+            "{\"status\":\"already_running\",\"vm\":\"VAMP-Nested-Smoke-20261115-235230\",\"display\":{\"native_target\":[1920,1080],\"viewer\":\"scaled\",\"auto_resize_guest\":false,\"resolution_verified\":false,\"viewer_reopen_may_be_required\":true,\"status\":\"configured\",\"vm\":\"VAMP-Nested-Smoke-20261115-235230\",\"video_hint\":\"sent\",\"observed_resolution\":[1280,800],\"action_required\":\"Set 1920x1080 inside the guest OS after installing display drivers/Guest Additions; recheck with vm_configure_display.\"}}"
+          ]
+        }
+      },
+      {
+        "tool": "vm_keyboard_scancode",
+        "result": {
+          "status": "completed",
+          "tool": "vm_keyboard_scancode",
+          "texts": [
+            "Sent \"enter\" x1 (scancodes: 1c 9c)"
+          ]
+        }
+      },
+      {
+        "tool": "vm_screenshot_before",
+        "result": {
+          "status": "completed",
+          "tool": "vm_screenshot",
+          "texts": [],
+          "screenshot": "C:\\Users\\vboxuser\\VAMP-Lab\\nested-demo\\nested-before.png"
+        }
+      },
+      {
+        "tool": "vm_screen_info",
+        "result": {
+          "status": "completed",
+          "tool": "vm_screen_info",
+          "texts": [
+            "{\n  \"width\": \"1280\",\n  \"height\": \"800\",\n  \"bpp\": \"32\",\n  \"vram\": \"16\",\n  \"graphicsController\": \"vboxvga\",\n  \"monitors\": \"1\"\n}"
+          ]
+        }
+      },
+      {
+        "tool": "vm_keyboard_scancode",
+        "result": {
+          "status": "completed",
+          "tool": "vm_keyboard_scancode",
+          "texts": [
+            "Sent \"esc\" x1 (scancodes: 01 81)"
+          ]
+        }
+      },
+      {
+        "tool": "vm_screenshot",
+        "result": {
+          "status": "completed",
+          "tool": "vm_screenshot",
+          "texts": [],
+          "screenshot": "C:\\Users\\vboxuser\\VAMP-Lab\\nested-demo\\nested.png"
+        }
+      }
+    ],
+    "vm_created": false,
+    "started_at": 1794757690.0916224
+  },
+  "ocr": {
+    "lines": [
+      {
+        "text": "0 MB Ram",
+        "confidence": 0.7670876979827881,
+        "xyxy": [
+          845,
+          59,
+          912,
+          73
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Select Language",
+        "confidence": 0.9877248406410217,
+        "xyxy": [
+          21,
+          133,
+          144,
+          154
+        ],
+        "language": "en"
+      },
+      {
+        "text": "<Standard English>",
+        "confidence": 0.9730055332183838,
+        "xyxy": [
+          447,
+          133,
+          592,
+          153
+        ],
+        "language": "en"
+      },
+      {
+        "text": "This selection will take you to the Boot Manager",
+        "confidence": 0.9942842125892639,
+        "xyxy": [
+          877,
+          133,
+          1265,
+          153
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Dev ice Manager",
+        "confidence": 0.9508698582649231,
+        "xyxy": [
+          3,
+          173,
+          135,
+          190
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Boot Manager",
+        "confidence": 0.9782159924507141,
+        "xyxy": [
+          19,
+          190,
+          122,
+          210
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Boot Maintenance Manager",
+        "confidence": 0.9761139750480652,
+        "xyxy": [
+          19,
+          209,
+          216,
+          229
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Continue",
+        "confidence": 0.999724805355072,
+        "xyxy": [
+          20,
+          247,
+          89,
+          266
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Reset",
+        "confidence": 0.9999004602432251,
+        "xyxy": [
+          20,
+          267,
+          65,
+          285
+        ],
+        "language": "en"
+      },
+      {
+        "text": "\u21911=Move Highlight",
+        "confidence": 0.963257372379303,
+        "xyxy": [
+          14,
+          742,
+          153,
+          762
+        ],
+        "language": "en"
+      },
+      {
+        "text": "<Enter>=Select Entry",
+        "confidence": 0.9994214177131653,
+        "xyxy": [
+          421,
+          741,
+          586,
+          763
+        ],
+        "language": "en"
+      }
+    ],
+    "elapsed_ms": 3130.36,
+    "service_pid": 30960
+  },
+  "before_ocr": {
+    "lines": [
+      {
+        "text": "Boot Manager",
+        "confidence": 0.9975034594535828,
+        "xyxy": [
+          579,
+          17,
+          681,
+          41
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Boot",
+        "confidence": 0.9999139308929443,
+        "xyxy": [
+          22,
+          97,
+          60,
+          112
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Manager",
+        "confidence": 0.999903678894043,
+        "xyxy": [
+          58,
+          95,
+          121,
+          115
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Menu",
+        "confidence": 0.9997573494911194,
+        "xyxy": [
+          125,
+          98,
+          160,
+          112
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Use",
+        "confidence": 0.9998566508293152,
+        "xyxy": [
+          22,
+          154,
+          51,
+          170
+        ],
+        "language": "en"
+      },
+      {
+        "text": "the",
+        "confidence": 0.9999820590019226,
+        "xyxy": [
+          50,
+          151,
+          84,
+          172
+        ],
+        "language": "en"
+      },
+      {
+        "text": "<t>",
+        "confidence": 0.8252037167549133,
+        "xyxy": [
+          84,
+          154,
+          112,
+          170
+        ],
+        "language": "en"
+      },
+      {
+        "text": "and",
+        "confidence": 0.9999461770057678,
+        "xyxy": [
+          117,
+          154,
+          145,
+          170
+        ],
+        "language": "en"
+      },
+      {
+        "text": "<1>",
+        "confidence": 0.8734696507453918,
+        "xyxy": [
+          149,
+          154,
+          180,
+          170
+        ],
+        "language": "en"
+      },
+      {
+        "text": "keys",
+        "confidence": 0.9997807741165161,
+        "xyxy": [
+          179,
+          153,
+          221,
+          171
+        ],
+        "language": "en"
+      },
+      {
+        "text": "to",
+        "confidence": 0.9999738931655884,
+        "xyxy": [
+          221,
+          155,
+          245,
+          170
+        ],
+        "language": "en"
+      },
+      {
+        "text": "choose a boot option,",
+        "confidence": 0.9779753088951111,
+        "xyxy": [
+          242,
+          154,
+          420,
+          171
+        ],
+        "language": "en"
+      },
+      {
+        "text": "the <Enter> key to select a boot option,",
+        "confidence": 0.9937469363212585,
+        "xyxy": [
+          418,
+          151,
+          749,
+          173
+        ],
+        "language": "en"
+      },
+      {
+        "text": "and the",
+        "confidence": 0.9847897887229919,
+        "xyxy": [
+          746,
+          153,
+          813,
+          171
+        ],
+        "language": "en"
+      },
+      {
+        "text": "<Esc>",
+        "confidence": 0.9979388117790222,
+        "xyxy": [
+          809,
+          152,
+          856,
+          171
+        ],
+        "language": "en"
+      },
+      {
+        "text": "key",
+        "confidence": 0.9888653755187988,
+        "xyxy": [
+          20,
+          171,
+          51,
+          192
+        ],
+        "language": "en"
+      },
+      {
+        "text": "to",
+        "confidence": 0.9999755024909973,
+        "xyxy": [
+          55,
+          174,
+          76,
+          190
+        ],
+        "language": "en"
+      },
+      {
+        "text": "exit",
+        "confidence": 0.9999277591705322,
+        "xyxy": [
+          76,
+          172,
+          116,
+          190
+        ],
+        "language": "en"
+      },
+      {
+        "text": "the",
+        "confidence": 0.9999726414680481,
+        "xyxy": [
+          118,
+          173,
+          147,
+          189
+        ],
+        "language": "en"
+      },
+      {
+        "text": "BootI",
+        "confidence": 0.9353764653205872,
+        "xyxy": [
+          148,
+          172,
+          194,
+          190
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Manager",
+        "confidence": 0.9967494606971741,
+        "xyxy": [
+          185,
+          169,
+          248,
+          192
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Menu .",
+        "confidence": 0.9922335147857666,
+        "xyxy": [
+          253,
+          174,
+          292,
+          189
+        ],
+        "language": "en"
+      },
+      {
+        "text": "\u21911=Move Highlight",
+        "confidence": 0.9257018566131592,
+        "xyxy": [
+          12,
+          739,
+          154,
+          760
+        ],
+        "language": "en"
+      },
+      {
+        "text": "Esc=Exit",
+        "confidence": 0.998897135257721,
+        "xyxy": [
+          844,
+          739,
+          915,
+          760
+        ],
+        "language": "en"
+      }
+    ],
+    "elapsed_ms": 3950.35,
+    "service_pid": 30960
+  },
+  "visual_assertion": "passed; ESC changed Boot Manager Menu to firmware main menu",
+  "installed_guest_os_tested": false
+}

@@ -1,0 +1,37 @@
+{
+  "robot_passed": true,
+  "capture_method": "timestamped VM screenshots, nominal 2 fps",
+  "captured_frames": 62,
+  "native_resolution": [
+    1920,
+    1080
+  ],
+  "delivery_resolution": [
+    2560,
+    1440
+  ],
+  "upscaled": false,
+  "bytes": 1222578,
+  "timeline": [
+    {
+      "seconds": 0.63,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 5.24,
+      "text": "vm_keyboard_type completed"
+    },
+    {
+      "seconds": 5.5,
+      "text": "vm_keyboard_scancode completed"
+    },
+    {
+      "seconds": 28.61,
+      "text": "Windows-host nested VM firmware menu transition verified by OCR"
+    },
+    {
+      "seconds": 30.75,
+      "text": "Robot PASS"
+    }
+  ]
+}
