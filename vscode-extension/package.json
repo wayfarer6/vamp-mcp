@@ -1,6 +1,6 @@
 {
   "name": "vamp-mcp",
-  "displayName": "VAMP — Virtual Agent Machine Platform",
+  "displayName": "VAMP \u2014 Virtual Agent Machine Platform",
   "description": "Local VirtualBox MCP tools for AI agents and RPA, with detachable observation and unattended VM provisioning.",
   "version": "0.1.0",
   "publisher": "wayfarer6",
@@ -91,5 +91,6 @@
     "@vscode/vsce": {
       "minimatch": "^11.0.1"
     }
-  }
+  },
+  "icon": "icon.png"
 }

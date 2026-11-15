@@ -20,7 +20,7 @@ code --install-extension ../artifacts/vamp-mcp-0.1.0.vsix
 
 ## 게시자 등록과 업로드
 
-`package.json`의 publisher `wayfarer6`는 현재 GitHub 저장소 소유자 이름에 맞춘 **미검증 게시자 ID**입니다. Marketplace에서 해당 ID를 소유/등록한 뒤 실제 publisher에 맞게 수정하고 재패키징해야 합니다. GitHub 로그인이나 VS Code 로그인만으로 Marketplace 게시 권한이 생기지 않습니다.
+`package.json`의 publisher `wayfarer6`는 사용자가 지정한 게시자 ID입니다. 실제 Marketplace 등록/권한은 아직 확인하지 못했습니다. Marketplace에서 해당 ID를 소유/등록한 뒤 실제 publisher에 맞게 수정하고 재패키징해야 합니다. GitHub 로그인이나 VS Code 로그인만으로 Marketplace 게시 권한이 생기지 않습니다.
 
 1. [Marketplace 게시자 관리](https://marketplace.visualstudio.com/manage)에서 로그인하고 Publisher를 생성하거나 기존 Publisher의 권한을 확인합니다.
 2. publisher ID와 확장 정보/라이선스/preview 상태를 검토합니다. 현재 버전은 실험적 preview이므로 manifest의 preview 표기를 유지합니다.

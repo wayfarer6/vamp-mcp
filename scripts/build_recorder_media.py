@@ -29,7 +29,7 @@ def build(output=None):
         iso.write(str(destination))
     finally: iso.close()
     return {'status':'media_built','iso':str(destination),'guest_setup_completed':False,
-            'guest_installers':{'windows11':'setup.ps1','debian':'setup.sh'},
+            'guest_installers':{'windows11':'setup-win.cmd','debian':'setup.sh'},
             'recorder_license':'GPL-3.0','recording_started':False}
 
 if __name__=='__main__':
