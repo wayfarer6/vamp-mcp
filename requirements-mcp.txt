@@ -1,0 +1,3 @@
+# Optional stdio MCP server; install the host backend requirements separately.
+mcp==1.30.0
+robotframework==7.5.1

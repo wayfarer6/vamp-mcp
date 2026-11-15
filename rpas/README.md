@@ -156,3 +156,9 @@ Robot의 작업·키워드 시작/종료 경계를 녹화 시작·종료나 타�
 - [전체 설명](../docs/RECORDING_CONVERSION.md) 및 `$spice-recording-convert` 스킬을 제공합니다.
 
 Windows는 Win+R, Debian GNOME은 Alt+F2 같은 공통 실행기를 사용하고 바탕화면 아이콘 시작은 피합니다. 생성기는 기존 폴더를 덮어쓰지 않습니다. 기본 상태는 검토/구현 대기로, VM에 입력하지 않습니다. 원시 `recording.local.json`은 Git에 포함되지 않으므로 공유받은 쪽에서는 재생성하거나 정리된 동작을 작성해야 합니다.
+
+## MCP와 모델 상주
+
+[MCP 서버](../docs/VM_MCP.md)가 패키지를 호출할 수도 있습니다. VM별 호환 목록은 `config/vm-mcp.json`에서 관리하며, SPICE 주소는 실제 libvirt VM에서 확인합니다. [모델 워커](../docs/MODEL_BACKGROUND.md)는 첫 실제 연결에서 자동 시작해 RPA 종료 후에도 유지됩니다. dry-run이나 변환은 모델/VM을 시작하지 않습니다.
+
+Hyper-V는 [별도 백엔드 폴더](../backends/hyperv/README.md)입니다. 이 폴더의 SPICE `common.resource`를 Hyper-V Robot 작업에서 import하지 않습니다.

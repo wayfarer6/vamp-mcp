@@ -1,0 +1,89 @@
+# VM RPA MCP 서버
+
+브랜치: `feat/vm-mcp-server`. stdio MCP 서버가 VM 조회·관찰·입력·Robot RPA 실행과 상주 모델 관리를 연결합니다. 기존 스킬/CLI/Robot 패키지도 계속 사용할 수 있습니다.
+
+## 설치 및 연결
+
+Ubuntu/SPICE 호스트는 먼저 [설치 안내](INSTALL.md)를 따른 뒤 MCP 의존성을 추가합니다.
+
+```bash
+.venv/bin/python -m pip install -r requirements-mcp.txt
+.venv/bin/python vm_mcp_server.py
+```
+
+두 번째 명령은 stdio 프로토콜을 기다리는 서버입니다. 일반 대화형 터미널 출력 도구가 아닙니다. MCP 클라이언트가 해당 명령을 실행하도록 등록하세요. 예시는 [examples/mcp-client.json](../examples/mcp-client.json)이며, `mcpServers` 형식을 지원하는 클라이언트용입니다. 경로와 클라이언트별 설정 형식은 환경에 맞춰 바꿉니다.
+
+```json
+{
+  "mcpServers": {
+    "vm-rpa": {
+      "command": "/home/ssh1032007/spice_kvm_based_rpa/.venv/bin/python",
+      "args": ["/home/ssh1032007/spice_kvm_based_rpa/vm_mcp_server.py"]
+    }
+  }
+}
+```
+
+SDK v1(`mcp==1.30.0`)을 사용합니다. [공식 v1 SDK 문서](https://py.sdk.modelcontextprotocol.io/v1/). 현재는 로컬 stdio만 제공하며 HTTP 포트나 원격 인증 서버는 구현하지 않았습니다. SDK/Robot 진단은 stderr 또는 자식 프로세스 로그로 분리해 MCP stdout을 오염시키지 않습니다.
+
+## 도구
+
+| 이름 | 동작 |
+| --- | --- |
+| `vm_list` | 설정된 libvirt VM의 상태·실제 SPICE 주소, Windows에서는 Hyper-V 인벤토리 |
+| `vm_rpas` | 패키지 ID·버전·선택 가능한 진입점 |
+| `vm_start` | 명시적으로 선택한 Off 상태의 libvirt VM 기동 |
+| `vm_inspect` | `ocr`, `analyze`(YOLO+OCR), `screen-info` |
+| `vm_capture` | 게스트 캡처를 로컬 저장하고 경로 반환; 자동 이미지 업로드 없음 |
+| `vm_input` | `click`, `move`, `write`, `hotkey`를 게스트로 전송 |
+| `vm_run_rpa` | OS에 맞는 Robot 진입점 하나 실행, 짧은 결과 반환 |
+| `vm_read_evidence` | artifacts 아래 JSON만 최대 30개씩 조회·검색 |
+| `vm_models` | 모델 백그라운드 프로세스 start/status/stop/restart |
+| `hyperv_open_console` | Windows 호스트에서 UAC·선택적 VM 기동·VMConnect 실행 |
+
+도구 호출 예:
+
+```json
+{"tool":"vm_inspect","arguments":{"vm_name":"windows-RPA","mode":"analyze","languages":"ko,en","query":"로그인","limit":5}}
+```
+
+```json
+{"tool":"vm_run_rpa","arguments":{"vm_name":"debian13","rpa_id":"debian_update","entry":"run","timeout":600}}
+```
+
+```json
+{"tool":"vm_run_rpa","arguments":{"vm_name":"windows-RPA","rpa_id":"windows_naver_recorded","variables":{"ALLOW_REPLAY":"True"}}}
+```
+
+위 JSON은 호출 개념 예시입니다. 실제 MCP 클라이언트에서 도구와 인자를 선택합니다. 기록 재생은 로컬 데이터 검토와 실제 재생 요청이 있을 때만 활성화하세요.
+
+## VM/백엔드 라우팅
+
+`config/vm-mcp.json`이 VM 이름·게스트 OS·백엔드·호환 RPA를 구분합니다. 현재 Debian `debian13`과 Windows 11 `windows-RPA` 모두 Linux/QEMU/SPICE 게스트입니다. 같은 해상도라도 Windows에서 Debian GNOME/apt 패키지를 실행하지 않도록 `supported_rpas`로 구분합니다. 새 패키지·VM은 이 호환 목록에도 등록합니다.
+
+실제 SPICE URI는 매 호출 시 libvirt에서 확인하고 서버가 Robot에 전달합니다. 도구 인자에서 `SPICE_URI`나 RPA ID를 Robot 변수로 덮어쓸 수 없습니다. 프로필은 `VM_MCP_CONFIG` 환경 변수로 다른 JSON을 선택할 수 있습니다. 호스트의 libvirt 접근 권한과 virsh가 필요합니다.
+
+Hyper-V는 [별도 폴더](../backends/hyperv/README.md)와 `$hyperv-rpa` 스킬을 사용합니다. Windows 호스트에서는 `.venv-hyperv`에 `requirements-mcp.txt`와 `backends/hyperv/requirements.txt`를 설치하고 같은 서버 명령을 등록할 수 있습니다. 현재 제공 기능은 인벤토리/VMConnect 기동이며 RDP 화면·입력은 미구현입니다. `hyperv_open_console`의 `launch_requested`는 게스트 접속·로그인 성공이 아닙니다. Windows 코드는 사용자가 현지에서 테스트할 대상으로, 이 Ubuntu 환경에서 실행 검증하지 않았습니다.
+
+## 출력·토큰·긴 작업
+
+기본 응답은 status·검증 여부·run_id·상세/보고서 경로 정도입니다. Robot 전체 로그나 화면 이미지를 매 호출 AI에 전달하지 않습니다. `vm_inspect`는 기본 10개 관찰만 반환하고 query/offset/limit으로 범위를 좁힙니다. 이미 만든 OCR 결과는 `vm_read_evidence`로 읽어 불필요한 재추론을 줄일 수 있습니다.
+
+실행 기록은 `artifacts/mcp/<run_id>/`에 저장합니다. `status`가 실제 앱/RPA 상태이며 `robot_exit_code`나 프로세스 실행 성공만으로 앱 성공을 주장하지 않습니다. CAPTCHA·추가 인증 상태는 사용자 인계로 유지합니다. `vm_input`의 `executed`도 입력 전달만 의미합니다.
+
+이 버전의 RPA 호출은 동기 완료를 기다리므로 MCP 클라이언트의 도구 제한 시간을 작업에 맞춰 늘려야 합니다. 서버 도구의 timeout 기본값은 600초, 최대 1800초입니다. timeout으로 호스트 컨트롤러가 종료되어도 게스트 apt나 이미 실행된 동작은 남을 수 있으므로 재호출 전에 현재 상태를 확인하세요. 비동기 job/poll API는 아직 제공하지 않습니다.
+
+## 자격 증명과 기록
+
+개인 비밀번호를 `vm_input.text`나 Robot 변수로 보내지 마세요. 전용 로그인 진입점에서 서버 실행 환경의 자격 증명 또는 사용자의 로컬 비공개 입력창을 사용합니다. MCP 클라이언트가 별도로 도구 인자를 기록할 수 있습니다. 원시 기록 데이터는 Git 제외 상태를 유지합니다. `vm_read_evidence`는 artifacts JSON에만 접근하며 config·소스·private recording 파일을 읽지 않습니다.
+
+## 모델 프로세스
+
+[독립 백그라운드 모델 프로세스](MODEL_BACKGROUND.md)를 사용합니다. systemd는 없습니다. 첫 실제 SPICE 연결이 자동으로 시작하며 MCP 요청이 끝나도 남아 있습니다. 미리 준비하려면 `vm_models`의 start, 해제하려면 stop을 명시적으로 호출합니다. YOLO 모델과 OCR 파이프라인이 메모리에 유지되지만 전체 화면 OCR 추론 비용까지 사라지지는 않습니다.
+
+## 검증한 범위
+
+- 실제 Ubuntu + NVIDIA에서 stdio 초기화·도구 등록·VM 목록·RPA 목록·모델 상태 조회.
+- 모델 캐시/PID 재사용과 기존 Robot 기반 Windows 게스트 입력·로그인 화면 도달 검증.
+- 단위 테스트와 Robot dry-run.
+- Hyper-V/UAC/VMConnect, RDP, AMD·Apple·NPU 장비 실행은 검증하지 않음.

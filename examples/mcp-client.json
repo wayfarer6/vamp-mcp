@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "vm-rpa": {
+      "command": "/home/ssh1032007/spice_kvm_based_rpa/.venv/bin/python",
+      "args": ["/home/ssh1032007/spice_kvm_based_rpa/vm_mcp_server.py"]
+    }
+  }
+}

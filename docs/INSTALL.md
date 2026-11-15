@@ -131,3 +131,9 @@ Intel NPU 경로는 명시적으로 선택해야 합니다. 첫 사용 때 YOLO 
 ```
 
 위 설정·dry-run 검사는 실제 VM 로그인이나 apt update를 실행하지 않습니다. 실제 실행 명령은 [RPA 패키지 README](../rpas/README.md)에 있습니다.
+
+## MCP / 상주 모델 / Hyper-V 추가 경로
+
+MCP 클라이언트에 연결할 때는 `requirements-mcp.txt`를 추가하고 [MCP 안내](VM_MCP.md)를 따릅니다. 정상 RPA 경로는 모델을 [독립 백그라운드 프로세스](MODEL_BACKGROUND.md)로 재사용합니다. systemd를 설치하지 않습니다.
+
+Windows Hyper-V 호스트용 VMConnect 코드만 사용할 때는 [Hyper-V 전용 설치](../backends/hyperv/README.md)를 따르세요. 해당 경로는 `.venv-hyperv`/별도 requirements이며 Linux GI/SPICE 컨트롤러를 Windows에 설치하는 절차와 다릅니다. RDP 입력·영상 백엔드는 아직 구현되지 않았습니다.

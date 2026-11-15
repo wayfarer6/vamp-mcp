@@ -1,10 +1,41 @@
-# SPICE VM RPA
+# VM RPA MCP Server
 
 호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내는 RPA 프로젝트입니다. 실행 대상은 **Debian VM과 Windows 11 VM으로 구분**합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
 
 이 프로젝트는 사용자가 요구사항과 방향을 제시하고 **AI 에이전트(Codex)와 바이브 코딩으로 개발**했습니다. Python·Robot Framework 코드, 스킬과 문서를 AI의 도움으로 작성·수정했습니다.
 
 **실제 실행·검증 환경: Ubuntu 26.04.1 LTS + NVIDIA GeForce RTX 3050 Laptop GPU.** AMD·Apple·NPU는 설치 프로필과 백엔드 경로를 제공하지만 해당 장비에서 별도 검증하지 않았습니다.
+
+## MCP 서버 브랜치
+
+`feat/vm-mcp-server`에서 기존 RPA를 **VM 기반 MCP 서버**로 묶었습니다. AI는 VM 조회·OCR/YOLO 관찰·입력·Robot 패키지 실행을 도구로 호출하고, 짧은 JSON 결과만 받습니다.
+
+```bash
+.venv/bin/python -m pip install -r requirements-mcp.txt
+.venv/bin/python vm_mcp_server.py
+```
+
+stdio MCP 클라이언트에 위 실행 명령을 등록합니다. [MCP 서버 README/설정 안내](docs/VM_MCP.md) · [클라이언트 설정 예시](examples/mcp-client.json)
+
+| 경로 | 구현 범위 | 검증 |
+| --- | --- | --- |
+| Linux QEMU/KVM + SPICE | 화면·키보드·마우스·OCR/YOLO·Robot RPA·MCP | Ubuntu + NVIDIA |
+| Windows Hyper-V | 별도 Python/PowerShell/Robot으로 정상 UAC 요청·선택적 VM 기동·VMConnect 실행 | 코드 작성만; 사용자가 Windows에서 테스트 예정 |
+| Hyper-V RDP 입력·화면 | 별도 어댑터가 필요한 확장 대상 | 미구현 |
+
+[Hyper-V 전용 폴더와 실행법](backends/hyperv/README.md)을 분리했습니다. Windows 게스트를 KVM에서 쓰는 것과 Windows 호스트의 Hyper-V는 다른 구성입니다.
+
+## YOLO·OCR 모델 백그라운드 상주
+
+systemd 없이 독립 Python 프로세스로 실행합니다. 실제 SPICE RPA의 첫 연결에서 자동 시작하고 RPA/MCP 호출이 끝나도 모델을 유지합니다. 미리 로드하거나 상태를 확인하고 명시적으로 종료할 수도 있습니다.
+
+```bash
+.venv/bin/python scripts/model_service.py start
+.venv/bin/python scripts/model_service.py status
+.venv/bin/python scripts/model_service.py stop
+```
+
+별도 `nohup`/`&`는 필요 없습니다. YOLO와 3개 OCR 파이프라인을 유지하고, 일본어·중국어는 같은 인식 모델을 공유합니다. 모델 초기화 비용을 반복하지 않지만 전체 화면 OCR 연산 비용은 남습니다. [백그라운드 실행·성능·로그 안내](docs/MODEL_BACKGROUND.md)
 
 ## 대상 VM: Debian / Windows 11
 
@@ -270,3 +301,7 @@ Error: The repository 'cdrom://[Debian GNU/Linux 13.7.0 ...] trixie Release' doe
 > 보안 확인 화면이 감지되어 자동화를 멈췄습니다. VM 창에서 CAPTCHA나 추가 인증을 직접 완료한 뒤 ‘완료’라고 알려주세요. 완료 후 제가 화면 상태를 다시 확인하겠습니다.
 
 사용자의 완료 통보 뒤 한 번 재검사하고 예상하는 다음 화면의 긍정적인 OCR 증거를 확인한 후 이어갑니다. `no_challenge_text`는 안내 문구를 찾지 못했다는 뜻이며, CAPTCHA 해제나 로그인 성공을 보장하지 않습니다. 문구가 없는 이미지형 CAPTCHA, 누락된 폰트, 낮은 OCR 품질은 감지를 방해할 수 있습니다. CAPTCHA의 정답을 읽거나 자동으로 풀지 않습니다.
+
+## 라이선스
+
+직접 작성한 코드와 문서는 [MIT](LICENSE)입니다. 가져온 소스·모델·의존성의 원래 라이선스는 유지하며 [별도 고지](THIRD_PARTY_NOTICES.md)를 따릅니다. 전체 YOLO/가중치 의존성까지 MIT로 재허가한 것은 아닙니다.
