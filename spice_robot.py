@@ -221,13 +221,10 @@ class SpiceRobot:
     @keyword
     def detect_guest_targets(self, model='models/omniparser-icon.pt', device='auto', confidence=0.35,
                              output='artifacts/detections.json', image_path=None):
-        import torch
-        from ultralytics import YOLO
-        if device == 'auto':
-            device = '0' if torch.cuda.is_available() else 'cpu'
-        if model not in self.models:
-            self.models[model] = YOLO(model)
-        result = self.models[model].predict(Image.open(image_path) if image_path else self._image(), device=device, imgsz=1280,
+        from inference_device import prepare_detector
+        requested_device = device
+        detector,device = prepare_detector(model,device,self.models)
+        result = detector.predict(Image.open(image_path) if image_path else self._image(), device=device, imgsz=1280,
                                           conf=float(confidence), verbose=False)[0]
         targets = []
         for index, box in enumerate(result.boxes):
@@ -237,7 +234,7 @@ class SpiceRobot:
                             'center': [(coords[0]+coords[2])/2, (coords[1]+coords[3])/2]})
         target = Path(output)
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text(json.dumps({'device':device,'targets':targets}, indent=2))
+        target.write_text(json.dumps({'device':device,'requested_device':requested_device,'targets':targets}, indent=2))
         result.save(filename=str(target.with_suffix('.jpg')))
         return targets
 

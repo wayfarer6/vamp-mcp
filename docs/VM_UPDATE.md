@@ -131,15 +131,15 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 
 기본 출력 폴더를 반복 사용하면 같은 이름의 결과·증거 파일을 덮어씁니다. 실행별 기록이 필요하면 매번 다른 `--output` 폴더를 지정하세요. `--timeout`은 apt 결과 확인 루프의 제한 시간이며, 연결·터미널 열기·인증·개별 OCR 처리 시간을 모두 포함한 전체 제한 시간은 아닙니다.
 
-## 7. 현재 VM에서 확인된 오류
+## 7. 초기 검증에서 확인된 오류
 
-2026-11-15 실제 실행에서는 root 전환과 apt 실행을 OCR만으로 확인했지만, apt 결과는 `failed`였습니다.
+2026-11-15 초기 실행에서는 root 전환과 apt 실행을 OCR만으로 확인했지만, apt 결과는 `failed`였습니다.
 
 ```text
 The repository 'cdrom://[Debian GNU/Linux 13.7.0 ...] trixie Release' does not have a Release file.
 ```
 
-설치 DVD 저장소 설정이 남아 있는 상태입니다. 이 상태에서 실행하면 같은 오류와 Robot FAIL이 다시 나올 수 있습니다. RPA는 저장소 설정을 자동 수정하지 않습니다. 해당 실행의 게스트 로그는 `/tmp/spice-rpa-apt-qrfpzy.log`입니다.
+이 기록은 설치 DVD 저장소 설정이 남아 있던 초기 환경의 오류입니다. 이후 사용자는 성공 결과를 보고했으므로 현재 결과는 새 실행의 summary.json으로 확인하세요. 이 상태에서 실행하면 같은 오류와 Robot FAIL이 다시 나올 수 있습니다. RPA는 저장소 설정을 자동 수정하지 않습니다. 해당 실행의 게스트 로그는 `/tmp/spice-rpa-apt-qrfpzy.log`입니다.
 
 ## 8. 중단·연결 문제
 

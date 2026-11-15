@@ -1,0 +1,6 @@
+# Huawei Ascend only. Match the CANN driver/toolkit to this TorchNPU version.
+# This is NOT a universal NPU package set; see docs/INSTALL.md.
+-r requirements.txt
+torch==2.7.1
+torchvision==0.22.1
+torch-npu==2.7.1

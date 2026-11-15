@@ -1,0 +1,5 @@
+# Shared controller packages. Native GI/SPICE libraries are installed by the OS.
+robotframework==7.5.1
+PyAutoGUI==0.9.54
+Pillow>=10
+requests>=2.31

@@ -7,3 +7,5 @@ models/*.pt
 *.part
 .env
 .env.*
+
+models/*_openvino_model/

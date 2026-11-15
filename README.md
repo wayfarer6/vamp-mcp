@@ -1,6 +1,26 @@
 # SPICE VM RPA
 
-호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내 Debian VM을 제어합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
+호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내는 RPA 프로젝트입니다. 실행 대상은 **Debian VM과 Windows 11 VM으로 구분**합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
+
+이 프로젝트는 사용자가 요구사항과 방향을 제시하고 **AI 에이전트(Codex)와 바이브 코딩으로 개발**했습니다. Python·Robot Framework 코드, 스킬과 문서를 AI의 도움으로 작성·수정했습니다.
+
+**실제 실행·검증 환경: Ubuntu 26.04.1 LTS + NVIDIA GeForce RTX 3050 Laptop GPU.** AMD·Apple·NPU는 설치 프로필과 백엔드 경로를 제공하지만 해당 장비에서 별도 검증하지 않았습니다.
+
+## 대상 VM: Debian / Windows 11
+
+| 대상 | 현재 libvirt VM 이름 | 공통 기준 해상도 | 현재 시나리오 상태 |
+| --- | --- | --- | --- |
+| Debian VM | `debian13` | 1920×1080 | GNOME Firefox·네이버·root apt update 예제 구현 및 실제 실행 확인 |
+| Windows 11 VM | `windows-RPA` | 1920×1080 | 별도 실행 대상; Windows 전용 기동·업데이트 절차는 미구현·미검증 |
+
+해상도가 같아도 OS·브라우저 배율·글꼴·UI 배치는 다르므로 좌표와 탐지 규칙을 검증 없이 공유하지 않습니다. 공통 SPICE/OCR 엔진을 재사용하고, OS별 `.robot`과 Python 동작은 구분해 관리합니다. 현재 GNOME `Alt+F2`, `su root`, `apt update`를 쓰는 패키지는 Debian용입니다. 게스트 Windows 11과 RPA를 설치하는 호스트 OS는 별개입니다.
+
+두 VM의 SPICE 포트는 libvirt에서 자동 배정합니다. VM을 실행한 뒤 실제 주소를 확인해 `SPICE_URI`에 전달하세요. 개발 기본값 `spice://127.0.0.1:5900`이 항상 Debian에 연결된다고 가정하지 마세요.
+
+```bash
+virsh -c qemu:///system domdisplay debian13
+virsh -c qemu:///system domdisplay windows-RPA
+```
 
 ## RPA별 패키지 규격
 
@@ -20,14 +40,14 @@ rpas/
 └── common.resource     # 공통 연결·종료·결과·사용자 인계
 ```
 
-| 패키지 ID | 작업 |
-| --- | --- |
-| `firefox_launch` | Firefox 실행 |
-| `firefox_naver` | Firefox에서 네이버 접속 |
-| `naver_login` | 로그인 폼 검출 또는 명시적으로 선택한 로그인 제출 |
-| `debian_update` | root apt update |
-| `captcha_handoff` | CAPTCHA·추가 인증 감지 후 사용자 인계 |
-| `desktop_control` | 화면·OCR·YOLO·좌표·키보드 작업 |
+| 패키지 ID | 현재 대상 | 작업 |
+| --- | --- | --- |
+| `firefox_launch` | Debian GNOME | Firefox 실행 |
+| `firefox_naver` | Debian GNOME | Firefox에서 네이버 접속 |
+| `naver_login` | Debian GNOME 기동 절차 | 로그인 폼 검출 또는 명시적으로 선택한 로그인 제출 |
+| `debian_update` | Debian 전용 | root apt update |
+| `captcha_handoff` | 공통 OCR; Windows 미검증 | CAPTCHA·추가 인증 감지 후 사용자 인계 |
+| `desktop_control` | 공통 SPICE; Windows 미검증 | 화면·OCR·YOLO·좌표·키보드 작업 |
 
 ```bash
 cd /home/ssh1032007/spice_kvm_based_rpa
@@ -44,21 +64,55 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 
 ## 설치
 
-Linux 호스트의 시스템 Python과 일치하는 PyGObject/SPICE GI 바인딩이 필요합니다. 이 환경은 시스템 Python 3.14, `gir1.2-spiceclientglib-2.0`, Pillow를 사용합니다. 배포판에 따라 시스템 패키지를 설치하세요. GUI 세션의 `DISPLAY`, `XAUTHORITY`가 있어야 PyAutoGUI를 import할 수 있습니다.
+[수동 설치·AI 에이전트 설치·플랫폼별 세부 안내](docs/INSTALL.md)에 전체 절차를 정리했습니다. requirements는 **컨트롤러 호스트**에 설치하고 게스트 VM에는 설치하지 않습니다.
+
+### 수동 설치 — Ubuntu + NVIDIA
 
 ```bash
+sudo apt update
+sudo apt install python3-venv python3-gi python3-pil gir1.2-spiceclientglib-2.0
 /usr/bin/python3 -m venv --system-site-packages .venv
-.venv/bin/pip install -r requirements.txt
-uv venv --python 3.12 .venv-ocr
-uv pip install --python .venv-ocr/bin/python -r requirements-ocr.txt
+.venv/bin/python -m pip install -r requirements-nvidia.txt
+.venv/bin/python -m pip install uv
+.venv/bin/uv venv --python 3.12 .venv-ocr
+.venv/bin/uv pip install --python .venv-ocr/bin/python -r requirements-ocr.txt
 .venv/bin/python scripts/download_models.py
 ```
 
-Torch/CUDA 의존성은 설치 용량이 큽니다. YOLO는 `torch.cuda.is_available()`에 따라 GPU 또는 CPU를 선택합니다. OCR은 호환성을 위해 별도 Python 3.12 환경에서 CPU로 실행합니다. OCR 모델은 첫 실행 때 내려받습니다.
+OS의 GI/SPICE와 컨트롤러 Python 버전이 맞아야 합니다. 현재 환경은 컨트롤러 Python 3.14와 OCR Python 3.12를 사용합니다. Linux 호스트에서는 GUI 세션의 `DISPLAY`, `XAUTHORITY`도 필요합니다.
 
-## Firefox 실행
+| 호스트 가속기 | requirements | YOLO `DEVICE` | 검증 상태 |
+| --- | --- | --- | --- |
+| NVIDIA CUDA | `requirements-nvidia.txt` | `auto` / `0` | Ubuntu + NVIDIA 실제 실행 확인 |
+| CPU | `requirements-cpu.txt` | `cpu` | 기존 Ubuntu에서 CPU 추론 확인; 새 설치 프로필 미검증 |
+| AMD ROCm | `requirements-amd-rocm.txt` | `rocm` / `auto` | 미검증 |
+| Apple Silicon MPS | `requirements-apple.txt` | `mps` / `auto` | 미검증 |
+| Huawei Ascend NPU | `requirements-npu-ascend.txt` | `ascend-npu` | 미검증 |
+| Intel NPU OpenVINO | `requirements-npu-intel.txt` | `intel-npu` | 미검증 |
 
-현재 VM: `debian13`, SPICE: `spice://127.0.0.1:5900`, 기본 화면 1920×1080.
+프로필은 하나만 선택해 `pip install -r <파일>`로 설치합니다. 드라이버·ROCm·CANN·SPICE GI는 pip와 별도로 준비해야 합니다. Apple은 MPS GPU 경로이며 Neural Engine 지원을 의미하지 않습니다. NPU는 제조사별 런타임을 구분하며 모든 NPU를 지원한다는 뜻은 아닙니다. PaddleOCR는 모든 프로필에서 별도 `requirements-ocr.txt`와 CPU를 사용합니다. 기존 `requirements.txt`는 일반/호환 설치용으로 유지합니다.
+
+`auto`는 사용 가능한 CUDA/ROCm → MPS → Ascend → CPU 순서로 선택합니다. Intel NPU는 명시적으로 선택하며 최초 OpenVINO 모델 변환이 필요합니다. 사용 예:
+
+```bash
+.venv/bin/python scripts/run_rpa.py desktop_control --var ACTION:analyze --var DEVICE:rocm
+.venv/bin/python scripts/run_rpa.py desktop_control --var ACTION:analyze --var DEVICE:mps
+.venv/bin/python scripts/run_rpa.py desktop_control --var ACTION:analyze --var DEVICE:intel-npu
+```
+
+설치 조합 출처: [PyTorch](https://pytorch.org/get-started/previous-versions/), [MPS](https://docs.pytorch.org/docs/stable/notes/mps.html), [Ascend](https://docs.ultralytics.com/integrations/ascend/), [OpenVINO](https://docs.ultralytics.com/integrations/openvino/). 프로필 제공과 실제 장비 검증은 구분합니다.
+
+### AI 에이전트에게 설치 요청
+
+`$spice-rpa-install` 스킬을 추가했습니다. 예시:
+
+> README와 docs/INSTALL.md를 읽고 내 호스트에 맞는 requirements 하나로 컨트롤러 venv와 OCR venv를 설치해줘. Ubuntu + NVIDIA만 검증된 프로젝트라는 점을 유지하고, 게스트에 패키지를 설치하거나 로그인·업데이트 RPA를 실행하지 마.
+
+에이전트는 호스트 OS·Python·GI·가속기 런타임을 확인한 뒤 프로필 하나를 고르고 pip/uv 설치를 진행합니다. AMD·Apple·NPU 장비별 테스트는 별도 요청이 없으면 실행하지 않습니다. [설치 스킬](.agents/skills/spice-rpa-install/SKILL.md)
+
+## Firefox 실행 — Debian GNOME
+
+Debian 검증 예제: `debian13`, 당시 SPICE 주소 `spice://127.0.0.1:5900`, 기준 화면 1920×1080. 실제 실행 주소는 위 VM 구분 절차로 확인하세요.
 
 ```bash
 .venv/bin/python -m robot --outputdir artifacts tests/launch_firefox.robot
@@ -173,7 +227,7 @@ AI 로그인 스킬은 `.agents/skills/spice-naver-login/SKILL.md`이며 현재 
 
 AI는 화면 이미지를 보지 않고 로컬 PaddleOCR의 텍스트만 읽습니다. 실행 결과 표식은 printf의 8진수 이스케이프로 출력하므로, 명령어가 화면에 에코된 것을 성공 결과로 오인하지 않습니다. 콘솔과 라이브러리는 요약 결과만 반환합니다. 요약은 `artifacts/vm-update/summary.json`, 전체 OCR 기록은 `artifacts/vm-update/result.json`에 저장됩니다. `--full-result` 옵션으로 실행하면 콘솔에도 전체 기록을 출력합니다. `succeeded`, `completed_with_warnings`, `failed`, 검증 불가·타임아웃 상태를 구분하며, Robot 예시는 `succeeded`일 때만 통과합니다. `apt update`는 패키지 목록을 갱신하며 패키지 업그레이드를 수행하지 않습니다.
 
-2026-11-15 실제 VM 검증: OCR로 `Password:`, `root@debian`과 root 확인 표식을 인식했고 `apt update`를 실행했습니다. 최종 결과는 **failed**였습니다. 온라인 Debian 저장소에는 접속했지만, 설치 DVD 저장소의 다음 오류와 실패 표식이 검출됐습니다.
+2026-11-15 초기 VM 검증: OCR로 `Password:`, `root@debian`과 root 확인 표식을 인식했고 `apt update`를 실행했습니다. 최종 결과는 **failed**였습니다. 온라인 Debian 저장소에는 접속했지만, 설치 DVD 저장소의 다음 오류와 실패 표식이 검출됐습니다.
 
 ```text
 Error: The repository 'cdrom://[Debian GNU/Linux 13.7.0 ...] trixie Release' does not have a Release file.

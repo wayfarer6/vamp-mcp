@@ -1,0 +1,4 @@
+# Versions used on the tested Ubuntu + NVIDIA environment (CUDA 13.2 PyPI build).
+-r requirements.txt
+torch==2.15.0
+torchvision==0.29.2

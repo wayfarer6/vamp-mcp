@@ -1,5 +1,9 @@
 # RPA 패키지 규격 v1
 
+이 프로젝트는 AI 에이전트와 바이브 코딩으로 개발했습니다. 실제 실행·검증 호스트는 Ubuntu + NVIDIA입니다. [호스트 설치와 가속기 프로필](../docs/INSTALL.md)을 참고하세요.
+
+게스트 대상은 Debian(`debian13`)과 Windows 11(`windows-RPA`)로 구분하고 둘 다 1920×1080 기준을 사용합니다. 동일 해상도가 동일 좌표·UI를 보장하지는 않습니다. 현재 GNOME Firefox 기동·로그인 준비와 apt update는 Debian용이며, Windows 전용 작업은 별도로 작성·검증해야 합니다. 패키지 선택과 호스트 GPU/NPU 프로필 선택은 별개입니다.
+
 RPA 한 개를 폴더 하나로 관리합니다. 각 폴더에는 하나 이상의 `.robot` 실행 파일, RPA 전용 Python 라이브러리, 실행 메타데이터가 들어갑니다. Robot Framework의 표준 확장자는 `.robot`입니다.
 
 ```text
@@ -80,6 +84,8 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 .venv/bin/python scripts/run_rpa.py desktop_control --var ACTION:click --var X:800 --var Y:500
 .venv/bin/python scripts/run_rpa.py desktop_control --var ACTION:click-text --var TEXT:확인
 ```
+
+YOLO `DEVICE`는 `cpu`, `auto`, `rocm`, `mps`, `ascend-npu`, `intel-npu` 등을 받습니다. AMD·Apple·NPU 경로는 미검증입니다.
 
 추가 ACTION: `move`, `move-relative`(`DX`, `DY`), `detect`, `find-image`, `click-image`(`TEMPLATE`). 절대 좌표는 게스트 원본 화면 기준입니다. 상대 이동은 SERVER 모드에서만 가능합니다. 일반 `write`에 개인 비밀번호를 넘기면 Robot 인자 로그에 남으므로 계정 입력에는 전용 로그인 진입점을 사용하세요.
 

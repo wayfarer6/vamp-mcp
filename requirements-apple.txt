@@ -1,0 +1,6 @@
+# Apple Silicon macOS / Metal GPU (MPS), not Apple Neural Engine.
+# Homebrew GI/SPICE libraries are separate system dependencies.
+-r requirements.txt
+torch==2.10.0
+torchvision==0.25.0
+pyobjc-framework-Quartz; sys_platform == 'darwin'

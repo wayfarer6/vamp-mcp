@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE RPA Install"
+  short_description: "Install one host dependency profile for SPICE RPAs"
+  default_prompt: "Use $spice-rpa-install to prepare the host and OCR venvs for my chosen hardware profile."

@@ -1,0 +1,5 @@
+# CPU wheels; profile is not an end-to-end platform validation.
+--extra-index-url https://download.pytorch.org/whl/cpu
+-r requirements.txt
+torch==2.10.0+cpu
+torchvision==0.25.0+cpu

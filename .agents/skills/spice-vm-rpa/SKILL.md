@@ -17,7 +17,7 @@ Choose one package/entrypoint. Never execute the entire `rpas` directory except 
 
 ## Observe and act
 
-The current VM is `debian13` at `spice://127.0.0.1:5900`. A new client can replace its viewer. Do not reboot/reconfigure the VM to reconnect and do not type concurrently with the user or another RPA.
+Targets are Debian `debian13` and Windows 11 `windows-RPA`, both using a 1920×1080 baseline. Existing GNOME launch/login/update workflows are Debian-specific; Windows flows are not implemented/validated. SPICE ports are auto-assigned: inspect the actual running VM URI instead of assuming the development default `spice://127.0.0.1:5900`. A new client can replace its viewer. Do not reboot/reconfigure the VM to reconnect and do not type concurrently with the user or another RPA.
 
 The desktop package defaults to capture only. Add `--var ACTION:ocr` for OCR-only inspection, `ACTION:analyze` for YOLO+OCR, or `ACTION:screen-info`. Other actions: `click`, `move` (`X`, `Y`), `move-relative` (`DX`, `DY`), `hotkey` (`KEYS:ctrl+l`), `write` (`TEXT`), `click-text`, `find-image`, `click-image` (`TEMPLATE`), `detect`. Set `LANGUAGES:ko,en,ja,zh` or `DEVICE:cpu` as needed.
 
@@ -27,7 +27,7 @@ Use the login package for private credentials, not generic `TEXT` or Robot argum
 
 ## Runtime and extension boundaries
 
-SPICE uses the system-Python `.venv`; PaddleOCR uses `.venv-ocr` (Python 3.12). YOLO selects CUDA if available, otherwise CPU. PaddleOCR currently runs on CPU. Recognition of CJK does not imply CJK text entry; keyboard input assumes US ASCII.
+SPICE uses the system-Python `.venv`; PaddleOCR uses `.venv-ocr` (Python 3.12). YOLO auto-selects CUDA/ROCm, MPS, Ascend, then CPU; Intel NPU is explicit. Read docs/INSTALL.md for host-specific requirements. Only Ubuntu/NVIDIA has project hardware validation; AMD/Apple/NPU are unvalidated. PaddleOCR currently runs on CPU. Recognition of CJK does not imply CJK text entry; keyboard input assumes US ASCII.
 
 Absolute clicks require CLIENT mode. Relative motion in SERVER mode does not guarantee pixel mapping because of guest acceleration. Stop after two failed attempts and inspect the cause before continuing.
 
