@@ -86,4 +86,5 @@ Hyper-V는 [별도 폴더](../backends/hyperv/README.md)와 `$hyperv-rpa` 스킬
 - 실제 Ubuntu + NVIDIA에서 stdio 초기화·도구 등록·VM 목록·RPA 목록·모델 상태 조회.
 - 모델 캐시/PID 재사용과 기존 Robot 기반 Windows 게스트 입력·로그인 화면 도달 검증.
 - 단위 테스트와 Robot dry-run.
+- VM이 정지된 뒤 vm_inspect 호출이 입력 없이 차단되는 상태 확인. 실제 MCP 도구 경유 화면 관찰은 실행 중인 VM에서 추가 확인할 대상입니다.
 - Hyper-V/UAC/VMConnect, RDP, AMD·Apple·NPU 장비 실행은 검증하지 않음.

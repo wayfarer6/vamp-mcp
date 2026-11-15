@@ -4,7 +4,7 @@
 
 ## 호스트와 게스트를 구분하세요
 
-requirements는 SPICE를 제어하는 **호스트**에 설치합니다. 게스트인 Debian VM과 Windows 11 VM에는 Python RPA를 설치하지 않습니다. 두 VM은 1920×1080 기준이며, OS별 실행 절차와 좌표 검증은 별개입니다. 현재 GNOME 실행창·`su root`·`apt update` 예시는 Debian용입니다. Windows 전용 기동·로그인 시나리오는 별도 작성·검증이 필요합니다.
+requirements는 SPICE를 제어하는 **호스트**에 설치합니다. 게스트인 Debian VM과 Windows 11 VM에는 Python RPA를 설치하지 않습니다. 두 VM은 1920×1080 기준이며, OS별 실행 절차와 좌표 검증은 별개입니다. 현재 GNOME 실행창·`su root`·`apt update` 예시는 Debian용입니다. Windows용 기록 변환 패키지 `windows_naver_recorded`는 Win+R 재생·로그인 화면 도달을 확인했습니다. 추가 Windows 작업과 Hyper-V 호스트는 별도 구현·검증이 필요합니다.
 
 ## 1. 수동 설치 — Ubuntu 호스트
 

@@ -42,7 +42,7 @@ systemd 없이 독립 Python 프로세스로 실행합니다. 실제 SPICE RPA�
 | 대상 | 현재 libvirt VM 이름 | 공통 기준 해상도 | 현재 시나리오 상태 |
 | --- | --- | --- | --- |
 | Debian VM | `debian13` | 1920×1080 | GNOME Firefox·네이버·root apt update 예제 구현 및 실제 실행 확인 |
-| Windows 11 VM | `windows-RPA` | 1920×1080 | 별도 실행 대상; Windows 전용 기동·업데이트 절차는 미구현·미검증 |
+| Windows 11 VM | `windows-RPA` | 1920×1080 | Win+R 기반 기록 재생·네이버 로그인 화면 도달 확인; Hyper-V 테스트는 아님 |
 
 해상도가 같아도 OS·브라우저 배율·글꼴·UI 배치는 다르므로 좌표와 탐지 규칙을 검증 없이 공유하지 않습니다. 공통 SPICE/OCR 엔진을 재사용하고, OS별 `.robot`과 Python 동작은 구분해 관리합니다. 현재 GNOME `Alt+F2`, `su root`, `apt update`를 쓰는 패키지는 Debian용입니다. 게스트 Windows 11과 RPA를 설치하는 호스트 OS는 별개입니다.
 
@@ -78,7 +78,8 @@ rpas/
 | `naver_login` | Debian GNOME 기동 절차 | 로그인 폼 검출 또는 명시적으로 선택한 로그인 제출 |
 | `debian_update` | Debian 전용 | root apt update |
 | `captcha_handoff` | 공통 OCR; Windows 미검증 | CAPTCHA·추가 인증 감지 후 사용자 인계 |
-| `desktop_control` | 공통 SPICE; Windows 미검증 | 화면·OCR·YOLO·좌표·키보드 작업 |
+| `desktop_control` | 공통 SPICE | 화면·OCR·YOLO·좌표·키보드 작업 |
+| `windows_naver_recorded` | Windows 11 KVM | 수동 기록 변환·네이버 로그인 화면 도달 검증 |
 
 ```bash
 cd /home/ssh1032007/spice_kvm_based_rpa
