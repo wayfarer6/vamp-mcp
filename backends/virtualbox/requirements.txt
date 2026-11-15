@@ -1,0 +1,4 @@
+# Host-only control; no SPICE/GI dependency. Vision uses root install profiles.
+mcp==1.30.0
+robotframework==7.5.1
+pycdlib==1.14.0

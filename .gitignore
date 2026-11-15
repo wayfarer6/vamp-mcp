@@ -14,3 +14,9 @@ models/*_openvino_model/
 rpas/*/recording.local.json
 
 .venv-hyperv/
+
+node_modules/
+third_party/mcp-virtualbox/dist/
+.venv-virtualbox/
+vscode-extension/dist/
+*.vsix

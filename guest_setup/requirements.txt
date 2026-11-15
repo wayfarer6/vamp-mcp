@@ -1,0 +1,2 @@
+# Host ISO builder; guest runtime requirements are separate.
+pycdlib==1.14.0
