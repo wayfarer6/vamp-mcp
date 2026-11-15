@@ -18,3 +18,5 @@ Use OCR text only for verification. Do not call an image viewer, multimodal mode
 Report `succeeded`, `completed_with_warnings`, `failed` or the exact unverified state. The completed flow sends `exit` and reports `root_shell_exited`; timeout can leave apt/root active, so inspect OCR before more input. Do not modify repositories merely to turn a failed test green.
 
 Future recording hooks belong around Robot tasks/keywords (`--listener`); the current package does not implement video recording.
+
+For a genuine workflow/locator failure within an authorized repair task, use `spice-rpa-repair/SKILL.md` to diagnose the saved run before changing coordinates. Preserve this skill's verification and credential boundaries; a system error or user handoff is not automatically a broken locator.

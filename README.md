@@ -96,6 +96,22 @@ YOLO는 접근성 API가 아니므로 영역이 실제 버튼인지는 화면과
 
 `.agents/skills/spice-vm-rpa/SKILL.md`에 워크플로가 있습니다. `$spice-vm-rpa`로 호출할 수 있도록 현재 호스트의 `~/.codex/skills/spice-vm-rpa`에 연결했습니다. 다른 호스트에서는 해당 폴더를 스킬 경로에 설치하고 저장소 위치를 맞추세요.
 
+
+### 실패한 RPA의 AI 보정
+
+`$spice-rpa-repair` 스킬을 추가했습니다. 예: “네이버 로그인 RPA가 실패했으니 `$spice-rpa-repair`로 원인을 확인하고 좌표·탐지 규칙을 보정해줘.”
+
+AI가 짧은 실패 결과와 Robot 키워드 기록을 읽고, 필요한 경우 현재 OCR·YOLO 좌표를 다시 관찰합니다. UI 위치 변경이면 해당 패키지의 `workflow.py`나 탐지 규칙을 수정하고, Robot 순서 문제이면 `.robot`을 수정합니다. 단위 테스트·dry-run 후 승인된 범위의 안전한 단계만 재검증합니다. CAPTCHA·자격 증명 대기는 사용자에게 넘기고, 로그인 제출 같은 동작을 무조건 반복하지 않습니다.
+
+```bash
+# VM 조작 없이 실패 근거의 위치와 요약만 수집
+.venv/bin/python .agents/skills/spice-rpa-repair/scripts/collect_failure.py naver_login
+# 별도 실행 폴더를 사용한 경우
+.venv/bin/python .agents/skills/spice-rpa-repair/scripts/collect_failure.py naver_login --run-dir artifacts/my-login-run
+```
+
+이 스킬은 실패 후 AI가 호출해 수행하는 코드 보정 절차입니다. 일반 RPA 실행 중 모델을 자동 호출하거나 코드를 스스로 수정하는 기능은 아닙니다. 보정 시도는 실패 건당 최대 2회이며, 실시간 검증 여부를 구분해 보고합니다. [스킬 지침](.agents/skills/spice-rpa-repair/SKILL.md)에 상세 절차가 있습니다.
+
 ## 모델 출처
 
 UI 탐지: [Microsoft OmniParser v2 icon_detect](https://huggingface.co/microsoft/OmniParser-v2.0) (YOLOv8). 해당 가중치는 AGPL-3.0이며 `models/OMNIPARSER-LICENSE`를 보존합니다. 원본 코드·모델의 라이선스는 각각 적용됩니다. OCR: [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR). [SPICE 입력 API](https://www.spice-space.org/api/spice-gtk/SpiceInputsChannel.html).

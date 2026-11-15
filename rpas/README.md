@@ -136,3 +136,9 @@ Robot의 작업·키워드 시작/종료 경계를 녹화 시작·종료나 타�
 `--listener`에는 사용자가 구현·설치한 Robot listener를 전달합니다. **현재 동영상 녹화나 수동 조작을 Robot 파일로 바꾸는 매크로 녹화기는 구현하지 않았습니다.** Python 내부의 세부 동작을 별도 타임라인으로 남기려면 해당 라이브러리에도 계측을 추가해야 합니다. SPICE 영상 녹화는 기존 세션의 화면을 재사용해야 하며, 별도 SPICE 클라이언트 연결은 제어 연결을 대체할 수 있습니다. 개인 계정 입력 구간은 녹화·자동 캡처 대상에서 제외하세요.
 
 [Robot listener 공식 문서](https://robotframework.org/robotframework/latest/RobotFrameworkUserGuide.html#listener-interface)
+
+## AI로 실패한 RPA 보정
+
+`$spice-rpa-repair`는 대상 패키지의 Robot 진입점과 Python 라이브러리를 유지하면서 좌표·OCR 앵커·타이밍을 보정하는 개발 스킬입니다. [SKILL.md](../.agents/skills/spice-rpa-repair/SKILL.md)를 따릅니다. 먼저 `summary.json`과 실패 키워드를 확인하고, UI 변화가 확인된 경우에만 새 OCR·YOLO 근거로 수정합니다. 시스템 오류나 인증 대기를 좌표 문제로 취급하지 않습니다.
+
+보정은 최대 2회 시도하며, 테스트·dry-run 결과와 실제 VM 재검증 여부를 별도로 기록합니다. 기존 성공 검증을 제거하거나 CAPTCHA를 풀지 않습니다. 자세한 명령은 [메인 README](../README.md#실패한-rpa의-ai-보정)에 있습니다.

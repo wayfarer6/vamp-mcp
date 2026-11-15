@@ -32,3 +32,5 @@ SPICE uses the system-Python `.venv`; PaddleOCR uses `.venv-ocr` (Python 3.12). 
 Absolute clicks require CLIENT mode. Relative motion in SERVER mode does not guarantee pixel mapping because of guest acceleration. Stop after two failed attempts and inspect the cause before continuing.
 
 Use Robot keyword boundaries and `scripts/run_rpa.py --listener <listener>` for future recording integration. No built-in video/macro recorder currently exists. A screen recorder must reuse the existing SPICE session. Do not claim automation is undetectable.
+
+For a genuine workflow/locator failure within an authorized repair task, use `spice-rpa-repair/SKILL.md` to diagnose the saved run before changing coordinates. Preserve this skill's verification and credential boundaries; a system error or user handoff is not automatically a broken locator.

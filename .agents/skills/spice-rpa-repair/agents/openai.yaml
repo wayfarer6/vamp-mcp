@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE RPA Repair"
+  short_description: "Repair failed RPA locators using fresh OCR and YOLO"
+  default_prompt: "Use $spice-rpa-repair to diagnose the failed RPA, repair its locator or workflow, and verify the change."
