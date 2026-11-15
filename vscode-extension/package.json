@@ -7,7 +7,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/wayfarer6/spice_kvm_based_rpa.git"
+    "url": "https://github.com/wayfarer6/vamp-mcp.git"
   },
   "engines": {
     "vscode": "^1.103.0"
