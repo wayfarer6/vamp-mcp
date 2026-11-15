@@ -1,0 +1,103 @@
+# SPICE VM RPA
+
+호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내 Debian VM을 제어합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
+
+## 설치
+
+Linux 호스트의 시스템 Python과 일치하는 PyGObject/SPICE GI 바인딩이 필요합니다. 이 환경은 시스템 Python 3.14, `gir1.2-spiceclientglib-2.0`, Pillow를 사용합니다. 배포판에 따라 시스템 패키지를 설치하세요. GUI 세션의 `DISPLAY`, `XAUTHORITY`가 있어야 PyAutoGUI를 import할 수 있습니다.
+
+```bash
+/usr/bin/python3 -m venv --system-site-packages .venv
+.venv/bin/pip install -r requirements.txt
+uv venv --python 3.12 .venv-ocr
+uv pip install --python .venv-ocr/bin/python -r requirements-ocr.txt
+.venv/bin/python scripts/download_models.py
+```
+
+Torch/CUDA 의존성은 설치 용량이 큽니다. YOLO는 `torch.cuda.is_available()`에 따라 GPU 또는 CPU를 선택합니다. OCR은 호환성을 위해 별도 Python 3.12 환경에서 CPU로 실행합니다. OCR 모델은 첫 실행 때 내려받습니다.
+
+## Firefox 실행
+
+현재 VM: `debian13`, SPICE: `spice://127.0.0.1:5900`, 기본 화면 1920×1080.
+
+```bash
+.venv/bin/python -m robot --outputdir artifacts tests/launch_firefox.robot
+# 다른 연결 주소
+.venv/bin/python -m robot --variable SPICE_URI:spice://127.0.0.1:5901 --outputdir artifacts tests/launch_firefox.robot
+```
+
+GNOME Alt+F2 실행창에서 `firefox`를 입력합니다. `artifacts/firefox.png`로 실제 실행 여부를 확인하세요. 시나리오는 Firefox 문구를 OCR로 검사합니다. SPICE 서버는 새 클라이언트 연결 시 기존 virt-manager 뷰어를 끊을 수 있습니다.
+
+## AI 제어 인터페이스
+
+```bash
+.venv/bin/python rpa.py capture
+.venv/bin/python rpa.py analyze --languages ko,en,ja,zh
+.venv/bin/python rpa.py analyze --languages en --device cpu
+.venv/bin/python rpa.py click-text '확인'
+.venv/bin/python rpa.py click 800 500
+.venv/bin/python rpa.py hotkey ctrl l
+.venv/bin/python rpa.py write 'about:blank'
+.venv/bin/python rpa.py hotkey enter
+```
+
+`--uri`는 서브커맨드 앞에 지정합니다. 기본 분석 결과는 `artifacts/ui.json`, 번호가 표시된 화면은 `artifacts/ui.annotated.png`입니다. 각 요소에는 다음이 있습니다.
+
+- `kind`: YOLO `ui_region` 또는 OCR 단독 `text`
+- `text`, `ocr_confidence`, `readings`: 문구, 신뢰도, 언어별 판독 후보
+- `xyxy`, `center`: 게스트 원본 화면의 영역과 클릭 중심
+- `id`, `confidence`: 프레임 내 번호와 YOLO 탐지 신뢰도
+
+YOLO는 접근성 API가 아니므로 영역이 실제 버튼인지는 화면과 문구를 함께 판단해야 합니다. 문구 클릭은 정확히 하나의 일치 결과, OCR 신뢰도 ≥0.7, 분석 후 동일한 대상 화면을 요구합니다. 여러 결과 또는 바뀐 화면이면 실패시켜 잘못된 클릭을 방지합니다. 언어별 잘못된 OCR 후보도 나올 수 있으므로 중요한 작업은 화면을 확인하세요.
+
+입력은 US 키보드 기준 ASCII를 지원합니다. CJK OCR 지원과 CJK 문자열 입력 지원은 별개입니다. CLIENT 마우스 모드에서 절대 좌표를 사용합니다. SERVER 모드 상대 이동 API는 제공하지만, OS 가속을 제거하지 않으므로 정밀 클릭을 보장하지 않습니다.
+
+## Codex 스킬
+
+`.agents/skills/spice-vm-rpa/SKILL.md`에 워크플로가 있습니다. `$spice-vm-rpa`로 호출할 수 있도록 현재 호스트의 `~/.codex/skills/spice-vm-rpa`에 연결했습니다. 다른 호스트에서는 해당 폴더를 스킬 경로에 설치하고 저장소 위치를 맞추세요.
+
+## 모델 출처
+
+UI 탐지: [Microsoft OmniParser v2 icon_detect](https://huggingface.co/microsoft/OmniParser-v2.0) (YOLOv8). 해당 가중치는 AGPL-3.0이며 `models/OMNIPARSER-LICENSE`를 보존합니다. 원본 코드·모델의 라이선스는 각각 적용됩니다. OCR: [PaddleOCR](https://github.com/PaddlePaddle/PaddleOCR). [SPICE 입력 API](https://www.spice-space.org/api/spice-gtk/SpiceInputsChannel.html).
+
+가중치의 출처 revision과 SHA-256은 `models/manifest.json`으로 고정하고 다운로드 시 검사합니다. 가중치, venv, 캡처·로그는 Git에 포함하지 않습니다. `scripts/download_models.py`로 YOLO 가중치를 복원할 수 있습니다.
+
+## 네이버 접속·로그인 예시
+
+```bash
+# Firefox 실행 → 네이버 접속 → 화면의 도메인과 NAVER 텍스트 OCR 검사
+.venv/bin/python -m robot --outputdir artifacts/naver-run tests/firefox_naver.robot
+
+# 로그인 화면으로 이동 → ID/PW/Sign in 영역 검출, 계정 입력 없이 종료
+.venv/bin/python -m robot --outputdir artifacts/login-run tests/naver_login.robot
+.venv/bin/python rpa.py login
+
+# 호스트의 비공개 입력창에서 계정 수집 → SPICE 입력 → 로그인 한 번 제출
+.venv/bin/python rpa.py login --prompt-credentials
+
+# 실행 환경에 NAVER_ID, NAVER_PASSWORD가 이미 제공된 경우
+.venv/bin/python rpa.py login --use-env
+.venv/bin/python -m robot --variable LOGIN_SUBMIT:True --outputdir artifacts/login-run tests/naver_login.robot
+```
+
+`rpa.py login`의 기본 동작은 화면 검출까지만 수행합니다. `artifacts/login/state.json`의 `needs_credentials`는 로그인 폼을 확인했고 계정 입력을 기다린다는 의미입니다. 결정론적 규칙은 ID/PW/로그인 문구, 각 영역의 세로 배치, 유일한 폼, OCR 신뢰도 ≥0.7, 주소창의 `nid.naver.com`을 요구합니다. 가중치가 고정된 YOLO 탐지 후 이 규칙을 적용하며 LLM 판단으로 필드를 추측하지 않습니다.
+
+입력 전 화면이 유지됐는지 검사하고, 비밀번호는 Robot 인자나 명령행 인자로 받지 않습니다. 비대화형 실행의 `--prompt-credentials`는 호스트 Zenity 창을 열며, 로컬 터미널에서는 getpass를 씁니다. 계정은 파일에 저장하지 않습니다. 로그인 제출 후 확인용 화면·OCR 결과는 임시 폴더에서 검사한 뒤 삭제합니다. 로그인 화면을 캡처하는 다른 프로그램은 이 코드의 제어 범위 밖입니다.
+
+`logged_in`은 로그아웃 UI를 인식한 경우에만 반환합니다. `submitted_unverified`는 제출만 확인했으며 성공을 증명하지 못했다는 뜻입니다. CAPTCHA·OTP·추가 인증이 보이면 `needs_user_verification`으로 멈춥니다. 실패한 계정을 반복 제출하지 않습니다.
+
+AI 로그인 스킬은 `.agents/skills/spice-naver-login/SKILL.md`이며 현재 호스트에 `$spice-naver-login`으로 연결했습니다. 로그인 대기 상태를 확인한 AI가 비공개 입력창을 띄우고, 사용자가 제공한 ID/PW를 VM의 검출된 필드에 SPICE로 입력하는 절차입니다.
+
+영문 로그인 페이지(`locale=en_US`)를 사용해 게스트의 한글 폰트가 부족해도 입력란을 확인할 수 있습니다. 네이버 본문에서 글자가 네모로 보이면 게스트에 해당 폰트가 필요하며 OCR로 원래 문자를 복원할 수 없습니다. 현재 지원하는 인증 정보는 US 키보드로 입력 가능한 ASCII입니다.
+
+## 검증
+
+```bash
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python scripts/check_multilingual_ocr.py
+.venv/bin/python -m robot --outputdir artifacts/examples-run tests/launch_firefox.robot tests/firefox_naver.robot tests/naver_login.robot
+```
+
+라이브 VM 검증은 한 프로세스씩 실행하세요. 같은 엔드포인트의 RPA 세션은 파일 잠금으로 동시 제어를 막고, 다른 뷰어가 연결을 끊으면 중단합니다. 사용자의 직접 입력과 자동화 입력도 섞이지 않게 하세요.
+
+재현용 의존성 목록은 `requirements.lock.txt`와 `requirements-ocr.lock.txt`에 있습니다. 전자는 현재 Linux/Python 3.14/CUDA 13.2 환경을 기록하므로 다른 Python·GPU 환경에서는 `requirements.txt`를 기준으로 호환 Torch를 선택하세요. 시스템 GI/Pillow는 OS 패키지에서 제공됩니다.

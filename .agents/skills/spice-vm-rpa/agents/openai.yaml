@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE VM RPA"
+  short_description: "Control SPICE VMs with YOLO and multilingual OCR"
+  default_prompt: "Use $spice-vm-rpa to inspect the Debian VM and control its desktop through SPICE."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE Naver Login"
+  short_description: "Detect login fields and enter credentials over SPICE"
+  default_prompt: "Use $spice-naver-login to open the login page and sign in through the SPICE VM."

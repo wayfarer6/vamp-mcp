@@ -1,0 +1,17 @@
+{
+  "repository": "microsoft/OmniParser-v2.0",
+  "revision": "f55d0750e5b94db2125ef0b45b0fa4a85ddc59b4",
+  "license": "AGPL-3.0",
+  "files": [
+    {
+      "remote": "icon_detect/model.pt",
+      "file": "omniparser-icon.pt",
+      "sha256": "dab3d4351ad00b035db829909a4db98354d5a90f6990e4ac00222a9a95d4bf57"
+    },
+    {
+      "remote": "icon_detect/LICENSE",
+      "file": "OMNIPARSER-LICENSE",
+      "sha256": "4df3c306dddaaf4baffdff5ca820cc679ac8cd6dc263c6a74517783e42fa7a3b"
+    }
+  ]
+}
