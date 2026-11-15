@@ -9,3 +9,6 @@ models/*.pt
 .env.*
 
 models/*_openvino_model/
+
+# Recorder input can contain private typed text; regenerate locally.
+rpas/*/recording.local.json

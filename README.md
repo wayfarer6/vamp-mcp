@@ -62,6 +62,27 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 
 [패키지 규격·변수·결과·새 RPA 추가·녹화 확장 안내](rpas/README.md)에 전체 사용법을 정리했습니다. 스킬은 이 패키지의 `.robot` 진입점을 우선 실행하도록 연결했습니다. Robot listener를 붙일 실행 경계는 마련했으며, 영상·매크로 녹화 기능 자체는 아직 구현하지 않았습니다.
 
+## 사용자 직접 작성·수동 기록 가져오기
+
+누구나 공개 Python CLI로 RPA 폴더를 만들거나 Recorder 코드를 변환할 수 있습니다. AI 없이도 실행 가능합니다.
+
+```bash
+# 직접 작성할 Windows RPA의 Robot/Python/manifest 틀 생성
+.venv/bin/python scripts/new_rpa.py my_windows_task --guest-os windows11
+# Debian용은 --guest-os debian
+
+# 게스트 안에서 기록한 PyAutoGUI Python을 Robot/SPICE 패키지로 변환
+.venv/bin/python scripts/convert_recording.py ~/naver_login_rpa \
+  --id my_recorded_naver --guest-os windows11 --coordinate-space guest \
+  --width 1920 --height 1080
+```
+
+Windows 프로그램은 **Win+R + 실행 명령**, Debian GNOME은 **Alt+F2 + 실행 명령**으로 시작합니다. 사용자마다 다른 바탕화면 아이콘 좌표에 의존하지 않습니다. 원본 파일은 실행하거나 덮어쓰지 않고 정적 분석하며, 지원하지 않는 문장은 중단합니다.
+
+이번 입력은 `~/naver_login_rpa`이고 생성 패키지는 `rpas/windows_naver_recorded/`입니다. 80개 동작을 변환했고 Win+R 시작을 확인했습니다. 기본 실행은 `needs_review`로 멈추며, 검토 후 `ALLOW_REPLAY:True`를 지정해야 VM 입력을 보냅니다. 원시 기록은 민감한 키 입력이 있을 수 있어 `recording.local.json`으로 로컬 보관하고 Git에서 제외합니다.
+
+[직접 작성·변환·좌표 보정·재생 안내](docs/RECORDING_CONVERSION.md) · [AI 변환 스킬](.agents/skills/spice-recording-convert/SKILL.md)
+
 ## 설치
 
 [수동 설치·AI 에이전트 설치·플랫폼별 세부 안내](docs/INSTALL.md)에 전체 절차를 정리했습니다. requirements는 **컨트롤러 호스트**에 설치하고 게스트 VM에는 설치하지 않습니다.

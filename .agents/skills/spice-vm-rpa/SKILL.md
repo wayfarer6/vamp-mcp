@@ -34,3 +34,5 @@ Absolute clicks require CLIENT mode. Relative motion in SERVER mode does not gua
 Use Robot keyword boundaries and `scripts/run_rpa.py --listener <listener>` for future recording integration. No built-in video/macro recorder currently exists. A screen recorder must reuse the existing SPICE session. Do not claim automation is undetectable.
 
 For a genuine workflow/locator failure within an authorized repair task, use `spice-rpa-repair/SKILL.md` to diagnose the saved run before changing coordinates. Preserve this skill's verification and credential boundaries; a system error or user handoff is not automatically a broken locator.
+
+For newly authored or repaired startup steps, use a shared OS launcher: Windows Win+R plus an executable/command; Debian GNOME Alt+F2 plus a command. Avoid desktop-icon coordinates because desktops differ by user. For manual recorder imports or package scaffolding, use `spice-recording-convert/SKILL.md` and the public `scripts/convert_recording.py` / `scripts/new_rpa.py` tools.

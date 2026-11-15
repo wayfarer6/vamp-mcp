@@ -1,0 +1,25 @@
+{
+  "format_version": 1,
+  "source_name": "naver_login_rpa",
+  "source_sha256": "cd02dbe5b3aa7a30a772da3cbab2cd2edaf346872bd418daff685b736a328652",
+  "guest_os": "windows11",
+  "coordinate_space": "guest",
+  "guest_resolution": [
+    1920,
+    1080
+  ],
+  "action_count": 80,
+  "operations": {
+    "key_down": 37,
+    "key_up": 37,
+    "click": 3,
+    "wait": 3
+  },
+  "initial_win_r": true,
+  "requires_review": true,
+  "warnings": [
+    "Mechanical conversion only: review target positions and replace waits with state checks.",
+    "Review all recorded input for private credentials before replay or sharing.",
+    "1 key(s) remain held at recording end; replay teardown will release them."
+  ]
+}

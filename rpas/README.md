@@ -148,3 +148,11 @@ Robot의 작업·키워드 시작/종료 경계를 녹화 시작·종료나 타�
 `$spice-rpa-repair`는 대상 패키지의 Robot 진입점과 Python 라이브러리를 유지하면서 좌표·OCR 앵커·타이밍을 보정하는 개발 스킬입니다. [SKILL.md](../.agents/skills/spice-rpa-repair/SKILL.md)를 따릅니다. 먼저 `summary.json`과 실패 키워드를 확인하고, UI 변화가 확인된 경우에만 새 OCR·YOLO 근거로 수정합니다. 시스템 오류나 인증 대기를 좌표 문제로 취급하지 않습니다.
 
 보정은 최대 2회 시도하며, 테스트·dry-run 결과와 실제 VM 재검증 여부를 별도로 기록합니다. 기존 성공 검증을 제거하거나 CAPTCHA를 풀지 않습니다. 자세한 명령은 [메인 README](../README.md#실패한-rpa의-ai-보정)에 있습니다.
+
+## 사용자가 직접 만들거나 Recorder로 가져오기
+
+- 빈 RPA 틀: `.venv/bin/python scripts/new_rpa.py my_task --guest-os windows11`
+- 코드 기록 변환: `.venv/bin/python scripts/convert_recording.py ~/naver_login_rpa --id my_recorded_task --guest-os windows11`
+- [전체 설명](../docs/RECORDING_CONVERSION.md) 및 `$spice-recording-convert` 스킬을 제공합니다.
+
+Windows는 Win+R, Debian GNOME은 Alt+F2 같은 공통 실행기를 사용하고 바탕화면 아이콘 시작은 피합니다. 생성기는 기존 폴더를 덮어쓰지 않습니다. 기본 상태는 검토/구현 대기로, VM에 입력하지 않습니다. 원시 `recording.local.json`은 Git에 포함되지 않으므로 공유받은 쪽에서는 재생성하거나 정리된 동작을 작성해야 합니다.

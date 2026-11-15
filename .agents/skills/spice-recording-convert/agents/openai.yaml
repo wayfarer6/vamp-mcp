@@ -1,0 +1,4 @@
+interface:
+  display_name: "SPICE Recording Convert"
+  short_description: "Convert manual recordings into Robot and Python RPAs"
+  default_prompt: "Use $spice-recording-convert to convert my recorder script into a reviewed Robot/SPICE RPA package."
