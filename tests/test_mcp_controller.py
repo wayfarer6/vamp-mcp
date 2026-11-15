@@ -31,6 +31,7 @@ class MCPControllerTests(unittest.TestCase):
 
     def test_evidence_is_paged_and_filters_before_paging(self):
         controller=self.controller()
+        (ROOT/'artifacts').mkdir(exist_ok=True)
         with tempfile.TemporaryDirectory(dir=ROOT/'artifacts') as directory:
             path=Path(directory)/'ocr.json'
             path.write_text(json.dumps([{'text':str(i)+' login','confidence':.99,'xyxy':[0,0,10,10]} for i in range(15)]))
