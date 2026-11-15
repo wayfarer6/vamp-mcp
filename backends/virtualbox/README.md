@@ -62,7 +62,7 @@ MCP 클라이언트 설정에서 경로를 실제 절대 경로로 바꾸세요.
 }
 ```
 
-10개 도구: `vm_create`, `vm_prepare_recorder`, `vm_list`, `vm_info`, `vm_start`, `vm_screenshot`, `vm_screen_info`, `vm_keyboard_scancode`, `vm_keyboard_type`, `vm_mouse_click`. 상류 전체 서버의 VM 삭제/게스트 명령/SSH 도구는 이 엔트리에서 등록하지 않습니다. Python CLI는 스크린샷을 파일로 저장해 큰 base64를 JSON에 출력하지 않습니다. 직접 MCP의 스크린샷 도구는 상류 형식대로 image 콘텐츠를 반환합니다. Python 도구 호출마다 경량 Node 서버를 실행하며 YOLO/OCR 모델 프로세스는 별개로 유지됩니다.
+12개 도구: `vm_configure_display`, `vm_insert_guest_additions`, `vm_create`, `vm_prepare_recorder`, `vm_list`, `vm_info`, `vm_start`, `vm_screenshot`, `vm_screen_info`, `vm_keyboard_scancode`, `vm_keyboard_type`, `vm_mouse_click`. 상류 전체 서버의 VM 삭제/게스트 명령/SSH 도구는 이 엔트리에서 등록하지 않습니다. Python CLI는 스크린샷을 파일로 저장해 큰 base64를 JSON에 출력하지 않습니다. 직접 MCP의 스크린샷 도구는 상류 형식대로 image 콘텐츠를 반환합니다. Python 도구 호출마다 경량 Node 서버를 실행하며 YOLO/OCR 모델 프로세스는 별개로 유지됩니다.
 
 ## 출처와 라이선스
 
@@ -87,3 +87,5 @@ AI는 먼저 사용자에게 **VirtualBox 호스트의 ISO 파일 경로**를 �
 Windows ISO에 따라 에디션 image_index 및 정당한 product_key가 필요할 수 있습니다. 기존 VM 이름/폴더는 덮어쓰지 않습니다. 오류 발생 시 `vamp-install.json`과 일부 생성된 VM/디스크를 보존합니다. 재실행 전에 원인을 확인하고 새 이름 또는 수동 정리를 선택하세요. 실행 도중 호스트의 MCP 클라이언트가 취소되면 이미 시작한 VM은 남아 있을 수 있습니다. OS 설치 전체 완료가 아니라 7분 이내의 호스트 준비/설치 시작 단계만 기다립니다.
 
 [Oracle unattended 문서](https://docs.oracle.com/en/virtualization/virtualbox/7.2/user/vboxmanage.html)를 기준으로 버전별 password 플래그를 선택합니다. 레코더는 전용 DVD 미디어와 post-install hook을 연결합니다. 자세한 라이선스·동작은 [게스트 레코더 안내](../../docs/GUEST_RECORDER.md)에 있습니다.
+
+게스트 OS 자체 **1920×1080 / 배율 100%** 및 호스트 관전 **View → Scaled Mode** 설정은 [해상도 안내](../../docs/VM_DISPLAY.md)를 참고하세요. Windows Guest Additions ISO 삽입은 스크립트로, 설치/UAC 승인과 재부팅은 사용자가 수행합니다.

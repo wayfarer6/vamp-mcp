@@ -288,3 +288,5 @@ YOLO/OCR은 [별도 백그라운드 Python 프로세스](docs/MODEL_BACKGROUND.m
 [VAMP 확장 안내](vscode-extension/README.md), [패키징·게시 절차](docs/VSCODE_MARKETPLACE.md). `.vsix` 형식으로 패키징하며 Node MCP 서버를 번들합니다. **VAMP: Set Up Python Environment**가 호스트 전용 venv를 만들고, **VAMP: Create VM From ISO**가 ISO 파일을 선택받아 AI 루프 없이 무인 설치를 시작합니다. 기본 공개 계정은 `vboxuser` / `password123!`입니다. 게시자 인증과 실제 Marketplace 업로드는 별도입니다.
 
 VirtualBox MCP `vm_create`도 ISO 경로 하나로 자동 이름·기본 사양을 선택할 수 있습니다. VM 생성 후 설치를 `separate` 모드로 시작하며, 레코더는 [게스트 설치 안내](docs/GUEST_RECORDER.md)에 따라 Debian postinstall / Windows 최초 바탕화면 로그인 시 구성합니다. 실제 설치 완료를 자동 검증한 상태는 아닙니다.
+
+게스트 OS 자체 **1920×1080 / 배율 100%** 및 호스트 관전 **View → Scaled Mode** 설정은 [해상도 안내](docs/VM_DISPLAY.md)를 참고하세요. Windows Guest Additions ISO 삽입은 스크립트로, 설치/UAC 승인과 재부팅은 사용자가 수행합니다.

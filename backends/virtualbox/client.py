@@ -13,7 +13,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 TOOLS = {'vm_list','vm_info','vm_start','vm_screenshot','vm_screen_info',
-         'vm_keyboard_scancode','vm_keyboard_type','vm_mouse_click','vm_prepare_recorder','vm_create'}
+         'vm_keyboard_scancode','vm_keyboard_type','vm_mouse_click','vm_prepare_recorder','vm_create','vm_configure_display','vm_insert_guest_additions'}
 
 async def request(tool: str, arguments: dict, screenshot: str | None = None):
     from mcp import ClientSession, StdioServerParameters
