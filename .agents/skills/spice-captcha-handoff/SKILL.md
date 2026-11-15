@@ -16,3 +16,5 @@ Robot publishes the handoff result and marks the task SKIP. Teardown releases it
 After the user explicitly reports completion, run this package once again. If instructions remain, retain the handoff. `no_challenge_text` means no known instruction was recognized; it does not prove clearance or successful login. Require positive OCR evidence of the expected next screen before resuming. Never navigate back to the login URL merely to recheck a challenge.
 
 Purely graphical challenges, missing fonts and OCR errors can be missed. Report unverified states honestly. Existing `rpa.py check-verification` remains compatible. Future listener-based recording must exclude private credential/verification entry; no built-in recorder is currently provided.
+
+Model lifetime: real SPICE connections auto-start detached YOLO/OCR processes. Keep them running across RPA/skill calls; do not stop/restart after each task. Use `scripts/model_service.py status` or explicit start/stop only when needed. See `docs/MODEL_BACKGROUND.md`; no systemd service is installed. Hyper-V uses its separate experimental `hyperv-rpa` skill/backend, not SPICE transport.

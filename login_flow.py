@@ -27,9 +27,25 @@ def detect_login_form(analysis):
     candidates = {}
     for role, labels in LABELS.items():
         normalized = {normalize(label) for label in labels}
-        candidates[role] = [e for e in analysis['elements']
-            if normalize(e.get('text','')) in normalized
-            and (e.get('ocr_confidence') or 0) >= 0.7]
+        candidates[role] = []
+        for element in analysis['elements']:
+            # A coarse YOLO region can include a brand heading and an input label.
+            # Match its individual OCR readings rather than requiring merged text equality.
+            readings = [reading for reading in element.get('readings',[])
+                        if normalize(reading.get('text','')) in normalized
+                        and reading.get('confidence',0) >= 0.7]
+            if readings:
+                reading = max(readings,key=lambda item:item['confidence'])
+                box = reading['xyxy']
+                candidates[role].append({**element,'text':reading['text'],
+                    'ocr_confidence':reading['confidence'],'label_xyxy':box,
+                    'center':[(box[0]+box[2])/2,(box[1]+box[3])/2]})
+            elif normalize(element.get('text','')) in normalized and (element.get('ocr_confidence') or 0) >= 0.7:
+                candidates[role].append(element)
+    origin_visible = any(
+        re.search(r'(?<![a-z0-9.-])(?:https?://)?nid\.naver\.com(?=[/:?\s]|$)',element.get('text',''),re.I)
+        and element.get('xyxy',[0,999])[1] < 160
+        for element in analysis['elements'])
     forms = []
     for username in candidates['username']:
         for password in candidates['password']:
@@ -43,9 +59,9 @@ def detect_login_form(analysis):
                     forms.append({'username':username,'password':password,'submit':submit})
     if len(forms) != 1:
         return {'status':'login_form_not_found' if not forms else 'ambiguous_login_form',
-                'candidate_counts':{k:len(v) for k,v in candidates.items()}, 'form_count':len(forms)}
+                'candidate_counts':{k:len(v) for k,v in candidates.items()}, 'form_count':len(forms),
+                'origin_verified':origin_visible}
     # OCR of browser chrome gives an additional origin check before entering credentials.
-    origin_visible = any('nid.naver.com' in e.get('text','').casefold() for e in analysis['elements'])
     return {'status':'needs_credentials' if origin_visible else 'origin_not_verified',
             'origin_verified':origin_visible, 'form':forms[0],
             'screenshot':analysis['screenshot'], 'annotated':analysis['annotated']}

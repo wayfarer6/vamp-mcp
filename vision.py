@@ -1,6 +1,5 @@
 """Fuse UI icon boxes with multilingual text. Coordinates always refer to guest pixels."""
 import json
-import subprocess
 import time
 from pathlib import Path
 from PIL import Image, ImageDraw
@@ -85,26 +84,10 @@ def analyze(robot, output='artifacts/ui.json', languages='ko,en,ja,zh', device='
 
 
 def run_ocr(robot, screenshot, languages, output):
-    output = Path(output).resolve()
-    output.parent.mkdir(parents=True, exist_ok=True)
-    with output.with_suffix('.log').open('w') as log:
-        worker = subprocess.Popen([str(ROOT/'.venv-ocr/bin/python'), str(ROOT/'ocr_worker.py'),
-            str(screenshot), '--languages', languages, '--output', str(output)],
-            stdout=log, stderr=subprocess.STDOUT)
-        try:
-            deadline = time.monotonic()+600
-            while worker.poll() is None:
-                robot._pump(0.1)
-                if time.monotonic() > deadline:
-                    raise TimeoutError(f'OCR exceeded 600s; see {output.with_suffix(".log")}')
-            if worker.returncode:
-                raise RuntimeError(f'OCR failed; see {output.with_suffix(".log")}')
-        finally:
-            if worker.poll() is None:
-                worker.terminate()
-                try:
-                    worker.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    worker.kill()
-                    worker.wait()
-    return json.loads(output.read_text())
+    from model_daemon import request
+    output=Path(output).resolve();output.parent.mkdir(parents=True,exist_ok=True)
+    result=request('ocr',{'op':'predict','image':str(Path(screenshot).resolve()),
+                         'languages':languages.split(',')},pump=robot._pump)
+    output.write_text(json.dumps(result['lines'],ensure_ascii=False,indent=2))
+    output.with_suffix('.log').write_text(json.dumps({key:value for key,value in result.items() if key!='lines'},indent=2))
+    return result['lines']

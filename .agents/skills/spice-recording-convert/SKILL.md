@@ -23,7 +23,7 @@ For new manual packages use `.venv/bin/python scripts/new_rpa.py <id> --guest-os
 
 **Windows program startup uses Win+R and an executable/command, not desktop-icon coordinates.** Use a guest shortcut or OS search only when the requested app cannot be launched from Run, and document why. Windows desktops differ by user. `cmd`/`win` recorder keys map to SPICE Super/Windows; `shift_r` maps to right Shift. Debian GNOME uses Alt+F2 plus a command, with documented alternatives for other desktops. Do not reuse Windows launch keys in Debian.
 
-Keep the recorder's Win+R prefix if present. If a recording launches through a desktop icon, identify the application and replace only the launch prefix with a common launcher. Do not guess an executable or replay a desktop click while investigating. The current input's Win+R prefix was mechanically identified; its 80 actions have not been live-replayed by this conversion.
+Keep the recorder's Win+R prefix if present. If a recording launches through a desktop icon, identify the application and replace only the launch prefix with a common launcher. Do not guess an executable or replay a desktop click while investigating. The current input's Win+R prefix was mechanically identified; its 80 actions were live-replayed once on the Windows KVM guest. The initial merged-label validation failed and was corrected; read-only re-observation confirmed the login form. See the package evidence rather than assuming account login occurred.
 
 ## Coordinate and semantic refinement
 

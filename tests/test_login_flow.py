@@ -34,3 +34,27 @@ class LoginDetectionTests(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class MergedRegionTests(unittest.TestCase):
+    def test_brand_heading_and_placeholder_in_one_yolo_box(self):
+        analysis=page()
+        username=analysis['elements'][1]
+        username['text']='NAVER ID or phone number'
+        username['center']=[800,200]
+        username['readings']=[
+            {'text':'NAVER','confidence':.99,'xyxy':[750,140,850,180]},
+            {'text':'ID or phone number','confidence':.97,'xyxy':[760,320,840,340]},
+        ]
+        result=detect_login_form(analysis)
+        self.assertEqual(result['status'],'needs_credentials')
+        self.assertEqual(result['form']['username']['center'],[800,330])
+        self.assertEqual(result['form']['username']['kind'],'ui_region')
+
+    def test_body_text_or_similar_host_cannot_verify_browser_origin(self):
+        for text,y in [('https://nid.naver.com.evil.example/login',95),
+                       ('https://nid.naver.com/login',500)]:
+            with self.subTest(text=text):
+                analysis=page()
+                analysis['elements'][0]=element(text,300,y)
+                self.assertEqual(detect_login_form(analysis)['status'],'origin_not_verified')
