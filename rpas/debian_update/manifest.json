@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "id": "debian_update",
+  "name": "Debian VM 패키지 목록 갱신",
+  "version": "1.0.0",
+  "default_entrypoint": "run",
+  "entrypoints": [
+    {
+      "name": "run",
+      "file": "run.robot",
+      "credentials": "public_sandbox_config"
+    }
+  ],
+  "python_libraries": [
+    "workflow.py"
+  ],
+  "dependencies": [
+    "spice",
+    "paddleocr"
+  ],
+  "skill": "spice-vm-update",
+  "outputs": {
+    "summary": "${OUTPUT DIR}/summary.json",
+    "robot_log": "${OUTPUT DIR}/log.html",
+    "robot_report": "${OUTPUT DIR}/report.html"
+  }
+}

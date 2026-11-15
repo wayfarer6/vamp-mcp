@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "id": "firefox_naver",
+  "name": "Firefox에서 네이버 접속",
+  "version": "1.0.0",
+  "default_entrypoint": "run",
+  "entrypoints": [
+    {
+      "name": "run",
+      "file": "run.robot",
+      "credentials": "none"
+    }
+  ],
+  "python_libraries": [
+    "workflow.py"
+  ],
+  "dependencies": [
+    "spice",
+    "paddleocr"
+  ],
+  "skill": "spice-vm-rpa",
+  "outputs": {
+    "summary": "${OUTPUT DIR}/summary.json",
+    "robot_log": "${OUTPUT DIR}/log.html",
+    "robot_report": "${OUTPUT DIR}/report.html"
+  }
+}

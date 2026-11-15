@@ -1,5 +1,14 @@
 # Debian VM apt update RPA 실행 가이드
 
+새 작업의 표준 진입점은 RPA 패키지입니다.
+
+```bash
+cd /home/ssh1032007/spice_kvm_based_rpa
+.venv/bin/python scripts/run_rpa.py debian_update
+```
+
+구성: `rpas/debian_update/run.robot` → `rpas/debian_update/workflow.py` → 공통 SPICE/OCR 엔진. 결과는 `artifacts/rpas/debian_update/summary.json`, 전체 OCR 기록은 그 아래 `update/result.json`에 저장됩니다. [패키지 규격 README](../rpas/README.md)에 변수·보고서·확장 방법을 정리했습니다. 아래는 계속 사용할 수 있는 기존 CLI의 상세 실행법입니다.
+
 호스트 터미널에서 RPA를 실행하면 SPICE 키보드 입력으로 게스트 Debian의 터미널을 열고 `su root` → `apt update`를 수행합니다. 화면 상태와 실행 결과는 로컬 PaddleOCR 텍스트로 판별합니다. AI 서비스나 멀티모달 화면 판독 없이도 실행할 수 있습니다.
 
 ## 1. 실행 전 준비

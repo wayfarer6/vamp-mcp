@@ -1,29 +1,34 @@
 ---
 name: spice-vm-rpa
-description: Control an authorized SPICE VM desktop through Robot Framework, guest screenshots, YOLO UI detection and Korean, English, Japanese, Chinese PaddleOCR. Use for visual VM interaction without installing an automation agent in the guest.
+description: "Control an authorized SPICE VM through packaged Robot Framework RPAs backed by Python SPICE, YOLO and Korean, English, Japanese, Chinese OCR. Use for visual guest interaction without installing a guest automation agent."
 ---
 
-Use the repository at `/home/ssh1032007/spice_kvm_based_rpa`, or the checkout containing this skill. Run commands from its root with `.venv/bin/python`. The OCR worker uses `.venv-ocr` (Python 3.12); do not import Paddle into the SPICE process. Read `README.md` for installation and command options if needed.
+Work from `/home/ssh1032007/spice_kvm_based_rpa` or the repository checkout. Read `rpas/README.md` for the package contract. Every RPA owns a manifest, one or more `.robot` entrypoints and a Python `workflow.py`; shared SPICE/OCR engines stay at repository root.
+
+## Packaged entrypoints
+
+| Task | Robot file | Python library | Command |
+| --- | --- | --- | --- |
+| Inspect or control desktop | `rpas/desktop_control/run.robot` | `rpas/desktop_control/workflow.py` | `.venv/bin/python scripts/run_rpa.py desktop_control` |
+| Launch Firefox | `rpas/firefox_launch/run.robot` | `rpas/firefox_launch/workflow.py` | `.venv/bin/python scripts/run_rpa.py firefox_launch` |
+| Visit Naver | `rpas/firefox_naver/run.robot` | `rpas/firefox_naver/workflow.py` | `.venv/bin/python scripts/run_rpa.py firefox_naver` |
+
+Choose one package/entrypoint. Never execute the entire `rpas` directory except with `--dryrun`. Results are in `artifacts/rpas/<id>/summary.json`; read full details only for an unresolved failure. `report.html` and `log.html` hold Robot evidence. Existing CLI commands remain compatibility options.
 
 ## Observe and act
 
-- Inspect the active VM endpoint before connecting. The current Debian VM is `debian13`, `spice://127.0.0.1:5900`. A new SPICE connection may replace an existing viewer. Do not reboot or reconfigure the VM to reconnect.
-- Capture with `.venv/bin/python rpa.py capture`. View the returned guest PNG with the image viewing tool.
-- Analyze with `.venv/bin/python rpa.py analyze --languages ko,en,ja,zh`. This saves `artifacts/ui.json` and `artifacts/ui.annotated.png`. Inspect both. `elements` contain numbered YOLO regions, OCR-only text, coordinates in native guest pixels, click centers, confidence, and alternative language readings.
-- YOLO identifies candidate UI regions, not accessible roles or button meanings. Infer a button's purpose using its text and the screenshot. An empty text label is unknown, not permission to guess.
-- To click a unique visible label, use `.venv/bin/python rpa.py click-text '확인'`. This refreshes detection, requires an exact unique match and OCR confidence of at least 0.7, and checks that the target crop has not changed. If it is ambiguous or stale, inspect a fresh screenshot and choose a coordinate only when the target is clear.
-- Coordinate clicks: `.venv/bin/python rpa.py click 800 500`. Coordinates are relative to the guest screen, never the virt-manager window. Do not reuse coordinates after layout changes.
-- Keys: `.venv/bin/python rpa.py hotkey ctrl l`; `.venv/bin/python rpa.py write 'about:blank'`; `.venv/bin/python rpa.py hotkey enter`. Text entry assumes a US keyboard layout and supports ASCII; OCR recognition of CJK does not imply CJK text entry.
-- Capture after each meaningful action and verify the visible result. Stop after two failed attempts at the same action and inspect the reason before proceeding. Keep actions within the user's requested task.
+The current VM is `debian13` at `spice://127.0.0.1:5900`. A new client can replace its viewer. Do not reboot/reconfigure the VM to reconnect and do not type concurrently with the user or another RPA.
 
-## Robot Framework
+The desktop package defaults to capture only. Add `--var ACTION:ocr` for OCR-only inspection, `ACTION:analyze` for YOLO+OCR, or `ACTION:screen-info`. Other actions: `click`, `move` (`X`, `Y`), `move-relative` (`DX`, `DY`), `hotkey` (`KEYS:ctrl+l`), `write` (`TEXT`), `click-text`, `find-image`, `click-image` (`TEMPLATE`), `detect`. Set `LANGUAGES:ko,en,ja,zh` or `DEVICE:cpu` as needed.
 
-Run `.venv/bin/python -m robot --outputdir artifacts tests/launch_firefox.robot` for the Firefox launch scenario. This opens the GNOME Run dialog with Alt+F2 and types `firefox` over SPICE. Review the final screenshot as well as Robot's report; a successful input sequence alone does not prove the intended application opened.
+Read the JSON and inspect a guest image only when the task permits multimodal viewing. Coordinates are native guest pixels, not host-window pixels. YOLO candidate regions are not guaranteed accessible buttons; combine text and scene context. Capture/check after meaningful actions. `executed` means input was dispatched, not that an application succeeded.
 
-Import `spice_robot.py` as a Robot library for `Analyze Guest UI`, `Click Guest Text`, `Click Guest Image`, `Guest Hotkey`, `Guest Write`, and `Capture Guest Screen` keywords. PyAutoGUI performs template matching on guest frames only; never call its host keyboard or mouse functions.
+Use the login package for private credentials, not generic `TEXT` or Robot argument variables. PyAutoGUI is only for guest image matching; never call its host mouse/keyboard functions.
 
-## Runtime boundaries
+## Runtime and extension boundaries
 
-YOLO chooses CUDA when Torch reports it available, otherwise CPU; `--device cpu` forces CPU. PaddleOCR uses CPU in the isolated environment. First use downloads recognition models; later runs use the cache. Do not describe models as trained on this VM or claim automation is undetectable.
+SPICE uses the system-Python `.venv`; PaddleOCR uses `.venv-ocr` (Python 3.12). YOLO selects CUDA if available, otherwise CPU. PaddleOCR currently runs on CPU. Recognition of CJK does not imply CJK text entry; keyboard input assumes US ASCII.
 
-Absolute clicks require SPICE CLIENT mode. Relative motion is available through `Guest Move Relative` in SERVER mode, but guest pointer acceleration prevents a guaranteed pixel mapping. Do not simulate precise absolute clicks by assuming homing or split deltas eliminate acceleration error.
+Absolute clicks require CLIENT mode. Relative motion in SERVER mode does not guarantee pixel mapping because of guest acceleration. Stop after two failed attempts and inspect the cause before continuing.
+
+Use Robot keyword boundaries and `scripts/run_rpa.py --listener <listener>` for future recording integration. No built-in video/macro recorder currently exists. A screen recorder must reuse the existing SPICE session. Do not claim automation is undetectable.

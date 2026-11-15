@@ -51,18 +51,20 @@ def detect_login_form(analysis):
             'screenshot':analysis['screenshot'], 'annotated':analysis['annotated']}
 
 
-def prepare(robot, languages='en', device='auto'):
+def prepare(robot, languages='en', device='auto', output='artifacts/login'):
     # GNOME Run dialog establishes browser foreground rather than assuming current focus.
     robot.guest_hotkey('alt','f2'); robot._pump(1)
     robot.guest_write('firefox'); robot.guest_hotkey('enter'); robot._pump(4)
     robot.guest_hotkey('ctrl','l'); robot.guest_write(LOGIN_URL)
     robot.guest_hotkey('enter'); robot._pump(6)
     robot.guest_hotkey('esc')
-    analysis = robot.analyze_guest_ui('artifacts/login/ui.json', languages, device)
+    directory=Path(output)
+    directory.mkdir(parents=True,exist_ok=True)
+    analysis = robot.analyze_guest_ui(str(directory/'ui.json'), languages, device)
     from verification import detect_verification
     challenge = detect_verification([reading for element in analysis['elements'] for reading in element.get('readings',[])])
     state = challenge if challenge['status'] != 'no_challenge_text' else detect_login_form(analysis)
-    path = Path('artifacts/login/state.json')
+    path = directory/'state.json'
     path.write_text(json.dumps(state, ensure_ascii=False, indent=2))
     return state
 

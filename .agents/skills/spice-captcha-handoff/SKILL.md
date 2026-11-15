@@ -1,16 +1,18 @@
 ---
 name: spice-captcha-handoff
-description: Detect CAPTCHA or additional verification instructions through multilingual OCR in a SPICE VM, stop automation, guide the user to complete it manually, and recheck afterward. Use when login RPA returns needs_user_captcha or needs_user_verification.
+description: "Run the Robot/Python CAPTCHA handoff package to detect multilingual verification instructions in a SPICE VM, pause automation for the user, and recheck after manual completion."
 ---
 
-Work from `/home/ssh1032007/spice_kvm_based_rpa` or the checkout containing this skill. `rpa.py check-verification` captures the current guest frame and runs local PaddleOCR in Korean, English, Japanese and Chinese. It does not navigate, type or click. Inspect the returned JSON, not a multimodal view, when OCR-only operation is requested.
+Work from `/home/ssh1032007/spice_kvm_based_rpa` or the checkout. The package is `rpas/captcha_handoff/`: `manifest.json`, `run.robot`, `workflow.py`. Run `.venv/bin/python scripts/run_rpa.py captcha_handoff`. It checks the current screen without navigating, clicking or typing. `--var LANGUAGES:ko,en,ja,zh` is the default. Read `artifacts/rpas/captcha_handoff/summary.json`.
 
-The login RPA checks for challenge instructions before credential entry and after submission. For `needs_user_captcha` or `needs_user_verification`, stop automated input immediately and tell the user:
+Local PaddleOCR detects instructional phrases, not challenge solutions. When OCR-only work is requested, read JSON rather than invoking an image viewer or multimodal model. The login package runs the same checks before credential entry and after submission.
+
+For `needs_user_captcha` or `needs_user_verification`, stop automated input and tell the user:
 
 “보안 확인 화면이 감지되어 자동화를 멈췄습니다. VM 창에서 CAPTCHA나 추가 인증을 직접 완료한 뒤 ‘완료’라고 알려주세요. 완료 후 제가 화면 상태를 다시 확인하겠습니다.”
 
-Leave the page as it is. Disconnecting the RPA releases its session lock so the user can reconnect their viewer if needed. Do not keep polling, reload the page, resubmit credentials, click challenge controls, extract challenge characters, answer a challenge, or route the challenge to another model/service.
+Robot publishes the handoff result and marks the task SKIP. Teardown releases its SPICE connection and lock so the user can reconnect their viewer. Leave the page as it is. Do not poll continuously, reload, resubmit credentials, click challenge controls, extract answers or route the challenge to another model/service.
 
-After the user explicitly reports completion, run `.venv/bin/python rpa.py check-verification` once. If challenge text is still detected, report it and keep the handoff active. `no_challenge_text` means no instruction phrase was recognized; it is not proof that the challenge is gone or login succeeded. Before resuming, require positive OCR evidence of the expected next screen. A visible logout control can support login success; a verified login form can support credential entry only when the user requested that step. Do not navigate back to the login URL just to recheck a challenge, since that can discard the user's progress.
+After the user explicitly reports completion, run this package once again. If instructions remain, retain the handoff. `no_challenge_text` means no known instruction was recognized; it does not prove clearance or successful login. Require positive OCR evidence of the expected next screen before resuming. Never navigate back to the login URL merely to recheck a challenge.
 
-The detector matches instructional phrases such as CAPTCHA, “I'm not a robot”, 보안문자, 画像認証 and 图形验证码, not the challenge solution. Purely graphical challenges, missing fonts and low-quality OCR can be missed. For uncertain screens, report an unverified state rather than assuming clearance.
+Purely graphical challenges, missing fonts and OCR errors can be missed. Report unverified states honestly. Existing `rpa.py check-verification` remains compatible. Future listener-based recording must exclude private credential/verification entry; no built-in recorder is currently provided.

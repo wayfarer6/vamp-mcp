@@ -2,6 +2,46 @@
 
 호스트에서 SPICE 화면을 읽고 키보드·마우스 패킷을 보내 Debian VM을 제어합니다. Robot Framework가 시나리오를 실행하고, PyAutoGUI는 **게스트 화면**의 이미지 매칭에 사용합니다. YOLO로 UI 영역을 찾고 PaddleOCR로 한국어·영어·일본어·중국어 텍스트를 연결합니다. 게스트에 자동화 프로그램을 설치하거나 SSH·WebDriver·클립보드를 사용하지 않습니다. 자동화 탐지가 불가능하다는 보장은 없습니다.
 
+## RPA별 패키지 규격
+
+이제 실행·공유 단위는 **RPA 하나 = 폴더 하나 + 하나 이상의 `.robot` 파일 + 전용 Python 라이브러리 + manifest**입니다. 작업 순서와 검증은 Robot 파일에, 좌표·SPICE 입력·YOLO·OCR 세부 처리는 Python에 둡니다.
+
+```text
+rpas/
+├── naver_login/
+│   ├── manifest.json
+│   ├── run.robot       # 로그인 화면 검출
+│   ├── login.robot     # 계정 입력·로그인 제출
+│   └── workflow.py
+├── debian_update/
+│   ├── manifest.json
+│   ├── run.robot
+│   └── workflow.py
+└── common.resource     # 공통 연결·종료·결과·사용자 인계
+```
+
+| 패키지 ID | 작업 |
+| --- | --- |
+| `firefox_launch` | Firefox 실행 |
+| `firefox_naver` | Firefox에서 네이버 접속 |
+| `naver_login` | 로그인 폼 검출 또는 명시적으로 선택한 로그인 제출 |
+| `debian_update` | root apt update |
+| `captcha_handoff` | CAPTCHA·추가 인증 감지 후 사용자 인계 |
+| `desktop_control` | 화면·OCR·YOLO·좌표·키보드 작업 |
+
+```bash
+cd /home/ssh1032007/spice_kvm_based_rpa
+.venv/bin/python scripts/run_rpa.py --list
+.venv/bin/python scripts/run_rpa.py debian_update
+.venv/bin/python scripts/run_rpa.py naver_login
+# 실제 로그인 제출은 별도 진입점을 명시
+.venv/bin/python scripts/run_rpa.py naver_login --entry login --var CREDENTIAL_SOURCE:prompt
+```
+
+기본 결과는 `artifacts/rpas/<ID>/summary.json`이며, `schema_version`, `rpa_id`, `status`와 필요한 검증·상세 경로만 반환합니다. Robot 보고서는 같은 폴더의 `report.html`, 로그는 `log.html`입니다. 기존 `rpa.py` CLI와 `tests/*.robot` 실행법도 유지합니다.
+
+[패키지 규격·변수·결과·새 RPA 추가·녹화 확장 안내](rpas/README.md)에 전체 사용법을 정리했습니다. 스킬은 이 패키지의 `.robot` 진입점을 우선 실행하도록 연결했습니다. Robot listener를 붙일 실행 경계는 마련했으며, 영상·매크로 녹화 기능 자체는 아직 구현하지 않았습니다.
+
 ## 설치
 
 Linux 호스트의 시스템 Python과 일치하는 PyGObject/SPICE GI 바인딩이 필요합니다. 이 환경은 시스템 Python 3.14, `gir1.2-spiceclientglib-2.0`, Pillow를 사용합니다. 배포판에 따라 시스템 패키지를 설치하세요. GUI 세션의 `DISPLAY`, `XAUTHORITY`가 있어야 PyAutoGUI를 import할 수 있습니다.

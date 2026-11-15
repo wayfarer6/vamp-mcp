@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "id": "captcha_handoff",
+  "name": "CAPTCHA 사용자 인계",
+  "version": "1.0.0",
+  "default_entrypoint": "run",
+  "entrypoints": [
+    {
+      "name": "run",
+      "file": "run.robot",
+      "credentials": "none"
+    }
+  ],
+  "python_libraries": [
+    "workflow.py"
+  ],
+  "dependencies": [
+    "spice",
+    "paddleocr"
+  ],
+  "skill": "spice-captcha-handoff",
+  "outputs": {
+    "summary": "${OUTPUT DIR}/summary.json",
+    "robot_log": "${OUTPUT DIR}/log.html",
+    "robot_report": "${OUTPUT DIR}/report.html"
+  }
+}
