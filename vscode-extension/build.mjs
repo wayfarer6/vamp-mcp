@@ -1,9 +1,13 @@
 import {build} from 'esbuild';
-import {cp,mkdir,rm,copyFile,readFile,writeFile,readdir} from 'node:fs/promises';
+import {cp,mkdir,rm,copyFile,readFile,writeFile,readdir,stat} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const root=path.dirname(here);
+const manifest=JSON.parse(await readFile(path.join(here,'package.json'),'utf8'));
+if ((await stat(path.join(here,manifest.icon))).size>1024*1024) {
+  throw new Error('Marketplace icon must be at most 1024 KB. Resize/compress it before packaging.');
+}
 const runtime=path.join(here,'dist/runtime');
 await rm(path.join(here,'dist'),{recursive:true,force:true});
 await mkdir(path.join(runtime,'backends/virtualbox'),{recursive:true});
