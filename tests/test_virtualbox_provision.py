@@ -22,6 +22,7 @@ class ProvisioningTests(unittest.TestCase):
         if args[1:3]==['list','vms']:output=self.listed
         if args[1:3]==['unattended','detect']:
             output=f'detectedOSTypeId="{self.os_type}"\nisInstallSupported="{str(self.supported).lower()}"\n'
+        if args[1]=='showvminfo':output=f'ostype="{self.os_type}"\nstoragecontrollername0="SATA"\nVMState="poweroff"\n'
         if '--help' in args:output='--user-password'
         return subprocess.CompletedProcess(args,0,output,'')
     def create(self):

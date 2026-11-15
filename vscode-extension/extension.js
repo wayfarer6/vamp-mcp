@@ -23,7 +23,7 @@ function activate(context) {
       if(config().get('vboxManagePath')) env.VBOXMANAGE_PATH=config().get('vboxManagePath');
       if(config().get('mousePythonExecutable')) env.PYTHON_PATH=config().get('mousePythonExecutable');
       return [new vscode.McpStdioServerDefinition('VAMP VirtualBox',process.execPath,
-        [path.join(runtime,'backends/virtualbox/server.mjs')],env,'0.1.0')];
+        [path.join(runtime,'backends/virtualbox/server.mjs')],env,'0.1.1')];
     }
   }));
   let settingUp = false;
@@ -72,6 +72,10 @@ function activate(context) {
           child.stdin.end(JSON.stringify({iso_path:files[0].fsPath}));
         });
         output.appendLine(result); output.show();
+        const details=JSON.parse(result);
+        if(details.guest_additions) vscode.window.showInformationMessage(details.guest_additions.status==='media_inserted'
+          ? 'After Windows installation: open the Guest Additions CD, run VBoxWindowsAdditions.exe, approve UAC and reboot. Then set 1920x1080, Scale 100%.'
+          : 'Windows Guest Additions ISO was not found. Supply a matching ISO through vm_insert_guest_additions, then install it manually.');
         vscode.window.showInformationMessage('VAMP installation started. Public guest login: vboxuser / password123!. Guest installation completion is not yet verified.');
       });
     } catch(error) {output.appendLine(String(error));output.show();vscode.window.showErrorMessage(`VAMP creation failed: ${error.message}`);}

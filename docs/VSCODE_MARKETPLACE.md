@@ -11,7 +11,7 @@ npm run build
 cd ../../vscode-extension
 npm ci --ignore-scripts
 npm run package
-code --install-extension ../artifacts/vamp-mcp-0.1.0.vsix
+code --install-extension ../artifacts/vamp-mcp-0.1.1.vsix
 ```
 
 마지막 설치 명령은 사용자 자신의 VS Code에서 실행하세요. 확장은 자동으로 VM/게스트 패키지를 설치하지 않습니다. 최초 **VAMP: Set Up Python Environment** 명령으로 private venv를 만든 다음, **VAMP: Create VM From ISO**로 파일 선택 창에서 ISO를 고르면 결정론적 설치기가 수행됩니다. 기본 공개 계정 `vboxuser / password123!`를 선택 창과 결과에서 안내합니다.

@@ -57,3 +57,11 @@ The independent guest recorder is from [axel-magard/PyAutoGUI-Recorder](https://
 No telemetry is implemented by VAMP. Dependency downloads use their package registries, and the MCP client determines what tool results are sent to a model provider.
 
 This project was developed with user direction and AI-assisted coding. This is an experimental preview; live guest installation and VS Code UI behavior still require testing before a production release.
+
+## Native resolution and scaled observation
+
+Both Debian GNOME and Windows guests use **1920×1080 native resolution, OS scale 100%, browser zoom 100%**. In GNOME select Settings → Displays → Resolution 1920×1080 → Scale 100% → Apply/Keep Changes. In Windows select Settings → System → Display → Display resolution 1920×1080 → Scale 100%.
+
+The VirtualBox **View → Scaled Mode** frontend can be small while the guest framebuffer remains full HD. Guest auto-resize is disabled by default. An already-open frontend may require detach/reopen or a manual View menu change.
+
+For Windows, VAMP tries to insert the host's Guest Additions ISO into a reserved DVD slot. After OS installation, open the CD in Windows, run **VBoxWindowsAdditions.exe**, approve UAC, install and reboot. Installation is manual. If the matching host ISO is unavailable, pass its path to `vm_insert_guest_additions`; occupied media is never replaced. Then call `vm_configure_display` to send a resolution hint and check actual screenshot pixels. A configured hint is not proof that the guest accepted the mode.

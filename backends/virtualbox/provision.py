@@ -12,6 +12,7 @@ import uuid
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'scripts'))
+sys.path.insert(0,str(Path(__file__).resolve().parent))
 from build_recorder_media import build
 
 PUBLIC_CREDENTIALS={'username':'vboxuser','password':'password123!','public_sandbox_credentials':True}
@@ -64,6 +65,8 @@ def create(iso_path,name=None,memory_mb=4096,cpus=2,disk_mb=65536,basedir=None,i
         record('recorder-media-built')
         run('createvm','--name',name,'--ostype',os_type,'--register','--basefolder',folder.parent)
         record('vm-created')
+        from display import preferences
+        journal['display']=preferences(name,run)
         options=['modifyvm',name,'--memory',memory_mb,'--cpus',cpus,'--vram',128,
                  '--mouse','usbtablet','--nic1','nat','--boot1','dvd','--boot2','disk',
                  '--graphicscontroller','vboxsvga' if os_type=='Windows11_64' else 'vmsvga']
@@ -77,6 +80,8 @@ def create(iso_path,name=None,memory_mb=4096,cpus=2,disk_mb=65536,basedir=None,i
         # Recorder media stays on a dedicated DVD; unattended owns its own installer/auxiliary slots.
         run('storageattach',name,'--storagectl','SATA','--port','3','--device','0','--type','dvddrive','--medium',media['iso'])
         if os_type=='Windows11_64':
+            from display import insert_additions
+            journal['guest_additions']=insert_additions(name,run=run)
             hook='cmd.exe /c "for %%D in (D E F G H I J K L M N O P) do @if exist %%D:\\postwin.cmd call %%D:\\postwin.cmd"'
         else:
             hook="sh -c 'mkdir -p /tmp/vamp-recorder; for d in /dev/sr*; do mount -o ro \"$d\" /tmp/vamp-recorder 2>/dev/null || continue; if [ -f /tmp/vamp-recorder/postdeb.sh ]; then sh /tmp/vamp-recorder/postdeb.sh; exit $?; fi; umount /tmp/vamp-recorder; done; exit 1'"

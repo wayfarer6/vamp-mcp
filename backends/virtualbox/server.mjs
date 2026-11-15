@@ -11,6 +11,21 @@ import { StdioServerTransport } from '../../third_party/mcp-virtualbox/node_modu
 import { z } from '../../third_party/mcp-virtualbox/node_modules/zod/index.js';
 const server = new McpServer({name: 'VAMP', version: '1.0.0'});
 const result = value => ({content: [{type: 'text', text: JSON.stringify(value)}]});
+async function displayAction(action,values) {
+  const python=process.env.RPA_HOST_PYTHON || 'python';
+  const script=fileURLToPath(new URL('./display.py',import.meta.url));
+  const output=await new Promise((resolve,reject)=>{
+    const child=execFile(python,[script,action],{timeout:180000},(error,stdout,stderr)=>{
+      if(error) reject(new Error(stdout || stderr || error.message)); else resolve(stdout);
+    });
+    child.stdin.end(JSON.stringify(values));
+  });
+  return JSON.parse(output);
+}
+server.tool('vm_configure_display','Request guest-native 1920x1080 and scaled viewer, disable auto-resize; verify via PNG pixels when running.',
+  {vm:z.string().min(1)},async args=>result(await displayAction('configure',args)));
+server.tool('vm_insert_guest_additions','Insert host Guest Additions ISO for a Windows VM; user installs it and approves UAC manually. Never replace occupied media.',
+  {vm:z.string().min(1),iso_path:z.string().optional()},async args=>result(await displayAction('additions',args)));
 server.tool('vm_list', 'List registered VirtualBox VMs without starting them', {}, async () =>
   result(parseVMList(await vboxManage('list', 'vms'))));
 server.tool('vm_info', 'Read VM configuration/state', {vm: z.string().min(1)}, async ({vm}) =>
@@ -19,10 +34,11 @@ server.tool('vm_start', 'Explicitly start an existing VM with detachable observa
   vm: z.string().min(1), type: z.enum(['separate','headless','gui']).default('separate'),
 }, async ({vm,type}) => {
   const state = parseMachineReadable(await vboxManage('showvminfo',vm,'--machinereadable')).VMState;
-  if (state === 'running') return result({status:'already_running',vm,frontend_changed:false});
+  if (state === 'running') return result({status:'already_running',vm,display:await displayAction('configure',{vm})});
   if (!['poweroff','saved','aborted'].includes(state)) throw new Error(`Cannot start VM in state ${state}`);
+  const display=await displayAction('configure',{vm});
   await vboxManage('startvm',vm,'--type',type);
-  return result({status:'start_requested',vm,type,guest_ready_verified:false});
+  return result({status:'start_requested',vm,type,display,guest_ready_verified:false});
 });
 registerDisplayTools(server);
 registerInputTools(server);

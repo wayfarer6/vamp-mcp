@@ -30,7 +30,7 @@ if args[0]=='showvminfo': print('VMState="'+os.environ.get('VBOX_TEST_STATE','po
 elif args[:2]==['list','vms']: print('"test-vm" {12345678-1234-1234-1234-123456789012}')
 elif args[0]=='controlvm' and args[2]=='screenshotpng':
  Path(args[3]).write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='))
-elif args[0]=='startvm': pass
+elif args[0] in ('startvm','setextradata'): pass
 else: sys.exit(2)
 ''')
         fake.chmod(0o700)

@@ -292,3 +292,4 @@ VirtualBox MCP `vm_create`도 ISO 경로 하나로 자동 이름·기본 사양�
 ## 이 브랜치의 통합 MCP
 
 `feat/vm-mcp-server`에는 SPICE 관찰·입력·Robot 실행과 실험적 Hyper-V 도구를 묶은 `vm_mcp_server.py`도 있습니다. [실행·설정](docs/VM_MCP.md) 및 [클라이언트 예시](examples/mcp-client.json)를 참고하세요. VirtualBox 전용 서버/VS Code 확장은 main과 공유하며, 통합 서버에서는 `virtualbox_create`로 무인 VM 생성, `vm_recorder_media`로 게스트 레코더 ISO 생성을 호출할 수 있습니다.
+게스트 OS 자체 **1920×1080 / 배율 100%** 및 호스트 관전 **View → Scaled Mode** 설정은 [해상도 안내](docs/VM_DISPLAY.md)를 참고하세요. Windows Guest Additions ISO 삽입은 스크립트로, 설치/UAC 승인과 재부팅은 사용자가 수행합니다.
