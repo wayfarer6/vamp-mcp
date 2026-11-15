@@ -11,7 +11,7 @@ npm run build
 cd ../../vscode-extension
 npm ci --ignore-scripts
 npm run package
-code --install-extension ../artifacts/vamp-mcp-0.1.2.vsix
+code --install-extension ../artifacts/vamp-mcp-0.1.3.vsix
 ```
 
 마지막 설치 명령은 사용자 자신의 VS Code에서 실행하세요. 확장은 자동으로 VM/게스트 패키지를 설치하지 않습니다. 최초 **VAMP: Set Up Python Environment** 명령으로 private venv를 만든 다음, **VAMP: Create VM From ISO**로 파일 선택 창에서 ISO를 고르면 결정론적 설치기가 수행됩니다. 기본 공개 계정 `vboxuser / password123!`를 선택 창과 결과에서 안내합니다.
@@ -20,13 +20,13 @@ code --install-extension ../artifacts/vamp-mcp-0.1.2.vsix
 
 ## 게시자 등록과 업로드
 
-`package.json`의 publisher `wayfarer6`는 사용자가 지정한 게시자 ID입니다. 실제 Marketplace 등록/권한은 아직 확인하지 못했습니다. Marketplace에서 해당 ID를 소유/등록한 뒤 실제 publisher에 맞게 수정하고 재패키징해야 합니다. GitHub 로그인이나 VS Code 로그인만으로 Marketplace 게시 권한이 생기지 않습니다.
+`package.json`의 publisher는 `wayfarer6`입니다. 사용자가 0.1.2 VSIX의 수동 업로드를 완료했으며, CLI 게시 인증은 별도입니다. GitHub 로그인이나 VS Code 로그인만으로 Marketplace 게시 권한이 생기지 않습니다.
 
 1. [Marketplace 게시자 관리](https://marketplace.visualstudio.com/manage)에서 로그인하고 Publisher를 생성하거나 기존 Publisher의 권한을 확인합니다.
 2. publisher ID와 확장 정보/라이선스/preview 상태를 검토합니다. 현재 버전은 실험적 preview이므로 manifest의 preview 표기를 유지합니다.
 3. 관리 페이지의 **New extension → Visual Studio Code**에서 생성한 VSIX를 업로드할 수 있습니다. 이 방법은 토큰을 채팅에 전달할 필요가 없습니다.
 4. CLI를 선호하면 공식 문서의 `vsce login <publisher>` / `vsce publish` 또는 지원되는 CI 인증을 설정합니다. 토큰은 채팅·Git·명령 인자에 남기지 않습니다.
 
-실제 Marketplace 게시/공개 URL은 아직 생성하지 않았습니다. VSIX 패키징, MCP 프로토콜 테스트와 실제 VS Code UI/게스트 OS 설치 검증을 구분하세요.
+확장 주소는 [wayfarer6.vamp-mcp](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp)입니다. 새 버전은 관리 페이지에서 해당 확장의 **Update**로 업로드하세요. 상세 설명은 확장의 `README.md`, 짧은 설명은 `package.json`의 `description`에서 가져옵니다. 수정 후 버전을 올려 VSIX를 다시 패키징해야 합니다. VSIX 패키징, MCP 프로토콜 테스트와 실제 VS Code UI/게스트 OS 설치 검증을 구분하세요.
 
 공식 문서: [MCP extension API](https://code.visualstudio.com/api/extension-guides/ai/mcp), [Publishing Extensions](https://code.visualstudio.com/api/working-with-extensions/publishing-extension).

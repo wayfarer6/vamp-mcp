@@ -1,5 +1,7 @@
 # VAMP MCP architecture
 
+Prototype motivation: use a local VM sandbox, OCR/UI recognition and reusable Robot/Python workflows to reduce AI token use on repetitive GUI work. Built in one day with user-directed vibe coding; completeness, reliability and documentation remain limited. Only KVM/SPICE and VirtualBox have been tried so far; Hyper-V is experimental and untested.
+
 VAMP exposes host-side VM tools to an AI agent through MCP over stdio. Robot Framework controls scenario order and assertions; Python implements VM operations and optional vision. Guest input is delivered through the hypervisor rather than a guest RPA agent.
 
 ```mermaid

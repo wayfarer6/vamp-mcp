@@ -26,7 +26,7 @@ cd /home/ssh1032007/spice_kvm_based_rpa
 - 새 SPICE 연결은 기존 virt-manager 뷰어 연결을 대체할 수 있습니다. 실행 중 뷰어를 재연결하면 RPA가 끊길 수 있습니다.
 - PyAutoGUI import에 필요한 호스트 GUI 세션의 `DISPLAY`, `XAUTHORITY`를 사용할 수 있는 터미널에서 실행하세요. `sudo`로 호스트 RPA를 실행할 필요는 없습니다.
 
-설치가 안 된 다른 호스트에서는 [README의 설치 절차](../README.md#설치)를 먼저 따르세요. 이 업데이트 작업에는 YOLO 모델이나 GPU가 필요하지 않으며, OCR은 별도 Python 3.12 환경의 CPU로 실행됩니다. OCR 모델은 최초 실행 시 다운로드될 수 있습니다.
+설치가 안 된 다른 호스트에서는 [설치 절차](INSTALL.md)를 먼저 따르세요. 이 업데이트 작업에는 YOLO 모델이나 GPU가 필요하지 않으며, OCR은 별도 Python 3.12 환경의 CPU로 실행됩니다. OCR 모델은 최초 실행 시 다운로드될 수 있습니다.
 
 ## 2. VM 설정 확인
 
