@@ -20,3 +20,4 @@ third_party/mcp-virtualbox/dist/
 .venv-virtualbox/
 vscode-extension/dist/
 *.vsix
+vscode-vault-extension/dist/

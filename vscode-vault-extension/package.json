@@ -1,0 +1,149 @@
+{
+  "name": "vamp-vault",
+  "displayName": "VAMP Vault — Credential & Certificate Isolation for AI Agents",
+  "description": "Local KeePassXC & VeraCrypt MCP vault for AI agents, providing isolated credential injection and virtual USB certificate mounting.",
+  "version": "0.1.0",
+  "publisher": "wayfarer6",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wayfarer6/vamp-mcp.git",
+    "directory": "vscode-vault-extension"
+  },
+  "engines": {
+    "vscode": "^1.103.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "MCP",
+    "vault",
+    "KeePassXC",
+    "VeraCrypt",
+    "credentials",
+    "certificate",
+    "NPKI",
+    "AI agent",
+    "VAMP"
+  ],
+  "extensionKind": [
+    "ui"
+  ],
+  "main": "./extension.js",
+  "icon": "icon.png",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false
+    }
+  },
+  "extensionDependencies": [
+    "wayfarer6.vamp-mcp"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "vampVault.setupCli",
+        "title": "VAMP Vault: Set Up KeePassXC & VeraCrypt CLI"
+      },
+      {
+        "command": "vampVault.createVault",
+        "title": "VAMP Vault: Create Vault (KeePassXC .kdbx)"
+      },
+      {
+        "command": "vampVault.openGuide",
+        "title": "VAMP Vault: Open Guide"
+      },
+      {
+        "command": "vampVault.status",
+        "title": "VAMP Vault: Show Status"
+      },
+      {
+        "command": "vampVault.lock",
+        "title": "VAMP Vault: Lock (Forget Master Password)"
+      }
+    ],
+    "mcpServerDefinitionProviders": [
+      {
+        "id": "vamp.vault",
+        "label": "VAMP Vault"
+      }
+    ],
+    "configuration": {
+      "title": "VAMP Vault",
+      "properties": {
+        "vampVault.keepassxcCliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to keepassxc-cli. Empty means use the system installation when found, otherwise the copy downloaded into this extension's storage."
+        },
+        "vampVault.veracryptCliPath": {
+          "type": "string",
+          "default": "",
+          "description": "Explicit path to the VeraCrypt command line binary. Empty means use the system installation when found, otherwise the copy downloaded into this extension's storage."
+        },
+        "vampVault.defaultKdbxPath": {
+          "type": "string",
+          "default": "",
+          "description": "Default KeePassXC database (.kdbx) used by the vault tools. Empty means 'vault.kdbx' inside this extension's global storage."
+        },
+        "vampVault.defaultVolumePath": {
+          "type": "string",
+          "default": "",
+          "description": "Default VeraCrypt volume (container file or device) used by the mount tools. Empty means 'vault.hc' inside this extension's global storage."
+        },
+        "vampVault.mountPoint": {
+          "type": "string",
+          "default": "",
+          "description": "Default mount point for encrypted volumes. Empty means a per-user folder: a drive letter on Windows, a folder under the home directory on macOS and Linux."
+        },
+        "vampVault.sessionCacheMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "maximum": 120,
+          "description": "How long a retrieved credential stays in the MCP server's memory before it must be approved and read again. 0 disables caching."
+        },
+        "vampVault.autoDownloadCli": {
+          "type": "boolean",
+          "default": true,
+          "description": "Allow the vault to download the official KeePassXC/VeraCrypt binaries for this platform when no system installation is found."
+        },
+        "vampVault.approvalMode": {
+          "type": "string",
+          "enum": [
+            "each-read",
+            "per-session",
+            "off"
+          ],
+          "default": "per-session",
+          "description": "When to ask you before a secret leaves the vault: on every read, once per entry per session, or never (off is not recommended)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "package": "npm run build && vsce package --out vamp-vault-0.1.0.vsix",
+    "test": "node test/smoke.mjs",
+    "vscode:prepublish": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^4.1.1",
+    "esbuild": "^0.25.0"
+  },
+  "preview": true,
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "^11.0.1"
+    }
+  }
+}
