@@ -13,7 +13,7 @@ Start in VS Code’s **VAMP** sidebar: **RPA Library** to create/find/export wor
 
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
-[VAMP 0.1.8](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8) · [Vault 0.1.5](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.5) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
+[VAMP 0.1.8](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8) · [Vault 0.1.5](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.5) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
 
 ## 만든 이유
 
@@ -86,10 +86,68 @@ OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualB
 [허브 사이트](https://wayfarer6.github.io/vamp-script-hub/) · [저장소 안 사본](docs/hub/) · [기여 가이드](https://github.com/wayfarer6/vamp-script-hub/blob/main/CONTRIBUTING.md)
 
 
+## Install the MCP servers with npm
+
+Use the MCP servers directly from VS Code, Codex, or another stdio MCP client without installing the VS Code extensions. Requires **Node.js 22+**. There are only two packages:
+
+- [`vamp-mcp`](https://www.npmjs.com/package/vamp-mcp): VirtualBox and KVM/libvirt control, plus the reviewed RPA library.
+- [`vamp-mcp-vault`](https://www.npmjs.com/package/vamp-mcp-vault): KeePassXC credentials and optional VeraCrypt volumes.
+
+> The npm publish requests have been accepted. The public registry currently exposes only a temporary `0.0.0-stage` placeholder; installation of the real releases is being verified. The placeholder is not an executable MCP server.
+
+Once the real releases are available, install both packages:
+
+```bash
+npm install -g vamp-mcp@0.1.8 vamp-mcp-vault@0.1.6
+```
+
+Register them with Codex:
+
+```bash
+codex mcp add vamp -- npx -y vamp-mcp@0.1.8 virtualbox
+codex mcp add vamp-vault -- npx -y vamp-mcp-vault@0.1.6
+```
+
+For KVM, replace `virtualbox` with `kvm`. For the reviewed RPA library, use `library` and set `VAMP_RPA_REGISTRY` to your catalog directory. In VS Code, use **MCP: Add Server → Command (stdio)** with the matching `npx` command, or copy the configuration examples below.
+
+npm installation does not automatically register every client, install a hypervisor/Python/KeePassXC/VeraCrypt, create a VM, or unlock a vault. Prepare those dependencies separately. Hyper-V is excluded from this npm release. The npm packages do not include the graphical VM manager or live VS Code viewer.
+
+[VS Code and Codex configuration](npm-package/README.md) · [Vault configuration, unlock and approval](npm-packages/vault/README.md)
+
+## npm으로 MCP 서버 설치
+
+> npm 게시 요청이 접수되었습니다. 현재 npm 공개 조회에는 임시 버전(`0.0.0-stage`)만 표시되어 실제 배포 버전의 설치 가능 여부를 확인 중입니다. 임시 버전은 실행 가능한 MCP 서버가 아닙니다.
+
+VS Code 확장 없이 MCP 서버만 사용하려면 npm으로 설치할 수 있습니다. Node.js 22 이상이 필요합니다. 패키지는 **VAMP와 Vault 두 개**이며, VirtualBox와 KVM은 VAMP 안에서 선택합니다.
+
+```bash
+npm install -g vamp-mcp@0.1.8 vamp-mcp-vault@0.1.6
+```
+
+전역 설치 없이 실행할 수도 있습니다. 아래 명령은 MCP 클라이언트에 등록해서 사용하며, 단독 실행하면 표준 입력에서 MCP 요청을 기다립니다.
+
+```bash
+npx -y vamp-mcp@0.1.8 virtualbox
+npx -y vamp-mcp@0.1.8 kvm
+npx -y vamp-mcp@0.1.8 library
+npx -y vamp-mcp-vault@0.1.6
+```
+
+Codex CLI 등록 예시:
+
+```bash
+codex mcp add vamp -- npx -y vamp-mcp@0.1.8 virtualbox
+codex mcp add vamp-vault -- npx -y vamp-mcp-vault@0.1.6
+```
+
+KVM은 첫 명령의 `virtualbox`를 `kvm`으로 바꿉니다. npm 설치가 모든 클라이언트에 자동 등록해 주지는 않습니다. VirtualBox·KVM/libvirt·Python·KeePassXC·VeraCrypt와 사용할 VM은 별도로 준비해야 합니다. Vault는 DB 경로와 로컬 잠금 해제 수단을 설정해야 하며, npm 설치만으로 VS Code의 승인창이나 비밀 저장소에 자동 연결되지 않습니다. Hyper-V는 이번 npm 배포에서 제외합니다.
+
+[VS Code·Codex 설정과 Python 준비](npm-package/README.md) · [Vault 설정·잠금 해제·승인 방식](npm-packages/vault/README.md)
+
 ## 시작하기
 
 1. 호스트에 VirtualBox 7.x와 Python 3.11+를 설치합니다.
-2. [Marketplace](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) 또는 [Release의 VSIX](https://github.com/wayfarer6/vamp-mcp/releases)로 확장을 설치합니다.
+2. [Marketplace](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools) 또는 [Release의 VSIX](https://github.com/wayfarer6/vamp-mcp/releases)로 확장을 설치합니다.
 3. 명령 팔레트에서 **VAMP: Set Up Python Environment**를 실행합니다.
 4. MCP 서버 목록에서 **VAMP VirtualBox**를 시작하고 기존 VM을 조회합니다.
 

@@ -1,0 +1,77 @@
+# VAMP Vault MCP
+
+Standalone stdio MCP server for KeePassXC credential databases and optional VeraCrypt encrypted volumes. This is the same server used by the VAMP Vault extension, packaged without the VS Code UI. VM control is provided separately by `vamp-mcp` (VirtualBox and KVM).
+
+## Install
+
+Requires Node.js 22+. Install KeePassXC (`keepassxc-cli`) and, for encrypted volume operations, VeraCrypt separately. npm installation does not install these applications or create databases/volumes.
+
+```sh
+npm install -g vamp-mcp-vault
+vamp-mcp-vault --help
+```
+
+Or run with an MCP client using `npx -y vamp-mcp-vault@0.1.6`. Starting it without flags waits for MCP requests on stdin.
+
+## VS Code
+
+Add to `.vscode/mcp.json`:
+
+```json
+{
+  "servers": {
+    "vamp-vault": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "vamp-mcp-vault@0.1.6"],
+      "env": {
+        "VAULT_KDBX": "/absolute/path/to/private.kdbx",
+        "VAULT_KEEPASSXC_CLI": "/absolute/path/to/keepassxc-cli",
+        "VAULT_APPROVAL_MODE": "each-read"
+      }
+    }
+  }
+}
+```
+
+Use host-specific existing paths; on Windows your client may require `npx.cmd`.
+
+## Codex
+
+Add to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.vamp_vault]
+command = "npx"
+args = ["-y", "vamp-mcp-vault@0.1.6"]
+
+[mcp_servers.vamp_vault.env]
+VAULT_KDBX = "/absolute/path/to/private.kdbx"
+VAULT_KEEPASSXC_CLI = "/absolute/path/to/keepassxc-cli"
+VAULT_APPROVAL_MODE = "each-read"
+```
+
+## Unlock and approval
+
+- Where configured, `VAULT_BRIDGE_SOCKET` and `VAULT_BRIDGE_TOKEN` connect to the running VAMP Vault VS Code extension for private unlock and approval dialogs. They are session-specific and not automatically discovered by npm.
+- Without that bridge, the existing server supports `VAULT_MASTER_PASSWORD` as a headless fallback, supplied locally through your process environment. Do not commit the master password to config, paste it into a prompt, or pass it in command arguments. A headless environment variable is not equivalent to VS Code secret storage.
+- Without a bridge, sensitive tools return an approval-required result unless their explicit `confirm` argument is authorized. This is caller confirmation, not an independent human dialog. The MCP client must obtain user authorization before confirming. This package preserves the server's existing policy; it does not disable approvals.
+- A configured but unavailable bridge blocks policy-protected reads. Restore the bridge rather than bypassing its policy.
+- Without an unlock source, operations requiring a database password report a locked/password-required result. Merely installing this package does not unlock anything.
+- Approved credential reads return secrets to the calling MCP client. Request only what the task requires and keep secrets out of logs and summaries.
+
+Use `--env-check`, `--list-tools`, and `vault_status` to inspect setup. Remote access can run the same executable over `ssh -T user@host vamp-mcp-vault`; the database and installed CLIs belong to that host.
+
+## Build from source
+
+Prepare the existing `vscode-vault-extension` npm dependencies, then run:
+
+```sh
+npm run build --prefix npm-packages/vault
+npm pack ./npm-packages/vault --pack-destination /tmp
+VAMP_TEST_PACKAGE=vault VAMP_TEST_TARBALL=/tmp/vamp-mcp-vault-0.1.6.tgz npm test --prefix npm-package
+```
+
+JavaScript dependencies and their license notices are bundled. The npm package has no install scripts and does not install VS Code extensions.
+
+[Source, setup and validation limits](https://github.com/wayfarer6/vamp-mcp)

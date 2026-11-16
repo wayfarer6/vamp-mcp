@@ -1,0 +1,48 @@
+{
+  "name": "vamp-mcp-vault",
+  "version": "0.1.6",
+  "description": "VAMP Vault MCP server for KeePassXC credentials and VeraCrypt volumes, with explicit approval and optional VS Code bridge.",
+  "type": "module",
+  "license": "MIT",
+  "author": "wayfarer6",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wayfarer6/vamp-mcp.git",
+    "directory": "npm-packages/vault"
+  },
+  "homepage": "https://github.com/wayfarer6/vamp-mcp#readme",
+  "bugs": {
+    "url": "https://github.com/wayfarer6/vamp-mcp/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "vamp-mcp-vault": "bin/vamp-mcp-vault.mjs"
+  },
+  "files": [
+    "bin/",
+    "runtime/",
+    "notices/",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "README.md"
+  ],
+  "keywords": [
+    "mcp",
+    "virtualbox",
+    "kvm",
+    "virtual-machine",
+    "rpa",
+    "automation",
+    "stdio"
+  ],
+  "scripts": {
+    "build": "node ../../npm-package/build-variant.mjs vault",
+    "prepack": "npm run build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  }
+}

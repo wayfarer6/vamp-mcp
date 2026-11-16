@@ -1,0 +1,17 @@
+{
+  "name": "vamp-mcp",
+  "version": "0.1.8",
+  "description": "VM-isolated GUI automation over MCP: VirtualBox control, reviewed RPA library, and KVM/VirtualBox host control over stdio or SSH.",
+  "type": "module",
+  "license": "MIT",
+  "author": "wayfarer6",
+  "repository": {"type": "git", "url": "https://github.com/wayfarer6/vamp-mcp.git", "directory": "npm-package"},
+  "homepage": "https://github.com/wayfarer6/vamp-mcp#readme",
+  "bugs": {"url": "https://github.com/wayfarer6/vamp-mcp/issues"},
+  "engines": {"node": ">=22"},
+  "bin": {"vamp-mcp": "bin/vamp-mcp.mjs"},
+  "files": ["bin/", "runtime/", "notices/", "LICENSE", "THIRD_PARTY_NOTICES.md", "README.md"],
+  "keywords": ["mcp", "virtualbox", "kvm", "virtual-machine", "rpa", "automation", "stdio"],
+  "scripts": {"build": "node build.mjs", "prepack": "npm run build", "test": "node --test test/package.test.mjs"},
+  "publishConfig": {"access": "public", "registry": "https://registry.npmjs.org/"}
+}
