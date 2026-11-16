@@ -136,8 +136,9 @@ function activate(context) {
   }));
   context.subscriptions.push(vscode.commands.registerCommand('vamp.openVault',()=>vscode.extensions.getExtension('wayfarer6.vamp-vault')?vscode.commands.executeCommand('vampVault.openBrowser'):vscode.commands.executeCommand('workbench.extensions.search','@id:wayfarer6.vamp-vault')));
   require('./rpa-library').registerLibrary(context,{runtime,output});
+  const remote = require('./remote-backend').registerRemote(context,{runtime,output,version,changes});
   require('./vm-manager').registerManager(context,{
-    pythonPath,runtime,output,
+    pythonPath,runtime,output,remote,
     setupPython:()=>vscode.commands.executeCommand('vamp.setupPython')
   });
   for(const command of ['vamp.onboard','vamp.createVM']) {
@@ -149,7 +150,7 @@ function activate(context) {
       const logo=view.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri,'assets/sidebar-brand.png'));
       view.webview.html=require('./vm-manager').sidebarHTML(String(logo),view.webview.cspSource);
       view.webview.onDidReceiveMessage(async message=>{
-        const command={library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',screen:'vamp.openVmScreen',guide:'vamp.openGuide'}[message?.type];
+        const command={library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',screen:'vamp.openVmScreen',guide:'vamp.openGuide',remote:'vamp.remote.openManager'}[message?.type];
         if(command){try{await vscode.commands.executeCommand(command);}catch(error){output.appendLine(error.message);}}
       });
     }

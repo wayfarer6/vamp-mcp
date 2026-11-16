@@ -1,8 +1,8 @@
 {
   "name": "vamp-mcp",
-  "displayName": "VAMP \u2014 Virtual Agent Machine Platform",
+  "displayName": "VAMP — Virtual Agent Machine Platform",
   "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -83,6 +83,31 @@
       {
         "command": "vamp.removePython",
         "title": "VAMP: Delete Python Environment"
+      },
+      {
+        "command": "vamp.remote.openManager",
+        "title": "VAMP: Open Remote Desktop Manager (SSH)",
+        "icon": "$(remote)"
+      },
+      {
+        "command": "vamp.remote.setupEnvironment",
+        "title": "VAMP: Remote · Prepare Environment on the Remote Host"
+      },
+      {
+        "command": "vamp.remote.verifyEnvironment",
+        "title": "VAMP: Remote · Verify Remote Environment"
+      },
+      {
+        "command": "vamp.remote.listVMs",
+        "title": "VAMP: Remote · List Desktops"
+      },
+      {
+        "command": "vamp.remote.captureScreenshot",
+        "title": "VAMP: Remote · Capture Desktop Screenshot"
+      },
+      {
+        "command": "vamp.remote.configure",
+        "title": "VAMP: Remote · Set Host and User"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -97,6 +122,10 @@
       {
         "id": "vamp.library",
         "label": "VAMP RPA Library"
+      },
+      {
+        "id": "vamp.remote",
+        "label": "VAMP Remote (SSH)"
       }
     ],
     "configuration": {
@@ -148,6 +177,83 @@
           },
           "default": [],
           "description": "Additional host folders containing VM recordings or RPA packages. You can also add them from RPA Library."
+        },
+        "vamp.remote.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Show the **VAMP Remote (SSH)** server and remote desktop manager. The remote host runs the VAMP remote server and keeps its own hypervisor and guest credentials."
+        },
+        "vamp.remote.host": {
+          "type": "string",
+          "default": "",
+          "description": "Host name or address of the machine that runs the virtual desktops (LAN, VPN or Tailscale name)."
+        },
+        "vamp.remote.port": {
+          "type": "number",
+          "default": 22,
+          "minimum": 1,
+          "maximum": 65535,
+          "description": "SSH port on the remote host."
+        },
+        "vamp.remote.username": {
+          "type": "string",
+          "default": "",
+          "description": "SSH user on the remote host. Leave empty to use your local user name."
+        },
+        "vamp.remote.privateKeyPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional private key file. Leave empty to use your SSH agent and ~/.ssh configuration."
+        },
+        "vamp.remote.backend": {
+          "type": "string",
+          "enum": [
+            "kvm",
+            "virtualbox"
+          ],
+          "enumDescriptions": [
+            "KVM / QEMU through libvirt (virsh) on a Linux host.",
+            "VirtualBox through VBoxManage on a Linux, Windows or macOS host."
+          ],
+          "default": "kvm",
+          "description": "Hypervisor that the remote host manages."
+        },
+        "vamp.remote.libvirtUri": {
+          "type": "string",
+          "default": "qemu:///system",
+          "description": "libvirt connection used on the remote host, for example qemu:///system or qemu+ssh://user@host/system."
+        },
+        "vamp.remote.remotePythonPath": {
+          "type": "string",
+          "default": "python3",
+          "description": "Python 3.11+ on the remote host, used to replay saved RPAs."
+        },
+        "vamp.remote.remoteNodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "Node.js 20+ on the remote host. The remote MCP server runs on it."
+        },
+        "vamp.remote.remoteRepoPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional VAMP checkout on the remote host. Needed only to replay saved RPAs."
+        },
+        "vamp.remote.remoteRegistryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional saved RPA registry folder on the remote host. Defaults to ~/.vamp/remote/rpa-catalog."
+        },
+        "vamp.remote.remoteVboxManagePath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional VBoxManage path on the remote host when it is not on PATH."
+        },
+        "vamp.remote.connectTimeoutSeconds": {
+          "type": "number",
+          "default": 10,
+          "minimum": 3,
+          "maximum": 60,
+          "description": "Seconds to wait for the SSH connection before reporting a failure."
         }
       }
     },
@@ -180,16 +286,23 @@
           "command": "vamp.openManager",
           "when": "view == vamp.desktops",
           "group": "navigation"
+        },
+        {
+          "command": "vamp.remote.openManager",
+          "when": "view == vamp.desktops",
+          "group": "navigation@2"
         }
       ]
     }
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.6.vsix",
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.7.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
-    "test:manager": "node --test test/vm-manager.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs"
+    "test:manager": "node --test test/vm-manager.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs",
+    "test:remote": "node --test test/remote-backend.cjs test/remote-ssh.cjs",
+    "test": "node --test test/vm-manager.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs test/ui-scripts.cjs test/remote-backend.cjs test/remote-ssh.cjs test/viewer-bridge.mjs"
   },
   "devDependencies": {
     "@vscode/vsce": "^4.1.1",

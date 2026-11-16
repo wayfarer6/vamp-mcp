@@ -64,6 +64,12 @@ Initial unattended profiles target detected Debian amd64 and Windows 11 x64 medi
 | `vamp.pythonExecutable` | Optional Python for creating the host venv. |
 | `vamp.vboxManagePath` | Optional VBoxManage executable path. |
 | `vamp.mousePythonExecutable` | Host Python with matching VirtualBox SDK bindings. |
+| `vamp.remote.enabled` | Show the **VAMP Remote (SSH)** server and remote view. |
+| `vamp.remote.host` / `port` / `username` / `privateKeyPath` | SSH target of the machine that owns the desktops. |
+| `vamp.remote.backend` | `kvm` (libvirt/`virsh`) or `virtualbox` (`VBoxManage`) on the remote host. |
+| `vamp.remote.libvirtUri` | libvirt connection used on the remote host. |
+| `vamp.remote.remoteNodePath` / `remotePythonPath` | Node.js 20+ and Python 3.11+ on the remote host. |
+| `vamp.remote.remoteRepoPath` / `remoteRegistryPath` | Optional VAMP checkout and RPA registry on the remote host. |
 
 ## Current state
 
@@ -76,6 +82,12 @@ YOLO/PaddleOCR and SPICE/Hyper-V are not bundled in this extension. VAMP impleme
 ## License
 
 Original integration: MIT. Bundled [mcp-virtualbox](https://github.com/chryaner/mcp-virtualbox) code: MIT. The independent guest [PyAutoGUI-Recorder](https://github.com/axel-magard/PyAutoGUI-Recorder): GPL-3.0, with source and license included. VirtualBox and optional models retain their own licenses. [Third-party notices](https://github.com/wayfarer6/vamp-mcp/blob/main/THIRD_PARTY_NOTICES.md)
+
+## Remote desktops over SSH
+
+Desktops can live on another machine: a home server, a lab box or a cloud VM. Set `vamp.remote.enabled`, the host and the user, then run **VAMP: Remote · Prepare Environment on the Remote Host**. The extension uploads a self-contained MCP server to `~/.vamp/remote/` there, prepares Python and libvirt/VirtualBox, and contributes the **VAMP Remote (SSH)** MCP server. Communication stays inside SSH, so no hypervisor port is opened and guest disks, credentials and the vault never leave the remote host.
+
+Remote screens are **screenshots**, one PNG per request, with no live stream. Start/stop, list, status, key input, absolute-pointer clicks on KVM and reviewed RPA replay are available remotely. VirtualBox remote hosts report clicks as unsupported. See [docs/REMOTE_SETUP.md](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/REMOTE_SETUP.md).
 
 ## Live KVM viewer
 

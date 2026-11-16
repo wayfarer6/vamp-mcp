@@ -132,6 +132,18 @@ Policy changes are read through the live VS Code bridge before a secret is retur
 Usernames fill in for the first 200 entries in the background. Search titles/groups while large databases are loading. The UI checks are not a full screen-reader or accessibility certification.
 
 
+## 8. Control desktops on a remote host (SSH)
+
+Use this when the virtual machines live on another machine and you only have SSH to it.
+
+1. Set `vamp.remote.enabled` and fill `vamp.remote.host`, `vamp.remote.username` (and `port`, `privateKeyPath` if needed). Or run **VAMP: Remote · Set Host and User**.
+2. Run **VAMP: Remote · Prepare Environment on the Remote Host**. VAMP uploads its remote server to `~/.vamp/remote/`, creates a Python venv, installs libvirt/QEMU when passwordless sudo is available, and reports the exact command for anything an administrator must do.
+3. Run **VAMP: Remote · Verify Remote Environment** to see every check.
+4. Open **Remote Server (SSH)** in VM Manager. Desktops on that host appear in the list; **Start**, **Shut Down** and **Screenshot** act on the remote hypervisor.
+5. For an agent, start **VAMP Remote (SSH)** in MCP server management. Tools: `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click`, `remote_rpa_run`.
+
+Remote screens are **screenshots only**: one PNG per request, refreshed every few seconds in the panel. There is no live stream, no forwarded hypervisor port, and guest credentials stay on the remote host. A started VM is not a booted guest — take a screenshot and look. Clicks use fractions of the screen so they follow the last screenshot; VirtualBox remote hosts report clicks as unsupported. Full guide: `docs/REMOTE_SETUP.md`.
+
 ## Troubleshooting
 
 | Symptom | Next step |
@@ -145,6 +157,9 @@ Usernames fill in for the first 200 entries in the background. Search titles/gro
 | completed_unverified | Verify the expected application result. |
 | Vault appears empty | Check the active database, lock state, search and group filter. |
 | Hyper-V has no viewer | Embedded display is unsupported. Open VMConnect. |
+| Remote: Permission denied (publickey) | Install the key on the remote host and test with `ssh -T`. |
+| Remote: libvirt is not reachable | Start `libvirtd` and re-open the session after joining the `libvirt` group. |
+| Remote: screenshot failed | The VM must be running and have a graphics device. |
 
 Screenshots use example workflow metadata and a sample credential. The guest shown is a Debian installer, not proof of a completed OS installation. See [validation](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/VALIDATION.md) and the [UI audit](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/UI_AUDIT.md) for exact coverage.
 
@@ -258,6 +273,18 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 
 사용자명은 처음 200개 항목을 백그라운드에서 읽습니다. 큰 금고에서는 제목·그룹으로 먼저 찾고 사용자명이 채워질 때까지 기다리세요. 키보드·스크린리더 전체 호환성을 보증하는 접근성 인증을 수행한 것은 아닙니다.
 
+## 8. 원격 호스트의 VM 다루기(SSH)
+
+VM이 다른 컴퓨터에 있고 그 컴퓨터에는 SSH로만 접근할 때 사용합니다.
+
+1. `vamp.remote.enabled`를 켜고 `vamp.remote.host`·`vamp.remote.username`(필요하면 `port`, `privateKeyPath`)을 지정합니다. **VAMP: Remote · Set Host and User** 명령으로 한 번에 저장할 수도 있습니다.
+2. **VAMP: Remote · Prepare Environment on the Remote Host**를 실행합니다. 원격 서버를 `~/.vamp/remote/`에 올리고, Python 가상환경을 만들고, 비밀번호 없는 sudo가 가능하면 libvirt/QEMU를 설치합니다. 관리자 권한이 필요한 항목은 실행할 명령을 그대로 알려 줍니다.
+3. **VAMP: Remote · Verify Remote Environment**로 점검 결과를 확인합니다.
+4. VM Manager의 **Remote Server (SSH)** 화면에서 원격 데스크톱을 조회하고 **Start**, **Shut Down**, **Screenshot**을 사용합니다.
+5. 에이전트에는 MCP 서버 **VAMP Remote (SSH)**를 켭니다. 도구는 `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click`, `remote_rpa_run`입니다.
+
+원격 화면은 **스크린샷 전용**입니다. 요청마다 PNG 한 장을 받아 몇 초 간격으로 새로 그립니다. 실시간 스트리밍도, 하이퍼바이저 포트 전달도 없고 게스트 자격증명은 원격 호스트를 떠나지 않습니다. 기동된 VM이 부팅 완료를 뜻하지 않으므로 스크린샷으로 확인합니다. 클릭 좌표는 화면 비율(0~1)이라 항상 마지막 스크린샷과 맞고, VirtualBox 원격 호스트는 클릭을 지원하지 않는다고 알립니다. 자세한 절차는 `docs/REMOTE_SETUP.md`에 있습니다.
+
 ## 문제 해결
 
 | 증상 | 다음 조치 |
@@ -271,6 +298,9 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 | completed_unverified | 재생은 끝났습니다. Expected result를 확인합니다. |
 | Vault에 항목이 없음 | 활성 .kdbx 경로와 잠금 상태를 확인하고 검색·그룹 필터를 비웁니다. |
 | Hyper-V 화면 버튼이 없음 | 내장 화면 미지원입니다. VMConnect를 엽니다. |
+| 원격: Permission denied (publickey) | 원격 호스트에 공개키를 등록했는지 확인하고 `ssh -T`로 먼저 시험합니다. |
+| 원격: libvirt에 연결할 수 없음 | `libvirtd`를 켜고, `libvirt` 그룹에 추가했다면 세션을 다시 엽니다. |
+| 원격: 스크린샷 실패 | VM이 실행 중인지, 그래픽 장치가 있는지 확인합니다. |
 
 검증 범위는 [VALIDATION](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/VALIDATION.md), 실제 UI 점검 결과는 [UI audit](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/UI_AUDIT.md)에 기록합니다.
 

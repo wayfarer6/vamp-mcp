@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7
+
+- Add **VAMP Remote (SSH)**: an SSH-based MCP server for desktops that live on another host, with `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click` and `remote_rpa_run`.
+- Remote screens are screenshots only (PNG per request); no live stream and no forwarded hypervisor port.
+- Prepare the remote host from VS Code: upload the server to `~/.vamp/remote/`, create a Python venv, install libvirt/QEMU when passwordless sudo allows, and report the exact command for anything that needs an administrator.
+- Add the `vamp.remote.*` settings, remote commands, the **VAMP Remote (SSH)** MCP provider and a remote view in the VM Manager that follows the existing VAMP look.
+- KVM guests support absolute-pointer clicks through the QEMU monitor; VirtualBox remote hosts report clicks as unsupported instead of pretending.
+- Document SSH keys, Tailscale/jump-host setups, troubleshooting and security boundaries in `docs/REMOTE_SETUP.md`.
+
 ## 0.1.6
 
 - Add searchable RPA Library, editable creation forms, AI-assisted metadata and reviewed guest-device replay.
