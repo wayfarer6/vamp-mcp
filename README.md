@@ -13,7 +13,7 @@ Start in VS Code’s **VAMP** sidebar: **RPA Library** to create/find/export wor
 
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
-[다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md)
+[다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/)
 
 ## 만든 이유
 
@@ -63,6 +63,25 @@ flowchart LR
 | VAMP Vault MCP | KeePassXC·VeraCrypt 기반 자격증명/인증서 격리 보관 및 사이드바 GUI |
 
 OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualBox MCP와 실시간 VNC 뷰어가 들어 있습니다. KVM MCP는 로컬 저장소의 Python 환경을 연결하며, VM 디스크·ISO·YOLO·PaddleOCR 모델은 VSIX에 포함하지 않습니다. [구성도](docs/MCP_ARCHITECTURE.md) · [로그·스크린샷 조회](docs/EXECUTION_HISTORY.md)
+
+## VAMP Script Hub — 커뮤니티 RPA 스크립트 카탈로그
+
+[VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/)는 VAMP 사용자가 검토한 RPA 스크립트를 모아 둔 정적 사이트입니다. 스크립트마다 PyAutoGUI 소스, 입력 계약, 검증 기준, `rpa_run_saved` 호출 예시가 함께 공개되고, VirtualBox·KVM과 Windows 11·Debian/Ubuntu 조합으로 걸러 볼 수 있습니다. 저장소 안의 사본은 [`docs/hub/`](docs/hub/)에 있습니다.
+
+멀티모달 CUA는 같은 로그인 화면이나 목록 화면을 실행할 때마다 다시 읽고 판단합니다. 허브의 스크립트는 그 판단을 이미 기록으로 남긴 것이라, 에이전트는 `rpa_search`로 맞는 항목을 찾고 `rpa_run_saved`에 입력값만 넘겨 재생하면 됩니다. 화면 인식과 코드 생성에 쓰던 토큰을 아끼는 것이 목적이며, 절감량을 비교 측정한 수치는 아직 없습니다.
+
+### 스크립트 공유와 연동
+
+1. 게스트에서 작업 하나를 기록하고, 비밀번호·PIN·토큰 입력 전에 멈춥니다.
+2. VS Code **RPA Library → Create**에서 이름, 설명, 사용 조건, 입력 이름, 기대 결과를 채우고 검토한 뒤 **Export ZIP**을 누릅니다. ZIP에는 파일별 SHA-256 체크섬이 담긴 `VAMP_EXPORT.json`이 들어 있으며 `.git` 이력은 포함되지 않습니다.
+3. 내보낸 폴더를 `vamp-script-hub` 저장소의 `scripts/<id>/`에 넣어 풀 리퀘스트를 열거나, 사이트의 **Submit a script**에서 이슈로 제출합니다. 생성기는 VAMP와 같은 규칙으로 입력 이름과 `${name}` 자리표시자를 검사합니다.
+4. 사용하는 쪽은 VS Code에서 **VAMP RPA Library** MCP를 켜고 `rpa_search` → `rpa_details` → `rpa_run_saved` 순서로 호출합니다. 정확한 VM UUID, 선언된 모든 입력, `confirmed:true`가 필요합니다.
+5. `completed_unverified`는 동작 완료일 뿐 업무 성공이 아닙니다. 기대 결과를 스크린샷·OCR·파일 확인처럼 가장 저렴한 방법으로 따로 검증합니다.
+
+기본 카탈로그는 6개 스크립트로 시작합니다: 네이버 로그인 폼 검증, 구글 검색 결과 추출, 깃허브 스타·릴리즈 확인, 슬랙 상태 설정, 노션 PDF 내보내기, 엔터프라이즈 인증서 선택 헬퍼. 사이트는 영어와 한국어를 모두 제공하며 언어 선택은 브라우저에 기억됩니다.
+
+[허브 사이트](https://wayfarer6.github.io/vamp-script-hub/) · [저장소 안 사본](docs/hub/) · [기여 가이드](https://github.com/wayfarer6/vamp-script-hub/blob/main/CONTRIBUTING.md)
+
 
 ## 시작하기
 

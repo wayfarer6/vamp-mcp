@@ -104,6 +104,10 @@ For an authorized repair, an agent can use **rpa_revision** to inspect history a
 5. The runner replays parsed events on guest devices; it never executes recorder Python source on the host.
 6. Read the compact result first. **completed_unverified** means the events completed, not that the application task succeeded. Verify the expected result with the cheapest reliable observation.
 
+### Community scripts: VAMP Script Hub
+
+Reviewed workflows from other VAMP users are listed at [VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/), each with its source, input contract and verification criteria. Import an exported skill with **Add RPA Folder**, or share your own with **Export ZIP**. The site's submission generator checks input names and `${name}` placeholders with the same rules the library applies. A copy of the site is kept in [`docs/hub/`](https://github.com/wayfarer6/vamp-mcp/tree/main/docs/hub) for reading inside the repository.
+
 MCP instructions and the bundled project `rpa-reuse` skill require: **search existing skills → reuse a compatible reviewed RPA → inspect its compact result → use targeted CUA/OCR/multimodal only when needed**. If nothing matches or execution/verification fails, fall back to normal GUI control. Compatibility and authorization take priority over token savings.
 
 VirtualBox mouse replay needs matching `vboxapi` bindings. Windows **Prepare Environment** installs them. On Linux/macOS, set **VAMP: Mouse Python Executable** when the SDK is in another Python. KVM replay requires `asyncvnc` in the host environment and an active localhost VNC display.
@@ -240,6 +244,10 @@ AI는 설명과 검색 메타데이터를 작성합니다. 녹화 동작을 몰�
 4. 사용자 작업 권한과 정확한 VM UUID를 확인한 뒤 `rpa_run_saved`에 선언한 입력과 `confirmed:true`를 전달합니다. 실행하지 않은 VM을 임의로 켜지는 않습니다.
 5. 실행은 호스트에서 녹화 Python 코드를 실행하는 방식이 아니라, 파싱된 이벤트를 해당 게스트 장치로 재생합니다.
 6. `completed_unverified`는 이벤트 재생 완료입니다. 업무 성공을 의미하지 않습니다. 에이전트가 **Expected result**를 가장 저렴하고 신뢰할 수 있는 관찰로 확인해야 합니다.
+
+### 커뮤니티 스크립트: VAMP Script Hub
+
+다른 VAMP 사용자가 검토한 워크플로는 [VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/)에 소스·입력 계약·검증 기준과 함께 공개됩니다. 내보낸 스킬은 **Add RPA Folder**로 가져오고, 내 스킬은 **Export ZIP**으로 제출합니다. 사이트의 생성기는 라이브러리와 같은 규칙으로 입력 이름과 `${name}` 자리표시자를 검사합니다. 사본은 [`docs/hub/`](https://github.com/wayfarer6/vamp-mcp/tree/main/docs/hub)에 있습니다.
 
 MCP와 `rpa-reuse` 스킬에는 **RPA 먼저 검색 → 적합한 검토 완료 스킬 재사용 → 짧은 결과 확인 → 필요할 때만 CUA/OCR/멀티모달** 순서가 들어 있습니다. 적합한 RPA가 없거나 실행·결과 확인이 실패하면 필요한 화면 조작으로 돌아갑니다. 무조건 RPA를 고르는 지침은 아닙니다.
 

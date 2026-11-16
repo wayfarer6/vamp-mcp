@@ -15,6 +15,7 @@
 | [SPICE 설치](INSTALL.md) | 수동·AI 설치, GPU/CPU/NPU 프로필 |
 | [SPICE 실행](SPICE_GUIDE.md) | 화면 제어, Firefox·로그인·인증 인계와 테스트 |
 | [RPA 패키지](../rpas/README.md) | Robot/Python/manifest 규격, 실행 결과와 새 작업 작성 |
+| [VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/) | 검토된 커뮤니티 RPA 스크립트 카탈로그, 제출·연동 안내 (사본: [docs/hub](hub/)) |
 
 ## VM 준비와 녹화
 

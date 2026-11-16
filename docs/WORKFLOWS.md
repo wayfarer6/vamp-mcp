@@ -77,3 +77,7 @@ Robot 파일은 호스트에서 열어 봅니다. MCP의 이력 도구는 실행
 | 토큰 비용 절감 | 설계 목적이며 비교 수치는 아직 없음 |
 
 Windows VM을 쓴다면 설치 ISO·라이선스·정품 인증은 사용자가 준비합니다. [VM 준비사항](GUEST_AUTOMATION.md) · [RPA 규격](../rpas/README.md) · [녹화 변환](RECORDING_CONVERSION.md)
+
+## 커뮤니티 스크립트에서 시작하기
+
+직접 기록하기 전에 같은 작업이 이미 있는지 [VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/)에서 먼저 찾습니다. 스크립트마다 PyAutoGUI 소스, 입력 계약, 검증 기준, `rpa_run_saved` 호출 예시가 함께 있어, 맞는 항목이면 좌표와 검증 조건을 다시 만들 필요가 없습니다. 내보낸 폴더는 VS Code **RPA Library → Add RPA Folder**로 가져오고, 내 기록은 **Export ZIP**으로 제출합니다. 자세한 절차는 [사용 안내의 커뮤니티 스크립트 절](USER_GUIDE.md#커뮤니티-스크립트-vamp-script-hub)과 [기여 가이드](https://github.com/wayfarer6/vamp-script-hub/blob/main/CONTRIBUTING.md)에 있습니다. 사본은 [`docs/hub/`](hub/)에 보관합니다.

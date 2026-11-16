@@ -156,5 +156,6 @@ Robot의 작업·키워드 시작/종료 경계를 녹화 시작·종료나 타�
 - 빈 RPA 틀: `.venv/bin/python scripts/new_rpa.py my_task --guest-os windows11`
 - 코드 기록 변환: `.venv/bin/python scripts/convert_recording.py ~/naver_login_rpa --id my_recorded_task --guest-os windows11`
 - [전체 설명](../docs/RECORDING_CONVERSION.md) 및 `$spice-recording-convert` 스킬을 제공합니다.
+- 공유: 검토한 패키지는 [VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/)에 올려 다른 사용자가 입력값만 바꿔 재사용하게 할 수 있습니다. **Export ZIP** 결과를 `scripts/<id>/`로 넣어 풀 리퀘스트를 열거나, 사이트의 제출 이슈를 사용하세요. 사본은 [`docs/hub/`](../docs/hub/)에 있습니다.
 
 Windows는 Win+R, Debian GNOME은 Alt+F2 같은 공통 실행기를 사용하고 바탕화면 아이콘 시작은 피합니다. 생성기는 기존 폴더를 덮어쓰지 않습니다. 기본 상태는 검토/구현 대기로, VM에 입력하지 않습니다. 원시 `recording.local.json`은 Git에 포함되지 않으므로 공유받은 쪽에서는 재생성하거나 정리된 동작을 작성해야 합니다.
