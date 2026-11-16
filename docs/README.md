@@ -33,6 +33,7 @@
 | 문서 | 내용 |
 | --- | --- |
 | [MCP 구조](MCP_ARCHITECTURE.md) | 구성 요소, 경계와 Windows 중첩 검증 |
+| [데모 시연 가이드](DEMO_SCENARIOS.md) | 다른 에이전트 연동 프롬프트, 구글 검색·볼트 시나리오와 트러블슈팅 |
 | [데모](DEMOS.md) | QHD 영상, 검증 JSON과 재현 명령 |
 | [검증 기록](VALIDATION.md) | 실제 결과와 미검증 범위 |
 | [모델 프로세스](MODEL_BACKGROUND.md) | YOLO/OCR 백그라운드 서비스 |
