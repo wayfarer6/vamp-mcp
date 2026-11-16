@@ -10,6 +10,7 @@
 | --- | --- |
 | [워크플로 재사용](WORKFLOWS.md) | 수동 조작·CUA 기록의 RPA 변환, AI 호출과 결과 확인 |
 | [VS Code 확장](../vscode-extension/README.md) | 설치, 기본 사용과 설정 |
+| [VAMP Vault 확장](../vscode-vault-extension/README.md) | 로컬 KeePassXC·VeraCrypt 격리 볼트 MCP 및 사이드바 GUI |
 | [VirtualBox MCP](../backends/virtualbox/README.md) | 호스트 의존성, 도구 목록, MCP 연결과 CLI |
 | [SPICE 설치](INSTALL.md) | 수동·AI 설치, GPU/CPU/NPU 프로필 |
 | [SPICE 실행](SPICE_GUIDE.md) | 화면 제어, Firefox·로그인·인증 인계와 테스트 |
@@ -21,6 +22,7 @@
 | --- | --- |
 | [게스트 자동화](GUEST_AUTOMATION.md) | 초기 설정, OS별 자원, 공유폴더와 스냅샷 |
 | [게스트 레코더](GUEST_RECORDER.md) | 설치, 녹화 소스 저장과 라이선스 |
+| [게스트 볼트·패스키 설정](GUEST_VAULT_SETUP.md) | KeePassXC 패스키 연동, VeraCrypt CLI, 단일 VHD 이동식 USB 마운트 |
 | [화면 해상도](VM_DISPLAY.md) | 게스트 FHD, 배율과 관전 창 |
 | [녹화 변환](RECORDING_CONVERSION.md) | 수동 기록의 정적 분석, 좌표 보정과 RPA 변환 |
 | [실행 이력](EXECUTION_HISTORY.md) | Robot 영상·스크린샷·SQLite와 MCP 조회 |

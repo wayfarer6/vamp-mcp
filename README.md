@@ -42,6 +42,7 @@ flowchart LR
 | 기록·로그 확인 | 녹화 소스, 실행 요약, Robot 로그·보고서와 SQLite 실행 이력 확인 |
 | 필요한 화면만 보기 | 현재 화면이나 저장한 스크린샷을 확인하고, 켜 둔 실행 영상은 로컬에서 재생 |
 | VirtualBox MCP | VS Code에서 VM 조회·기동, ISO 설치 시작, 해상도·공유폴더·스냅샷 도구 사용 |
+| VAMP Vault MCP | KeePassXC·VeraCrypt 기반 자격증명/인증서 격리 보관 및 사이드바 GUI |
 
 OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualBox MCP가 들어 있으며, SPICE·YOLO·PaddleOCR 전체가 포함되지는 않습니다. [구성도](docs/MCP_ARCHITECTURE.md) · [로그·스크린샷 조회](docs/EXECUTION_HISTORY.md)
 
@@ -64,6 +65,7 @@ OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualB
 
 실제 FHD 화면을 약 2 fps로 캡처한 뒤 여백을 더한 QHD 영상입니다. [재현 방법](docs/DEMOS.md)
 
+| 자격증명·공인인증서 격리와 패스키 | [VAMP Vault 확장](vscode-vault-extension/README.md) · [게스트 볼트 설정](docs/GUEST_VAULT_SETUP.md) |
 | 알아볼 내용 | 문서 |
 | --- | --- |
 | 작업을 기록하고 AI가 다시 실행하는 방법 | [워크플로 재사용](docs/WORKFLOWS.md) |
