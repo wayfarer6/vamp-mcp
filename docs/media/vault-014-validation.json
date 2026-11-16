@@ -1,0 +1,39 @@
+{
+  "version": "0.1.4",
+  "date": "2026-11-16",
+  "linux_checks": {
+    "mcp_smoke_with_real_clis": 42,
+    "extension_host_standin": 21,
+    "remote_ssh_standin": 30,
+    "credential_browser": 2,
+    "live_approval_policy": 7
+  },
+  "windows_native": {
+    "status": "passed",
+    "platform": "nt",
+    "checks": [
+      "nine packaged MCP tools",
+      "native KeePassXC CLI resolves",
+      "native VeraCrypt PE version resolves",
+      "create encrypted database",
+      "refuse database overwrite",
+      "create grouped credential",
+      "list without password disclosure",
+      "read requires consent",
+      "approved read returns exact fixture",
+      "session cache",
+      "update credential",
+      "update invalidates old cache",
+      "delete requires its own consent",
+      "delete credential",
+      "database encrypted on disk"
+    ],
+    "count": 15
+  },
+  "tested_mcp_bundle_sha256": "0baa99347b625215da1e94daaea7fe719959f42a8339ac9143a17a31f7fa8139",
+  "limits": [
+    "Windows host is nested on Ubuntu/KVM",
+    "Remote SSH suite uses a stand-in SSH transport and separate temporary hosts",
+    "Windows volume mounting was not repeated in this 0.1.4 run"
+  ]
+}

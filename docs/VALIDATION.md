@@ -55,3 +55,10 @@ Fresh, local receipts are collected with `scripts/collect_nested_evidence.py` in
 - With real Linux KeePassXC CLI: Vault smoke 39/39 and extension-host stand-in 18/18 passed; credential browser 2 tests and live approval-policy 7 checks passed.
 - Both stable VSIX packages built successfully. Marketplace publication is reserved for the user.
 - Actual UI and platform limits are recorded in [UI audit](UI_AUDIT.md). Physical Windows/macOS and the latest full visual sequence remain unverified.
+
+## Vault 0.1.4 release follow-up — 2026-11-16
+
+- Actual Linux KeePassXC/VeraCrypt checks: MCP smoke 42, extension-host stand-in 21, remote SSH stand-in 30, credential browser 2 and live approval policy 7 checks passed.
+- The packaged 0.1.4 MCP server passed 15 native Windows checks in the existing nested Windows lab with temporary databases. Read approval, independent deletion consent, grouped CRUD, cache invalidation, overwrite rejection and encrypted on-disk storage passed. The native validator now tests deletion's own confirmation requirement instead of assuming an earlier read approval covers deletion.
+- The VSIX passed isolated VS Code installation. The README now states accurately that the master password reaches the selected remote host through encrypted SSH stdin, while local approval and storage remain on this computer.
+- Remote SSH tests use a stand-in transport; physical Windows hardware and native Windows volume mounting were not repeated in this 0.1.4 run. [Receipt](media/vault-014-validation.json).

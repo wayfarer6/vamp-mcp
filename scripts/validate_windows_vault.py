@@ -54,7 +54,8 @@ async def main(args):
                 check('update credential',(await call('vault_update_credential',entry='Integration/Native Windows',password=updated))['status']=='updated')
                 reread=await call('vault_get_credential',entry='Integration/Native Windows',fields=['password'],confirm=True)
                 check('update invalidates old cache',reread.get('password')==updated)
-                check('delete credential',(await call('vault_delete_credential',entry='Integration/Native Windows'))['status']=='deleted')
+                check('delete requires its own consent',(await call('vault_delete_credential',entry='Integration/Native Windows'))['status']=='approval_required')
+                check('delete credential',(await call('vault_delete_credential',entry='Integration/Native Windows',confirm=True))['status']=='deleted')
                 check('database encrypted on disk',secret.encode() not in database.read_bytes() and master.encode() not in database.read_bytes())
                 if args.volume:
                     if Path('V:\\').exists():raise RuntimeError('V: is already occupied')

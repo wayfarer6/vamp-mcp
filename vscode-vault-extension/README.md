@@ -93,9 +93,9 @@ VS Code extension host                        MCP server process (Node, stdio)
    src/downloader.mjs: PATH → standard install dirs → official release download
 ```
 
-Three boundaries matter. **stderr, never argv** — the database and volume passwords reach the CLIs on standard input, so they do not appear in a process list. **The extension host owns the secrets** — the MCP server never reads a settings file; it asks the bridge, which reads VS Code secret storage. **The agent sees one value** — `vault_get_credential` returns the requested fields of one entry, and `vault_list_credentials` never returns a password.
+Three boundaries matter. **stdin, never argv** — the database and volume passwords reach the CLIs on standard input, so they do not appear in a process list. **The extension host owns the secrets** — the MCP server never reads a settings file; it asks the bridge, which reads VS Code secret storage. **The agent sees one value** — `vault_get_credential` returns the requested fields of one entry, and `vault_list_credentials` never returns a password.
 
-A remote host adds one more boundary: **approval and the master password never cross the wire as data.** The local proxy asks this extension host, then runs one SSH command for the call; the password rides that command's standard input.
+For a remote host, **approval dialogs and master-password storage stay on this computer**. After local approval, the proxy sends the master password to the selected host through the encrypted SSH channel on standard input, never in command arguments or an agent result. Each host has its own database and password scope.
 
 ```
 VS Code extension host            remote proxy (Node, stdio)        SSH        remote host
@@ -237,3 +237,11 @@ KeePassXC 2.8 already stores passkeys and exposes them through the KeePassXC-Bro
 - `keepassxc-cli` has no solver for hidden-volume protection, passkey writes, or entry attributes beyond the standard set; those are done in the KeePassXC application.
 - One master password per database is remembered at a time by the dialog flow; several databases work, each with its own stored password.
 - The extension runs on the local desktop host and does not work in vscode.dev.
+
+## Version 0.1.4 release validation
+
+[Download the 0.1.4 VSIX and SHA-256](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.4).
+
+Linux checks passed with the real KeePassXC and VeraCrypt CLIs: MCP smoke 42, extension-host stand-in 21, remote SSH stand-in 30, browser 2 and live approval-policy 7 checks. The packaged MCP server also passed 15 native Windows checks in the nested Windows lab, using a temporary encrypted database: credential CRUD, independent deletion approval, read approval, cache invalidation and encrypted storage. [Validation receipt](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/media/vault-014-validation.json).
+
+The remote suite models separate hosts with a stand-in SSH transport. Physical Windows hardware and native Windows VeraCrypt mounting were not retested for this release. The master password is transmitted to the selected remote host through encrypted SSH stdin; approval dialogs and stored passwords remain under this computer's control.
