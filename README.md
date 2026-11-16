@@ -6,6 +6,11 @@
 
 **VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents**
 
+Start in VS Code’s **VAMP** sidebar: **RPA Library** to create/find/export workflows, **Open VM Manager** for VirtualBox/KVM/Hyper-V, and **Browse Credentials** for your encrypted vault. **Create** lets you name and describe a VM recording; **Create with AI** asks questions and proposes searchable metadata. Enable **VAMP RPA Library** MCP so agents can search and reuse reviewed skills before repeating CUA or multimodal analysis.
+
+[User guide — every button and workflow](docs/USER_GUIDE.md) · [UI audit](docs/UI_AUDIT.md)
+
+
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
 [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md)

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/vscode-vault-extension/icon.png" width="128" height="128" alt="VAMP bat holding a monitor with a mint vault door">
+  <img src="https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/vscode-vault-extension/assets/vault-brand.png" width="128" height="128" alt="VAMP bat holding a monitor with a mint vault door">
 </p>
 
 # VAMP Vault · Credential & Certificate Isolation for AI Agents
@@ -20,6 +20,16 @@ It is the companion to [VAMP](https://marketplace.visualstudio.com/items?itemNam
 4. Open MCP server management, start **VAMP Vault**, and let the agent call it.
 
 The master password is asked once and stays in secret storage until you run **VAMP Vault: Lock**. Every secret read is approved in a VS Code dialog, or once per entry per session if you choose that setting.
+
+## Browse your credentials
+
+Use **VAMP Vault: Browse Credentials**, or **VAMP → Browse Credentials**. **Open Existing Vault** selects a `.kdbx`; **Unlock Vault** asks for the master password in a native VS Code password prompt. Search by title/group/username and select an entry for its username, URL and notes. **Show for 15 Seconds** and **Copy Password** each ask for confirmation. Hiding the view or locking clears the displayed secret. **Export Encrypted Vault** saves an encrypted `.kdbx` copy.
+
+The full [user guide](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/USER_GUIDE.md) is bundled in this VSIX under **VAMP Vault: Open Guide**. The companion VAMP **RPA Library** supports manual Create, AI-guided questions, keyword search and ZIP export.
+
+## Agent approval levels
+
+Click **Approval** in the credential browser or its status-bar indicator: **1 · Ask every time**, **2 · Ask per entry** (default), or **3 · No prompts**. Disabling prompts requires explicit confirmation. The running MCP server refreshes policy through the bridge before returning secrets; locking or changing policy invalidates cached approvals. Direct reveal/copy controls still require user action.
 
 ## Sidebar
 

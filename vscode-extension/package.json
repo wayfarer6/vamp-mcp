@@ -1,8 +1,8 @@
 {
   "name": "vamp-mcp",
-  "displayName": "VAMP — Virtual Agent Machine Platform",
+  "displayName": "VAMP \u2014 Virtual Agent Machine Platform",
   "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -39,6 +39,24 @@
   "contributes": {
     "commands": [
       {
+        "command": "vamp.openRpaLibrary",
+        "title": "VAMP: Find and Export RPA",
+        "icon": "$(library)"
+      },
+      {
+        "command": "vamp.openVault",
+        "title": "VAMP: Browse Credentials"
+      },
+      {
+        "command": "vamp.openManager",
+        "title": "VAMP: Open VM Manager",
+        "icon": "$(vm)"
+      },
+      {
+        "command": "vamp.openVmScreen",
+        "title": "VAMP: View VM Screen"
+      },
+      {
         "command": "vamp.setupPython",
         "title": "VAMP: Set Up Python Environment"
       },
@@ -57,6 +75,14 @@
       {
         "command": "vamp.openKvmViewer",
         "title": "VAMP: Open KVM Viewer (Live VNC)"
+      },
+      {
+        "command": "vamp.verifyEnvironment",
+        "title": "VAMP: Verify Python Environment (Activation and Imports)"
+      },
+      {
+        "command": "vamp.removePython",
+        "title": "VAMP: Delete Python Environment"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -67,6 +93,10 @@
       {
         "id": "vamp.kvm",
         "label": "VAMP KVM (VNC)"
+      },
+      {
+        "id": "vamp.library",
+        "label": "VAMP RPA Library"
       }
     ],
     "configuration": {
@@ -101,15 +131,65 @@
           "type": "string",
           "default": "",
           "description": "Optional VM profile JSON for the KVM MCP server. Defaults to config/vm-mcp.json in the repository."
+        },
+        "vamp.libvirtUri": {
+          "type": "string",
+          "default": "qemu:///session",
+          "enum": [
+            "qemu:///session",
+            "qemu:///system"
+          ],
+          "description": "Local KVM connection used by VM Manager. Session runs VMs as your user; system requires libvirt permissions."
+        },
+        "vamp.rpaDirectories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional host folders containing VM recordings or RPA packages. You can also add them from RPA Library."
         }
       }
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vamp",
+          "title": "VAMP",
+          "icon": "assets/sidebar-brand.png"
+        }
+      ]
+    },
+    "views": {
+      "vamp": [
+        {
+          "id": "vamp.desktops",
+          "name": "Virtual Desktops",
+          "type": "webview"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "vamp.openRpaLibrary",
+          "when": "view == vamp.desktops",
+          "group": "navigation@0"
+        },
+        {
+          "command": "vamp.openManager",
+          "when": "view == vamp.desktops",
+          "group": "navigation"
+        }
+      ]
     }
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.5.vsix",
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.6.vsix",
     "vscode:prepublish": "npm run build",
-    "test:viewer": "node --test test/viewer-bridge.mjs"
+    "test:viewer": "node --test test/viewer-bridge.mjs",
+    "test:manager": "node --test test/vm-manager.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs"
   },
   "devDependencies": {
     "@vscode/vsce": "^4.1.1",
@@ -124,6 +204,7 @@
   "icon": "icon.png",
   "dependencies": {
     "@novnc/novnc": "^1.7.0",
-    "ws": "^8.23.0"
+    "ws": "^8.23.0",
+    "yazl": "3.3.1"
   }
 }

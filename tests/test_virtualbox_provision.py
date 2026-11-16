@@ -72,3 +72,23 @@ class ProvisioningTests(unittest.TestCase):
             result=provision.create(iso_path=str(self.iso),name='windows-confirm',basedir=str(self.root/'never-create'))
         self.assertEqual(result['status'],'needs_windows_confirmation')
         self.assertFalse(any(args[0]=='createvm' for args in self.calls))
+
+    def test_manual_fallback_starts_iso_without_unattended_or_public_credentials(self):
+        self.supported=False
+        with patch.object(provision.subprocess,'run',self.command):
+            result=provision.create(iso_path=str(self.iso),name='manual',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True)
+        self.assertEqual(result['installation_mode'],'manual')
+        self.assertFalse(result['credentials']['public_sandbox_credentials'])
+        self.assertFalse(result['installation_verified'])
+        self.assertFalse(any(args[:2]==['unattended','install'] for args in self.calls))
+        self.assertTrue(any(args[:2]==['startvm','manual'] for args in self.calls))
+        self.assertTrue(any('--medium' in args and str(self.iso) in args for args in self.calls))
+
+    def test_manual_fallback_handles_detection_not_implemented(self):
+        def command(args,**kwargs):
+            if args[1:3]==['unattended','detect']:
+                return subprocess.CompletedProcess(args,1,'','NS_ERROR_NOT_IMPLEMENTED')
+            return self.command(args,**kwargs)
+        with patch.object(provision.subprocess,'run',command):
+            result=provision.create(iso_path=str(self.iso),name='fallback',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True)
+        self.assertEqual(result['installation_mode'],'manual')

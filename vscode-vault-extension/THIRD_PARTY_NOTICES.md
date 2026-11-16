@@ -34,3 +34,7 @@ that includes them, carry their license files and source offers as their terms r
 `.kdbx` (KeePass 2.x) and VeraCrypt volumes are the user's own encrypted files. This extension does
 not weaken their protection, does not implement a fallback password, and does not store the master
 password outside VS Code secret storage.
+
+## Lucide vault activity icon
+
+`assets/vault.svg` is from [lucide-icons/lucide](https://github.com/lucide-icons/lucide/blob/main/icons/vault.svg), under the ISC license. The full notice is bundled as `assets/LUCIDE-LICENSE.txt`.

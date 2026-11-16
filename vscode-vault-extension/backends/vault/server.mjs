@@ -59,6 +59,7 @@ const scope = {
   bridgeTried: false,
   approvedThisSession: new Set(),
   cache: new Map(),
+  policyRevision:null,
 };
 
 const text = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
@@ -167,9 +168,22 @@ function cacheForget(entry) {
  * Returns {approved, how} or {pending:true} when neither a dialog nor an
  * explicit confirmation is available.
  */
-async function approve({ action, entry, detail, confirm = false }) {
+async function refreshPolicy(file=settings.kdbx){
+  const bridge=await getBridge();
+  if(!settings.bridgeSocket)return;
+  if(!bridge)throw new Error('Vault approval bridge is unavailable. Reopen VS Code before reading secrets.');
+  let live;
+  try{live=await bridge.request('state',{kdbx:file},{timeout:5000});}
+  catch{throw new Error('Vault approval bridge is unavailable. Reopen VS Code before reading secrets.');}
+  const mode=['each-read','per-session','off'].includes(live.approval_mode)?live.approval_mode:'each-read';
+  if(scope.policyRevision!==live.revision||settings.approvalMode!==mode||!live.unlocked){scope.cache.clear();scope.approvedThisSession.clear();}
+  scope.policyRevision=live.revision;settings.approvalMode=mode;settings.ttlMs=Math.max(0,Math.min(120,Number(live.cache_minutes)||0))*60000;
+}
+
+async function approve({ action, entry, detail, confirm = false,file=settings.kdbx }) {
+  await refreshPolicy(file);
   if (settings.approvalMode === 'off') return { approved: true, how: 'approval disabled by configuration' };
-  const key = `${settings.kdbx}|${entry}`;
+  const key = `${file}|${action}|${entry}`;
   if (settings.approvalMode === 'per-session' && scope.approvedThisSession.has(key)) {
     return { approved: true, how: 'already approved in this session' };
   }
@@ -275,20 +289,20 @@ server.registerTool('vault_get_credential', {
     const file = args.file || settings.kdbx;
     if (!file) return failure(new Error('No database path configured.'), { code: 'path_required' });
     const wanted = new Set(args.fields);
-    const cached = [...wanted].map(field => [field, cacheGet(file, args.entry, field)]).filter(([, value]) => value !== null);
-    if (cached.length === wanted.size) {
-      const value = Object.fromEntries(cached);
-      return text({ status: 'ok', entry: args.entry, cached: true, expires_in_ms: settings.ttlMs, ...value });
-    }
-
     const decision = await approve({
-      action: 'read_credential',
+      file,action: 'read_credential',
       entry: args.entry,
       confirm: args.confirm,
       detail: `Release ${[...wanted].join(', ')} for "${args.entry}" to the AI agent.`,
     });
     if (decision.pending) return approvalNotice(args.entry, `Release ${[...wanted].join(', ')} to the AI agent.`);
     if (!decision.approved) return text({ status: 'denied', entry: args.entry, reason: decision.how });
+
+    const cached = [...wanted].map(field => [field, cacheGet(file, args.entry, field)]).filter(([, value]) => value !== null);
+    if (cached.length === wanted.size) {
+      const value = Object.fromEntries(cached);
+      return text({ status: 'ok', entry: args.entry, cached: true, expires_in_ms: settings.ttlMs, ...value });
+    }
 
     const password = await masterPassword({ file });
     const record = await cli.showEntry({ file, entry: args.entry, databasePassword: password.password });

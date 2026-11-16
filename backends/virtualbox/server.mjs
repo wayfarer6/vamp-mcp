@@ -12,7 +12,7 @@ import { z } from '../../third_party/mcp-virtualbox/node_modules/zod/index.js';
 import { config as vboxConfig } from '../../third_party/mcp-virtualbox/dist/types.js';
 vboxConfig.mouseHelperPath=process.env.MOUSE_HELPER_PATH || fileURLToPath(new URL('./mouse_click.py',import.meta.url));
 vboxConfig.pythonPath=process.env.PYTHON_PATH || process.env.RPA_HOST_PYTHON || (process.platform==='win32'?'python':'python3');
-const server = new McpServer({name: 'VAMP', version: '0.1.2'}, {instructions:'For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup.'});
+const server = new McpServer({name: 'VAMP', version: '0.1.2'}, {instructions:'Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup.'});
 const result = value => ({content: [{type: 'text', text: JSON.stringify(value)}]});
 async function displayAction(action,values) {
   const python=process.env.RPA_HOST_PYTHON || 'python';

@@ -39,10 +39,11 @@ class VaultView {
     item.id = `${this.kind}:${node.path ?? node.id ?? node.label}`;
     if (node.description) item.description = node.description;
     item.tooltip = node.tooltip || node.description || node.label;
-    item.iconPath = new vscode.ThemeIcon(node.icon || 'circle-outline');
+    item.iconPath = node.brand && this.brandIcon ? this.brandIcon : new vscode.ThemeIcon(node.icon || 'circle-outline');
     item.contextValue = node.type === 'entry'
       ? 'vampVault.credential'
       : node.type === 'group' ? 'vampVault.group' : `vampVault.${node.type}`;
+    if (node.type === 'entry') item.command = {command:'vampVault.openBrowser',title:'View Credential',arguments:[node]};
     if (node.command) item.command = { command: node.command, title: node.label, arguments: [] };
     item.element = node;
     return item;
@@ -51,7 +52,8 @@ class VaultView {
   async getChildren(node) {
     if (node) return node.children ?? [];
     if (!this.loader) return [];
-    return this.loader();
+    const nodes = await this.loader();
+    return this.brandIcon ? [{id:'brand',type:'info',label:'VAMP Vault',description:'Encrypted workspace',tooltip:'Encrypted Vault Execution for AI Agents',brand:true,command:'vampVault.status'},...nodes] : nodes;
   }
 }
 
@@ -177,7 +179,7 @@ async function handle(request, context, state, output) {
   switch (request.op) {
     case 'state': {
       const map = await readSecretMap(context);
-      return { unlocked: Boolean(map[request.params?.kdbx ?? kdbx]), stored_databases: Object.keys(map).length };
+      return { unlocked: Boolean(map[request.params?.kdbx ?? kdbx]), stored_databases: Object.keys(map).length, approval_mode:config.get('approvalMode')||'per-session',cache_minutes:Number(config.get('sessionCacheMinutes')??5),revision:state.revision };
     }
     case 'unlock': {
       const target = request.params?.kdbx || kdbx;
@@ -201,7 +203,7 @@ async function handle(request, context, state, output) {
       const choice = await vscode.window.showWarningMessage(
         `VAMP Vault: ${detail}`,
         { modal: true, detail: `The AI agent asked for ${entry}. Approving sends the value to the running MCP server process.` },
-        'Approve once', 'Approve for this session', 'Cancel',
+        ...(config.get('approvalMode')==='each-read'?['Approve once','Cancel']:['Approve once','Approve for this session','Cancel']),
       );
       if (choice === 'Approve once') return { approved: true, remember: false };
       if (choice === 'Approve for this session') return { approved: true, remember: true };
@@ -222,7 +224,7 @@ async function handle(request, context, state, output) {
 function activate(context) {
   const output = vscode.window.createOutputChannel('VAMP Vault');
   const changes = new vscode.EventEmitter();
-  const state = { setup: false };
+  const state = { setup: false, revision: 0 };
   const config = () => vscode.workspace.getConfiguration('vampVault');
   const globalStorage = context.globalStorageUri.fsPath;
   const binDir = path.join(globalStorage, 'bin');
@@ -240,9 +242,32 @@ function activate(context) {
 
   readSecretMap(context).then(map => { statusItem.text = map[kdbxPath()] ? '$(shield) Vault' : '$(lock) Vault'; }).catch(() => {});
 
+  const approvalNames={'each-read':'Ask every time','per-session':'Ask per entry','off':'No prompts'};
+  const approvalItem=vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right,89);
+  approvalItem.command='vampVault.changeApproval';
+  const updateApproval=()=>{const mode=config().get('approvalMode')||'per-session';approvalItem.text=(mode==='off'?'$(warning) ':'$(shield) ')+approvalNames[mode];approvalItem.tooltip='VAMP Vault agent approval level · click to change';approvalItem.show();};
+  updateApproval();context.subscriptions.push(approvalItem);
+  async function setApproval(mode){
+    if(!Object.hasOwn(approvalNames,mode))return;
+    if(mode==='off'){
+      const answer=await vscode.window.showWarningMessage('Allow agent reads without approval prompts?',{modal:true,detail:'While the vault is unlocked, agents may read credentials without asking. Password reveal/copy buttons still require your action.'},'Disable Approval Prompts');
+      if(answer!=='Disable Approval Prompts')return;
+    }
+    await config().update('approvalMode',mode,vscode.ConfigurationTarget.Global);updateApproval();
+  }
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.changeApproval',async()=>{
+    const picked=await vscode.window.showQuickPick([
+      {label:'1 · Ask every time',description:'Confirm every agent read, including cached values',mode:'each-read'},
+      {label:'2 · Ask per entry',description:'Approve once or remember the entry for this session',mode:'per-session'},
+      {label:'3 · No prompts',description:'Allow unlocked reads without approval · explicit confirmation required',mode:'off'}
+    ],{title:'VAMP Vault · Agent approvals',placeHolder:'Current: '+approvalNames[config().get('approvalMode')||'per-session']});
+    if(picked)await setApproval(picked.mode);
+  }));
   // ------------------------------------------------------------------ sidebar
   const credentialView = new VaultView('credentials');
   const statusView = new VaultView('status');
+  const sidebarBrand = vscode.Uri.file(context.asAbsolutePath('assets/vault-brand.png'));
+  statusView.brandIcon = {light:sidebarBrand,dark:sidebarBrand};
   context.subscriptions.push(credentialView, statusView, vscode.window.registerTreeDataProvider('vampVault.views.credentials', credentialView), vscode.window.registerTreeDataProvider('vampVault.views.status', statusView));
 
   let vaultData = null;      // last read of the credentials view
@@ -251,7 +276,8 @@ function activate(context) {
   const treeModule = () => loadModule(context, 'dist/runtime/src/tree.mjs');
   const cliReport = () => loadModule(context, 'dist/runtime/src/downloader.mjs')
     .then(({ cliStatus }) => cliStatus({ binDir, overrides: { keepassxc: config().get('keepassxcCliPath') || undefined, veracrypt: config().get('veracryptCliPath') || undefined } }));
-  const resetVault = () => { vaultData = null; fillToken += 1; };
+  let browser;
+  const resetVault = () => { vaultData = null; fillToken += 1; state.revision++; browser?.reset(); };
 
   const syncContext = async unlocked => {
     await vscode.commands.executeCommand('setContext', 'vampVault.unlocked', Boolean(unlocked));
@@ -259,6 +285,7 @@ function activate(context) {
   };
 
   async function credentialData() {
+    const generation = fillToken;
     const db = kdbxPath();
     if (vaultData && vaultData.db === db) return vaultData;
     const report = await cliReport();
@@ -277,6 +304,7 @@ function activate(context) {
           : error.message;
       }
     }
+    if (generation !== fillToken || db !== kdbxPath()) return credentialData();
     vaultData = data;
     statusItem.text = unlocked ? '$(shield) Vault' : '$(lock) Vault';
     syncContext(unlocked).catch(() => {});
@@ -384,6 +412,7 @@ function activate(context) {
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
     if (event.affectsConfiguration('vampVault')) {
+      updateApproval();
       changes.fire();
       resetVault();
       credentialView.refresh();
@@ -629,6 +658,37 @@ function activate(context) {
     return picked?.entryPath ?? null;
   }
 
+  browser=require('./vault-browser').registerBrowser(context,{
+    async load(){
+      const data=await credentialData();
+      if(data.listing&&!data.filled&&!data.error){data.filled=true;data.usernamesLoading=true;fillUsernames(data).catch(()=>{}).finally(()=>{data.usernamesLoading=false;browser?.refresh();});}
+      return {approval_mode:config().get('approvalMode')||'per-session',database:path.basename(data.db),available:data.report.keepassxc.available,exists:data.exists,unlocked:data.unlocked,error:data.error,usernames_loading:!!data.usernamesLoading,
+        entries:data.unlocked?(data.listing?.entries||[]).map(e=>({...e,username:data.meta[e.path]?.username||''})):[]};
+    },
+    async details(entry){
+      if(!(await readSecretMap(context))[kdbxPath()])throw Error('The vault is locked. Unlock it to browse.');
+      const opened=await openVault();if(!opened)throw Error('Unlock the vault first.');
+      return opened.cli.showEntry({file:opened.db,entry,databasePassword:opened.password,showProtected:false});
+    },
+    setApproval,
+    copyUsername:entry=>vscode.commands.executeCommand('vampVault.copyUsername',{type:'entry',path:entry}),
+    copyPassword:entry=>vscode.commands.executeCommand('vampVault.copyPassword',{type:'entry',path:entry}),
+    async reveal(entry){
+      const answer=await vscode.window.showWarningMessage(`Show the password for "${entry}" for 15 seconds?`,{modal:true},'Show Password');
+      if(answer!=='Show Password')return;
+      if(!(await readSecretMap(context))[kdbxPath()])throw Error('The vault was locked. Unlock it again.');
+      const opened=await openVault();if(!opened)return;
+      const record=await opened.cli.showEntry({file:opened.db,entry,databasePassword:opened.password,showProtected:true});
+      return record.password || '';
+    }
+  });
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.openDatabase',async()=>{
+    const files=await vscode.window.showOpenDialog({canSelectMany:false,filters:{'KeePassXC database':['kdbx']},title:'Open an existing encrypted vault'});
+    if(!files?.length)return;
+    await config().update('defaultKdbxPath',files[0].fsPath,vscode.ConfigurationTarget.Global);
+    resetVault();credentialView.refresh();statusView.refresh();
+    await vscode.commands.executeCommand('vampVault.openBrowser');
+  }));
   context.subscriptions.push(vscode.commands.registerCommand('vampVault.refreshTree', async () => {
     resetVault();
     credentialView.refresh();
@@ -786,7 +846,7 @@ function activate(context) {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('vampVault.openGuide', () =>
-    vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.file(context.asAbsolutePath('README.md')))));
+    vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.file(context.asAbsolutePath('USAGE.md')))));
 
   if (!context.globalState.get('vampVault.onboardSeen')) {
     context.globalState.update('vampVault.onboardSeen', true);

@@ -258,7 +258,7 @@ await check('the manifest declares the activity bar container and both views', (
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   const container = manifest.contributes.viewsContainers.activitybar.find(item => item.id === 'vamp-vault');
   assert.equal(container.title, 'VAMP Vault');
-  assert.equal(container.icon, manifest.icon);
+  assert.equal(container.icon, 'assets/vault.svg');
   const views = manifest.contributes.views['vamp-vault'];
   assert.deepEqual(views.map(view => view.id), ['vampVault.views.status', 'vampVault.views.credentials']);
   assert.equal(views[0].name, 'Vault Status');

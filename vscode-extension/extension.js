@@ -38,6 +38,16 @@ function activate(context) {
         [path.join(repository, 'vm_mcp_server.py')], {VM_MCP_CONFIG: profile}, version)];
     }
   }));
+  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.library',{
+    onDidChangeMcpServerDefinitions:changes.event,
+    provideMcpServerDefinitions(){
+      return [new vscode.McpStdioServerDefinition('VAMP RPA Library',process.execPath,[path.join(runtime,'backends/library/server.mjs')],{
+        ELECTRON_RUN_AS_NODE:'1',VAMP_RPA_REGISTRY:path.join(context.globalStorageUri.fsPath,'rpa-catalog'),
+        RPA_HOST_PYTHON:pythonPath(),RPA_REPLAY_PYTHON:config().get('mousePythonExecutable')||pythonPath(),
+        VBOXMANAGE_PATH:config().get('vboxManagePath')||'',VAMP_LIBVIRT_URI:config().get('libvirtUri')||'qemu:///session'
+      },version)];
+    }
+  }));
   const viewerPanels = new Map();
   context.subscriptions.push({dispose(){for(const panel of viewerPanels.values())panel.dispose();viewerPanels.clear();}});
   context.subscriptions.push(vscode.commands.registerCommand('vamp.openKvmViewer', async () => {
@@ -82,7 +92,7 @@ function activate(context) {
   }));
   let settingUp = false;
   context.subscriptions.push(vscode.commands.registerCommand('vamp.setupPython', async () => {
-    if(settingUp) return;
+    if(settingUp) return false;
     settingUp=true;
     try {
       await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'VAMP Python setup'}, async progress => {
@@ -111,68 +121,40 @@ function activate(context) {
         changes.fire();
         vscode.window.showInformationMessage('VAMP Python ready. VirtualBox must be installed separately.');
       });
-    } catch(error) { output.appendLine(String(error)); output.show(); vscode.window.showErrorMessage(`VAMP setup failed: ${error.message}`); }
+      return true;
+    } catch(error) { output.appendLine(String(error)); output.show(); vscode.window.showErrorMessage(`VAMP setup failed: ${error.message}`); return false; }
     finally {settingUp=false;}
   }));
-  context.subscriptions.push(vscode.commands.registerCommand('vamp.onboard',async()=>{
-    const exe=config().get('vboxManagePath') || (process.platform==='win32' ? path.join(process.env.ProgramFiles || 'C:/Program Files','Oracle/VirtualBox/VBoxManage.exe') : 'VBoxManage');
-    try {await run(exe,['--version'],{timeout:15000});}
-    catch {
-      const selected=await vscode.window.showInformationMessage('Install VirtualBox on this host first. VAMP can guide you; host drivers may require administrator access.','Open Official Downloads','Later');
-      if(selected==='Open Official Downloads') await vscode.env.openExternal(vscode.Uri.parse('https://www.virtualbox.org/wiki/Downloads'));
-      return;
-    }
-    if(!fs.existsSync(pythonPath())) await vscode.commands.executeCommand('vamp.setupPython');
-    if(fs.existsSync(pythonPath())) await vscode.commands.executeCommand('vamp.createVM');
+  context.subscriptions.push(vscode.commands.registerCommand('vamp.removePython',async()=>{
+    if(settingUp){vscode.window.showWarningMessage('Wait for environment preparation to finish.');return false;}
+    const answer=await vscode.window.showWarningMessage('Delete the VAMP Python environment?',{modal:true,detail:'Stop VAMP Python MCP processes first. This removes only the managed Python environment; VM disks, saved RPAs and vault files are kept. Prepare Environment can recreate it.'},'Delete Environment');
+    if(answer!=='Delete Environment')return false;
+    settingUp=true;
+    try{await fs.promises.rm(path.join(context.globalStorageUri.fsPath,'python'),{recursive:true,force:true});changes.fire();return true;}
+    catch(error){output.appendLine(error.message);vscode.window.showErrorMessage('Could not delete environment: '+error.message);return false;}
+    finally{settingUp=false;}
   }));
-  if(!context.globalState.get('vamp.onboardSeen')) {
-    context.globalState.update('vamp.onboardSeen',true);
-    vscode.window.showInformationMessage('Set up VAMP VM environment? Debian is the default. Windows is optional for Windows-only certificate/security software.','Set Up','Later')
-      .then(choice=>{if(choice==='Set Up')vscode.commands.executeCommand('vamp.onboard');});
+  context.subscriptions.push(vscode.commands.registerCommand('vamp.openVault',()=>vscode.extensions.getExtension('wayfarer6.vamp-vault')?vscode.commands.executeCommand('vampVault.openBrowser'):vscode.commands.executeCommand('workbench.extensions.search','@id:wayfarer6.vamp-vault')));
+  require('./rpa-library').registerLibrary(context,{runtime,output});
+  require('./vm-manager').registerManager(context,{
+    pythonPath,runtime,output,
+    setupPython:()=>vscode.commands.executeCommand('vamp.setupPython')
+  });
+  for(const command of ['vamp.onboard','vamp.createVM']) {
+    context.subscriptions.push(vscode.commands.registerCommand(command,()=>vscode.commands.executeCommand('vamp.openManager')));
   }
-  let creatingVM = false;
-  context.subscriptions.push(vscode.commands.registerCommand('vamp.createVM', async () => {
-    if(creatingVM) return;
-    if(!fs.existsSync(pythonPath())) {
-      vscode.window.showErrorMessage('Run VAMP: Set Up Python Environment first.'); return;
-    }
-    const os=await vscode.window.showQuickPick([
-      {label:'Debian GNOME (recommended default)',id:'debian'},
-      {label:'Windows 11 (optional, license required)',id:'windows11'},
-      {label:'Ubuntu GNOME (experimental unattended profile)',id:'ubuntu'}
-    ],{title:'Choose guest OS; Windows is optional'});
-    if(!os)return;
-    const profiles=JSON.parse(fs.readFileSync(path.join(runtime,'backends/virtualbox/profiles.json'),'utf8')).profiles;
-    const profile=profiles[os.id];
-    const confirm=await vscode.window.showInformationMessage(
-      `${os.label}: ${profile.memory_mb} MB RAM, ${profile.cpus} CPUs, ${profile.disk_mb/1024} GiB dynamic disk, 1920x1080. Public login vboxuser/password123!. ${os.id==='windows11' ? 'Windows requires your own valid license; activate it after installation.' : 'Installation proceeds automatically after selecting a supported ISO.'}`,
-      {modal:true},'Select ISO and Create');
-    if(confirm!=='Select ISO and Create')return;
-    const files=await vscode.window.showOpenDialog({canSelectMany:false,filters:{'OS installation ISO':['iso']},
-      title:'VAMP sandbox VM: public account vboxuser / password123!'});
-    if(!files || !files.length) return;
-    creatingVM=true;
-    try {
-      await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'VAMP: Preparing unattended VM installation'}, async () => {
-        const env={...process.env};
-        if(config().get('vboxManagePath')) env.VBOXMANAGE_PATH=config().get('vboxManagePath');
-        const result=await new Promise((resolve,reject) => {
-          const child=execFile(pythonPath(),[path.join(runtime,'backends/virtualbox/provision.py'),'--json-stdin'],
-            {timeout:420000,env},(error,stdout,stderr)=>error ? reject(new Error(stdout || stderr || error.message)) : resolve(stdout));
-          child.stdin.end(JSON.stringify({iso_path:files[0].fsPath,guest_os:os.id,windows_confirmed:os.id==='windows11'}));
-        });
-        output.appendLine(result); output.show();
-        const details=JSON.parse(result);
-        if(details.guest_additions) vscode.window.showInformationMessage(details.guest_additions.status==='media_inserted'
-          ? 'After Windows installation: open the Guest Additions CD, run VBoxWindowsAdditions.exe, approve UAC and reboot. Then set 1920x1080, Scale 100%.'
-          : 'Windows Guest Additions ISO was not found. Supply a matching ISO through vm_insert_guest_additions, then install it manually.');
-        if(details.status!=='installation_started') {vscode.window.showWarningMessage(details.action_required || details.status);return;}
-        vscode.window.showInformationMessage('VAMP installation started. Public guest login: vboxuser / password123!. Guest installation completion is not yet verified.');
+  context.subscriptions.push(vscode.window.registerWebviewViewProvider('vamp.desktops',{
+    resolveWebviewView(view){
+      view.webview.options={enableScripts:true,localResourceRoots:[vscode.Uri.joinPath(context.extensionUri,'assets')]};
+      const logo=view.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri,'assets/sidebar-brand.png'));
+      view.webview.html=require('./vm-manager').sidebarHTML(String(logo),view.webview.cspSource);
+      view.webview.onDidReceiveMessage(async message=>{
+        const command={library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',screen:'vamp.openVmScreen',guide:'vamp.openGuide'}[message?.type];
+        if(command){try{await vscode.commands.executeCommand(command);}catch(error){output.appendLine(error.message);}}
       });
-    } catch(error) {output.appendLine(String(error));output.show();vscode.window.showErrorMessage(`VAMP creation failed: ${error.message}`);}
-    finally {creatingVM=false;}
+    }
   }));
   context.subscriptions.push(vscode.commands.registerCommand('vamp.openGuide', () =>
-    vscode.commands.executeCommand('markdown.showPreview',vscode.Uri.file(context.asAbsolutePath('README.md')))));
+    vscode.commands.executeCommand('markdown.showPreview',vscode.Uri.file(context.asAbsolutePath('USAGE.md')))));
 }
 module.exports={activate};

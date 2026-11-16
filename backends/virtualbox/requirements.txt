@@ -2,3 +2,6 @@
 mcp==1.30.0
 robotframework==7.5.1
 pycdlib==1.14.0
+
+# Saved RPA replay on KVM guest devices; no screenshot inference loop.
+asyncvnc==1.3.0

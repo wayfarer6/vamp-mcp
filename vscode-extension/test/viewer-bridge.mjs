@@ -28,5 +28,5 @@ test('bridge rejects non-loopback destinations and HTML escapes VM names',async(
   await assert.rejects(startBridge({host:'192.168.0.1',port:5900}),/loopback/);
   const result=viewerHTML({scriptUri:'https://example.invalid/viewer.js',wsUrl:'ws://127.0.0.1:1234/token',name:'<img src=x onerror=alert(1)>',host:'127.0.0.1',port:5901});
   assert.ok(!result.includes('<img src=x'));assert.ok(result.includes('127.0.0.1:5901'));
-  assert.ok(result.includes('외부 VNC 접속 정보'));assert.ok(result.includes('connect-src ws://127.0.0.1:1234'));
+  assert.ok(result.includes('External VNC connection'));assert.ok(result.includes('connect-src ws://127.0.0.1:1234'));
 });

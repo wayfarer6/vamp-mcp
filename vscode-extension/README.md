@@ -16,12 +16,17 @@ This VS Code extension provides the VirtualBox MCP tools. Recording conversion, 
 
 ## Get started
 
-1. Install VirtualBox 7.x and Python 3.11+ on the local host. Debian/Ubuntu may also need `python3-venv`.
-2. Run **VAMP: Set Up Python Environment** to create the extension's private host venv.
-3. Open MCP server management and start/trust **VAMP VirtualBox**. Tool availability depends on the client and its policy.
-4. Ask the agent to list an existing VM and capture its screen. For a new VM, use **VAMP: Create VM From ISO** with a host-local ISO.
+Open the **VAMP** bat icon in the activity bar. **RPA Library** is the main entry for finding, creating and exporting reusable workflows; **Open VM Manager** manages your virtual desktops; **Browse Credentials** opens the encrypted vault.
 
-The bundled Node server runs with desktop VS Code. VirtualBox, system drivers and Python must be installed separately. The extension runs on the local desktop host even when a remote workspace is open, so tool paths refer to that host. It does not run in vscode.dev.
+1. **VM Manager**: select VirtualBox, KVM or Hyper-V, choose your ISO, then **Create and Start**. VirtualBox and KVM show the guest in the editor. Hyper-V embedded viewing is unsupported; use VMConnect.
+2. Record a task in the guest and save the Python recording to its host share, or use **Add RPA Folder** for the host folder containing it.
+3. **RPA Library → Create**: choose the recording and enter its name, description, use case, tags, inputs and expected result. **Create with AI** asks you questions and fills those fields from your answers. You review and save them.
+4. Find the workflow by title or description, inspect its source, edit its review state or choose **Export ZIP**.
+5. Enable **VAMP RPA Library** in VS Code MCP management. Its `rpa_search`, `rpa_details` and `rpa_run_saved` tools let agents find and reuse reviewed skills before spending tokens on another CUA/multimodal loop.
+
+**[Full click-by-click user guide](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/USER_GUIDE.md)** is also bundled in the VSIX: **VAMP: Open Setup Guide**. It covers prerequisites, recording locations, Create/AI questions, export, credentials and recovery from errors.
+
+Recorded replay currently supports VirtualBox and KVM for supported PyAutoGUI recorder actions, with an exact guest resolution match. Registration does not execute the source. Execution requires review, an explicit VM and confirmation; `completed_unverified` still needs application-result verification. VirtualBox mouse replay requires its matching Python SDK. Existing Robot packages require their matching shared runtime; ZIP exports contain source, not a standalone VM or runtime.
 
 ## Records, logs and screens
 

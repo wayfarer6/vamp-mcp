@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.6
+
+- Add searchable RPA Library, editable creation forms, AI-assisted metadata and reviewed guest-device replay.
+- Store each saved skill in a local Git repository; export only its latest committed revision and support reviewed AI repairs.
+- Verify environment activation/imports, show a green check and support deletion/recreation.
+- Adapt library and manager layouts to smaller windows and highlight selected sidebar actions.
+- Bundle English/Korean usage instructions and document platform validation limits.
+
 ## 0.1.5
 
 - Add the shared live KVM/VNC viewer and binary VM exchange integration.

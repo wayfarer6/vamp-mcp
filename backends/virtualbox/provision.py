@@ -28,7 +28,7 @@ def executable():
         if candidate.is_file():return str(candidate)
     return shutil.which('VBoxManage') or 'VBoxManage'
 
-def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False):
+def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False,allow_manual_install=False):
     name=name or ('VAMP-'+uuid.uuid4().hex[:8])
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',name):raise ValueError('Use 1-64 letters/digits/underscore/hyphen for name')
     iso=Path(iso_path).expanduser().resolve(strict=True)
@@ -42,11 +42,17 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         return proc.stdout
     listed=run('list','vms')
     if any(line.startswith('"'+name+'" ') for line in listed.splitlines()):raise ValueError('VM name already exists; refusing to modify it')
-    detected=parse(run('unattended','detect','--iso',iso,'--machine-readable'))
+    try:
+        detected=parse(run('unattended','detect','--iso',iso,'--machine-readable'))
+    except RuntimeError:
+        manual_types={'debian':'Debian_64','ubuntu':'Ubuntu_64','windows11':'Windows11_64'}
+        if not allow_manual_install or guest_os not in manual_types:raise
+        detected={'OSTypeId':manual_types[guest_os],'IsInstallSupported':'false'}
     os_type=detected.get('OSTypeId',detected.get('detectedOSTypeId',''))
     if not (re.fullmatch(r'Debian[0-9]*_64',os_type) or re.fullmatch(r'Ubuntu[0-9]*_64',os_type) or os_type=='Windows11_64'):
         raise ValueError(f'Only detected Debian/Ubuntu amd64 or Windows11 x64 ISO supported by this initial profile: {os_type or "unknown"}')
-    if detected.get('IsInstallSupported',detected.get('isInstallSupported','true')).lower() not in ('true','1','yes','on'):
+    unattended_supported=detected.get('IsInstallSupported',detected.get('isInstallSupported','true')).lower() in ('true','1','yes','on')
+    if not unattended_supported and not allow_manual_install:
         raise ValueError('VirtualBox reports this ISO does not support unattended installation')
     selected='windows11' if os_type=='Windows11_64' else ('ubuntu' if os_type.startswith('Ubuntu') else 'debian')
     if guest_os and guest_os!=selected:raise ValueError('Selected guest OS does not match detected ISO')
@@ -60,6 +66,7 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         return {'status':'preflight_ready','vm_created':False,'guest_os':selected,
                 'resource_profile':{'memory_mb':memory_mb,'cpus':cpus,'disk_mb':disk_mb},
                 'windows_confirmation_required':selected=='windows11' and not windows_confirmed,
+                'installation_mode':'unattended' if unattended_supported else 'manual',
                 'credentials':PUBLIC_CREDENTIALS,'iso':str(iso)}
     if selected=='windows11' and not windows_confirmed:
         return {'status':'needs_windows_confirmation','no_vm_created':True,'profile':profile,
@@ -70,8 +77,10 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
     if selected=='windows11':journal['license_notice']='Windows requires a valid license. Activate Windows yourself after installation; VAMP supplies no license or activation bypass.'
     if os_type=='Windows11_64' and memory_mb<4096:raise ValueError('Windows 11 requires at least 4096 MB')
     # Check version-specific password option before creating any VM.
-    help_proc=subprocess.run([executable(),'unattended','install','--help'],capture_output=True,text=True)
-    help_text=help_proc.stdout+help_proc.stderr
+    help_text=''
+    if unattended_supported:
+        help_proc=subprocess.run([executable(),'unattended','install','--help'],capture_output=True,text=True)
+        help_text=help_proc.stdout+help_proc.stderr
     password_flag='--user-password' if '--user-password' in help_text else '--password'
     folder.mkdir(parents=True,exist_ok=False)
     journal_path=folder/'vamp-install.json'
@@ -97,6 +106,15 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         run('storagectl',name,'--name','SATA','--add','sata','--controller','IntelAhci','--portcount','4')
         run('storageattach',name,'--storagectl','SATA','--port','0','--device','0','--type','hdd','--medium',disk)
         run('storagectl',name,'--name','IDE','--add','ide')
+        if not unattended_supported:
+            run('storageattach',name,'--storagectl','SATA','--port','1','--device','0','--type','dvddrive','--medium',iso)
+            run('startvm',name,'--type','separate')
+            journal.update(status='installation_started',installation_mode='manual',os_type=os_type,
+                           frontend='separate',journal=str(journal_path),
+                           credentials={'public_sandbox_credentials':False,'account_setup':'Choose your account in the OS installer'},
+                           action_required='This ISO needs manual installation. Follow the installer in the VM screen. Choose your own guest account; automatic recorder setup has not run.')
+            record('manual-installation-started')
+            return journal
         # Recorder media stays on a dedicated DVD; unattended owns its own installer/auxiliary slots.
         run('storageattach',name,'--storagectl','SATA','--port','3','--device','0','--type','dvddrive','--medium',media['iso'])
         if os_type=='Windows11_64':
@@ -112,7 +130,7 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
             args+=['--image-index',image_index]
             if product_key:args+=['--key',product_key]
         run(*args,timeout=300)
-        journal.update(status='installation_started',os_type=os_type,frontend='separate',
+        journal.update(status='installation_started',installation_mode='unattended',os_type=os_type,frontend='separate',
                        recorder_setup='Debian postinstall; Windows first desktop login',
                        requires_ai_loop=False,journal=str(journal_path))
         record('unattended-installation-started')

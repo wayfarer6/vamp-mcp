@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from mcp_vm.controller import VMController
 
-mcp=FastMCP('VAMP',instructions='Use VM profiles to keep Debian and Windows RPAs separate. Prefer compact results and OCR. Hyper-V console launch is not RDP input automation. Credentials stay in dedicated local flows.')
+mcp=FastMCP('VAMP',instructions='Before repeated CUA, OCR or multimodal work, use the VAMP RPA Library provider rpa_search and rpa_details to find a compatible reviewed skill. Prefer reuse when authorized; read compact results and verify expected outcomes. Fall back to targeted CUA when no suitable skill exists or verification fails. Use VM profiles to keep Debian and Windows RPAs separate. Prefer compact results and OCR. Hyper-V console launch is not RDP input automation. Credentials stay in dedicated local flows.')
 controller=VMController()
 READ=ToolAnnotations(readOnlyHint=True,destructiveHint=False)
 WRITE=ToolAnnotations(readOnlyHint=False,destructiveHint=True)

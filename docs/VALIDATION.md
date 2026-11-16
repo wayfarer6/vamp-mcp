@@ -48,3 +48,10 @@ Ubuntu/KVM on Ryzen 7 5800H runs the independent `vamp-nested-hyperv-lab` Window
 - VNC uppercase input was corrected to preserve uppercase RFB keysyms. A real Windows console displayed `VAMP Upper ABC XYZ` with the correct case, and the four RFB transport tests passed, including balanced uppercase/lowercase key events.
 
 Fresh, local receipts are collected with `scripts/collect_nested_evidence.py` into `artifacts/kvm-validation/nested-evidence/`; these generated artifacts are excluded from Git. Failures and subsequent passes remain in the history. Release versions are VAMP 0.1.5 and Vault 0.1.2. Marketplace publication is left to the user. A standalone UAC automation tool and an embedded Hyper-V viewer are not included.
+
+## VAMP 0.1.6 / Vault 0.1.3 — 2026-11-16
+
+- Python: 84 tests passed. VAMP manager/library/author: 12 passed; live stream bridge: 2 passed; embedded script syntax: 1 passed.
+- With real Linux KeePassXC CLI: Vault smoke 39/39 and extension-host stand-in 18/18 passed; credential browser 2 tests and live approval-policy 7 checks passed.
+- Both stable VSIX packages built successfully. Marketplace publication is reserved for the user.
+- Actual UI and platform limits are recorded in [UI audit](UI_AUDIT.md). Physical Windows/macOS and the latest full visual sequence remain unverified.

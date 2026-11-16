@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.3
+
+- Add a searchable credential browser with explicit reveal/copy controls and encrypted export.
+- Apply live agent approval policies and invalidate cached approvals on lock or policy changes.
+- Use a distinct safe icon in the activity bar and Marketplace.
+- Bundle English/Korean usage instructions.
+
 ## 0.1.2
 
 - Probe the Windows VeraCrypt executable's PE version instead of launching it with Unix console flags.

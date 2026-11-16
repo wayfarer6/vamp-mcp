@@ -1,8 +1,8 @@
 {
   "name": "vamp-vault",
-  "displayName": "VAMP Vault — Credential & Certificate Isolation for AI Agents",
+  "displayName": "VAMP Vault \u2014 Credential & Certificate Isolation for AI Agents",
   "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -52,7 +52,7 @@
         {
           "id": "vamp-vault",
           "title": "VAMP Vault",
-          "icon": "icon.png"
+          "icon": "assets/vault.svg"
         }
       ]
     },
@@ -71,6 +71,16 @@
       ]
     },
     "commands": [
+      {
+        "command": "vampVault.openBrowser",
+        "title": "VAMP Vault: Browse Credentials",
+        "icon": "$(book)"
+      },
+      {
+        "command": "vampVault.openDatabase",
+        "title": "VAMP Vault: Open Existing Database",
+        "icon": "$(folder-opened)"
+      },
       {
         "command": "vampVault.setupCli",
         "title": "VAMP Vault: Set Up KeePassXC & VeraCrypt CLI"
@@ -129,10 +139,25 @@
         "command": "vampVault.showEntry",
         "title": "VAMP Vault: Show Entry Details",
         "icon": "$(list-unordered)"
+      },
+      {
+        "command": "vampVault.changeApproval",
+        "title": "VAMP Vault: Change Agent Approval Level",
+        "icon": "$(shield)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "vampVault.changeApproval",
+          "when": "view == vampVault.views.status",
+          "group": "navigation@0"
+        },
+        {
+          "command": "vampVault.openBrowser",
+          "when": "view == vampVault.views.credentials",
+          "group": "navigation@0"
+        },
         {
           "command": "vampVault.refreshTree",
           "when": "view == vampVault.views.credentials",
@@ -263,8 +288,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out vamp-vault-0.1.2.vsix",
-    "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs",
+    "package": "npm run build && vsce package --out vamp-vault-0.1.3.vsix",
+    "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs && node --test test/browser.cjs",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
