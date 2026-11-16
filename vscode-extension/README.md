@@ -4,7 +4,7 @@
 
 # VAMP · Virtual Agent Machine Platform
 
-**VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents**
+**Local & remote (SSH) hypervisors with VM-isolated GUI RPA & screenshot control for AI agents**
 
 Record a GUI task once, turn the reviewed actions into a reusable RPA, and let an AI agent call it again by name and inputs. VAMP is being built to reduce the tokens spent repeatedly inspecting screens and reconstructing the same GUI workflow.
 

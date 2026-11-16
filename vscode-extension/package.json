@@ -1,7 +1,7 @@
 {
   "name": "vamp-mcp",
   "displayName": "VAMP — Virtual Agent Machine Platform",
-  "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
+  "description": "Local & remote (SSH) hypervisors (VirtualBox, KVM, Hyper-V) with VM-isolated GUI RPA & screenshot control for AI agents",
   "version": "0.1.7",
   "publisher": "wayfarer6",
   "license": "MIT",
@@ -22,7 +22,13 @@
     "VNC",
     "RPA",
     "AI agent",
-    "VAMP"
+    "VAMP",
+    "remote",
+    "SSH",
+    "hypervisor",
+    "KVM",
+    "VirtualBox",
+    "Hyper-V"
   ],
   "extensionKind": [
     "ui"

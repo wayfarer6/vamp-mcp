@@ -26,7 +26,7 @@ function harness() {
     commands:{registerCommand(name,fn){commands.set(name,fn);return {dispose(){}};},executeCommand:async()=>{}},
     window:{createWebviewPanel:()=>panel,showOpenDialog:async()=>[{fsPath:'/tmp/installer.iso'}],showInformationMessage:async(...args)=>{notices.push(args);return answers.confirm;},showWarningMessage:async(...args)=>{warnings.push(args);return answers.warning;}}};
   const module={exports:{}};
-  const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./host-backends'?{hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
+  const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
   vm.runInNewContext(`(function(require,module,exports){${fs.readFileSync(path.join(root,'vm-manager.js'),'utf8')}\n})`,{setInterval,clearInterval,process,console})(req,module,module.exports);
   const api=module.exports;
   api.registerManager(context,{pythonPath:()=>__filename,runtime:'/runtime',output:{appendLine(){},show(){}},setupPython:async()=>{calls.push(['setup']);return answers.setup;}});
