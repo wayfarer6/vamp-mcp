@@ -35,6 +35,11 @@ async function writeSecretMap(context, map) {
   else await context.secrets.store(SECRET_KEY, JSON.stringify(map));
 }
 
+async function askSecret(prompt) {
+  const value = await vscode.window.showInputBox({ prompt, password: true, ignoreFocusOut: true });
+  return value === undefined ? null : value;
+}
+
 async function askPassword(prompt) {
   const first = await vscode.window.showInputBox({ prompt, password: true, ignoreFocusOut: true, validateInput: value => (value && value.length >= 8 ? null : 'Use at least 8 characters.') });
   if (first === undefined) return null;
@@ -92,7 +97,9 @@ function startBridge(context, state, output) {
 async function unlockMasterPassword(context, kdbxPath, output) {
   const map = await readSecretMap(context);
   if (map[kdbxPath]) return { password: map[kdbxPath], source: 'vscode_secret_storage' };
-  const password = await askPassword(`Master password for ${path.basename(kdbxPath)} (stored in VS Code secret storage)`);
+  // Unlocking asks once and accepts any length: an existing database may have a
+  // password shorter than the rule we apply to new ones.
+  const password = await askSecret(`Master password for ${path.basename(kdbxPath)} (stored in VS Code secret storage)`);
   if (!password) return { cancelled: true };
   map[kdbxPath] = password;
   await writeSecretMap(context, map);
