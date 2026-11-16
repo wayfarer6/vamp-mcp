@@ -31,8 +31,8 @@ agent / VS Code  ──ssh──►  node ~/.vamp/remote/server.mjs  ──►  
 - **Input is explicit.** Text is typed through QEMU `input-send-event` with a US
   layout, so an unmapped character is reported instead of typed wrongly. Clicks
   use screen fractions (0-1), so they follow the last screenshot regardless of
-  resolution. VirtualBox absolute clicks are reported as unsupported rather than
-  pretending to work.
+  resolution. VirtualBox absolute clicks use the matching Python SDK when `--repo` and
+  `--python` are configured; otherwise they report unsupported.
 - **Setup never destroys.** `remote_env_setup` creates directories and a venv,
   installs packages only when `sudo -n` works, and otherwise reports the exact
   command.

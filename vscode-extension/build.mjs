@@ -15,10 +15,10 @@ const built=await build({metafile:true,entryPoints:[path.join(root,'backends/vir
   outfile:path.join(runtime,'backends/virtualbox/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',
   banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
 for(const name of ['scripts/build_recorder_media.py','rpas','backends/common/Test-Environment.ps1','recording_converter.py','guest_keys.py','backends/library/registry.py','backends/library/replay.py','guest_setup/recorder','third_party/pyautogui-recorder','backends/virtualbox/setup_windows_sdk.py','backends/hyperv/scripts/Manage-Desktop.ps1',
-  'scripts/remote_host_setup.sh','third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/rpas','backends/virtualbox/history.py','backends/virtualbox/recording_listener.py','backends/virtualbox/mouse_click.py','backends/virtualbox/shares.py','backends/virtualbox/transfers.py','backends/virtualbox/vnc.py','backends/virtualbox/recordings.py','backends/virtualbox/snapshots.py','backends/virtualbox/profiles.json','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
+  'scripts/remote_host_setup.sh','third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/rpas','backends/virtualbox/history.py','backends/virtualbox/recording_listener.py','backends/virtualbox/mouse_click.py','backends/virtualbox/mouse_move.py','backends/virtualbox/shares.py','backends/virtualbox/transfers.py','backends/virtualbox/vnc.py','backends/virtualbox/recordings.py','backends/virtualbox/snapshots.py','backends/virtualbox/profiles.json','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
   const destination=path.join(runtime,name);
   await mkdir(path.dirname(destination),{recursive:true});
-  await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__') && source!==path.join(root,'backends/virtualbox/rpas/demos')});
+  await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__') && source!==path.join(root,'backends/virtualbox/rpas/demos') && source!==path.join(root,'rpas/windows_print_pdf') && source!==path.join(root,'rpas/remote_host_validation')});
 }
 await mkdir(path.join(here,'dist/notices'),{recursive:true});
 for(const name of ['LICENSE','THIRD_PARTY_NOTICES.md']) await copyFile(path.join(root,name),path.join(here,name));

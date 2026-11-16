@@ -10,7 +10,7 @@ Record a GUI task once, turn the reviewed actions into a reusable RPA, and let a
 
 Opening the Naver login page is one example: launch a browser, navigate to the page and check that the expected form appeared. The reusable workflow keeps those steps and checks in local Robot/Python code. The agent can read the result summary first, then inspect logs or screenshots when needed.
 
-This VS Code extension provides the VirtualBox MCP tools. Recording conversion, SPICE execution and local OCR/UI recognition are separate parts of the repository. Arbitrary CUA recordings cannot be imported automatically, and the recorded-action converter currently targets SPICE rather than VirtualBox replay.
+This VS Code extension provides the VirtualBox MCP tools. Recording conversion, SPICE execution and local OCR/UI recognition are separate parts of the repository. Arbitrary CUA recordings cannot be imported automatically, and the AST converter emits Robot/SPICE packages; RPA Library device replay separately supports KVM and VirtualBox.
 
 [Workflow example](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/WORKFLOWS.md) · [Documentation](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/README.md) · [Releases](https://github.com/wayfarer6/vamp-mcp/releases)
 
@@ -87,7 +87,7 @@ Original integration: MIT. Bundled [mcp-virtualbox](https://github.com/chryaner/
 
 Desktops can live on another machine: a home server, a lab box or a cloud VM. Set `vamp.remote.enabled`, the host and the user, then run **VAMP: Remote · Prepare Environment on the Remote Host**. The extension uploads a self-contained MCP server to `~/.vamp/remote/` there, prepares Python and libvirt/VirtualBox, and contributes the **VAMP Remote (SSH)** MCP server. Communication stays inside SSH, so no hypervisor port is opened and guest disks, credentials and the vault never leave the remote host.
 
-Remote screens are **screenshots**, one PNG per request, with no live stream. Start/stop, list, status, key input, absolute-pointer clicks on KVM and reviewed RPA replay are available remotely. VirtualBox remote hosts report clicks as unsupported. See [docs/REMOTE_SETUP.md](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/REMOTE_SETUP.md).
+Remote screens are **screenshots**, one PNG per request, with no live stream. Start/stop, list, status, key input, absolute-pointer clicks on KVM and reviewed RPA replay are available remotely. VirtualBox remote clicks and pointer movement require `--repo` and a Python runtime with the matching VirtualBox SDK. The extension automatic uploader uses a POSIX shell; native Windows SSH can use an explicit PowerShell launch command. See [docs/REMOTE_SETUP.md](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/REMOTE_SETUP.md).
 
 ## Live KVM viewer
 
@@ -96,3 +96,13 @@ Set `vamp.kvmRepositoryPath` to the VAMP checkout. Optionally set `vamp.kvmPytho
 Run **VAMP: Open KVM Viewer (Live VNC)** and choose a running VM. The view receives the live binary RFB stream through a local WebSocket bridge. It is view-only, scales to the panel and supports reconnecting. The table below the screen shows the VM name, host, actual VNC port and an address copy button for external viewers. The VM image, installer ISO and model weights are outside the VSIX.
 
 The `vboxuser` / `password123!` account is assigned by the MCP server during unattended VM installation. It is a public test default, not an operating-system-provided account.
+
+## Version 0.1.8 validation and videos
+
+The remote stdio startup, simultaneous hotkeys and KVM tablet click dispatch are fixed. Guidance now asks agents to implement local OCR/YOLO checks and Robot assertions in new GUI RPAs, return compact results on success and inspect targeted evidence on failures. [Low-token authoring/output policy](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/LOW_TOKEN_AUTOMATION.md).
+
+Ubuntu/KVM Windows PDF printing and nested Windows-host VirtualBox/Debian remote keyboard/mouse scenarios passed with real guest UI and local outcome checks. VM screens are fixed at **1920×1080**; Robot recordings use **2560×1440** with padding and no upscaling. Physical Windows hosts and production ERP integrations were not tested.
+
+[Windows host remote input video](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/media/windows-remote-fhd-qhd.mp4) · [Windows Print to PDF video](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/media/remote-windows-print-pdf.mp4) · [Replay video](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/media/remote-windows-print-pdf-replay.mp4) · [Validation and reproduction](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/REMOTE_PDF_VALIDATION.md)
+
+The complete Robot/vision demos run from the repository; the basic VSIX does not bundle the OCR/YOLO model stack or these repository-only demonstration suites. [Download v0.1.8](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8).

@@ -44,3 +44,9 @@
 | [브랜딩](BRANDING.md) | 아이콘 출처와 배포 크기 |
 | [Hyper-V](../backends/hyperv/README.md) | 실험적 백엔드의 범위 |
 | [라이선스 고지](../THIRD_PARTY_NOTICES.md) | 외부 코드·모델·제품의 라이선스 |
+
+## 원격 RPA 검증과 작성 원칙
+
+- [원격 호스트와 Windows PDF 재현 및 영상](REMOTE_PDF_VALIDATION.md)
+- [정상 결과는 짧게 반환하고 새 GUI RPA에 로컬 검증을 넣는 원칙](LOW_TOKEN_AUTOMATION.md)
+- [GeekNews 소개글 초안](GEEKNEWS_DRAFT.md)

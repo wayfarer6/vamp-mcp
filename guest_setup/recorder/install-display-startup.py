@@ -17,7 +17,9 @@ def install(home=None,platform=None,python=None):
         base=home/'.local/share/vamp/display';startup=home/'.config/autostart'
     base.mkdir(parents=True,exist_ok=True);startup.mkdir(parents=True,exist_ok=True)
     for name in ['apply-display.py','windows-display.py','gnome-display.py']:
-        shutil.copy2(Path(__file__).with_name(name),base/name)
+        destination=base/name
+        if destination.exists():destination.chmod(0o644)
+        shutil.copyfile(Path(__file__).with_name(name),destination)
     command=base/'apply-display.py'
     if platform=='win32':
         gui=Path(python).with_name('pythonw.exe')

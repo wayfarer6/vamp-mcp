@@ -1,0 +1,25 @@
+{
+  "source": "artifacts/remote-pdf-validation/windows-fhd-qhd/windows-host-remote-keyboard-and-mouse.mp4",
+  "output": "docs/media/windows-remote-fhd-qhd.mp4",
+  "source_metadata": {
+    "size": [
+      2560,
+      1440
+    ],
+    "fps": 2.0,
+    "duration_seconds": 64.5
+  },
+  "output_metadata": {
+    "size": [
+      2560,
+      1440
+    ],
+    "fps": 2.0,
+    "duration_seconds": 64.5
+  },
+  "encoder": "libx264",
+  "decode_verified": true,
+  "editing": "No cuts, scaling, inserted frames, or speed changes. Silent.",
+  "source_sha256": "1a2207ac63cbedbb9d407c5ccfbeff0c8e2819aad34edc3464e80d87c4bef225",
+  "sha256": "cb79b086ec4ede2b309f76b3327f3a57d6cf56a64f2aabbf9af42ab0d5fe3eb2"
+}

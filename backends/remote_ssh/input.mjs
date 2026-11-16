@@ -60,6 +60,17 @@ export function keyEvents({ text = '', keys = [] } = {}) {
   return { events, unsupported };
 }
 
+/** Resolve a simultaneous chord before sending any guest input. */
+export function chordKeys(keys = []) {
+  if (!Array.isArray(keys) || keys.length > 8) throw new Error('hotkey must be an array of at most eight keys');
+  return keys.map(raw => {
+    const key = String(raw).toLowerCase().replace(/[\s_-]/g, '');
+    const qcode = NAMED_QCODES[key] || (/^[a-z0-9]$/.test(key) ? key : null);
+    if (!qcode) throw new Error(`Unsupported hotkey key: ${raw}`);
+    return { key, qcode };
+  });
+}
+
 export const SCANCODES = (() => {
   const map = {};
   '1234567890'.split('').forEach((char, index) => { map[char] = 2 + index; });
@@ -67,7 +78,7 @@ export const SCANCODES = (() => {
   'asdfghjkl'.split('').forEach((char, index) => { map[char] = 30 + index; });
   'zxcvbnm'.split('').forEach((char, index) => { map[char] = 44 + index; });
   Object.assign(map, {
-    enter: 28, esc: 1, tab: 15, space: 57, ctrl: 29, alt: 56, shift: 42, backspace: 14,
+    super: 0x15b, win: 0x15b, meta: 0x15b, enter: 28, esc: 1, tab: 15, space: 57, ctrl: 29, alt: 56, shift: 42, backspace: 14,
     left: 0x14b, right: 0x14d, up: 0x148, down: 0x150, delete: 0x153,
     '-': 12, '=': 13, '[': 26, ']': 27, ';': 39, "'": 40, '`': 41, '\\': 43, ',': 51, '.': 52, '/': 53, '\n': 28,
   });

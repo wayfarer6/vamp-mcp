@@ -14,11 +14,13 @@ export const SERVER_NAME = 'vamp-remote';
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
 const INSTRUCTIONS = [
+  'When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success.',
+  'Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark.',
   'This server controls virtual desktops on the host that runs it, reached over SSH. Only screenshots are available - there is no live screen stream, so take a new screenshot for a new frame.',
   'Work in this order: remote_env_check to see whether the host is usable, remote_vm_list to find a desktop, remote_vm_status for detail, then remote_vm_screenshot before acting.',
   'A started VM is not a booted guest: verify with a screenshot. A hypervisor state of running does not prove an application finished loading.',
   'remote_vm_stop asks the guest to shut down; force=true powers it off and can lose unsaved work, so use it only on an explicit instruction.',
-  'remote_vm_mouse_click takes fractions of the guest screen (0-1), matching the last screenshot. KVM guests need an absolute pointing device; VirtualBox returns unsupported for clicks.',
+  'remote_vm_mouse_click takes fractions of the guest screen (0-1), matching the last screenshot. KVM guests need an absolute pointing device. VirtualBox mouse input needs --repo and a Python runtime with the matching SDK.',
   'remote_rpa_run executes a reviewed saved VAMP RPA and changes the guest; ask the user first and pass confirmed=true only after authorization.',
   'Secrets stay on the host. Never request, echo or store guest passwords in tool output, and do not paste credentials into text fields unless the user asked for exactly that.',
 ].join(' ');
@@ -193,7 +195,7 @@ async function main() {
       return 1;
     }
   }
-  await serveStdio({ tools });
+  await serveStdio({ tools: tools.tools });
   return 0;
 }
 

@@ -1,0 +1,48 @@
+{
+  "date": "2026-11-16",
+  "host_matrix": [
+    "Ubuntu/KVM -> Windows",
+    "Windows/VirtualBox -> Debian (Windows host nested on Ubuntu/KVM)"
+  ],
+  "windows_host_resources": {
+    "sockets": 1,
+    "cores": 8,
+    "memory_mib": 8192
+  },
+  "guest_dimensions": [
+    1920,
+    1080
+  ],
+  "recording_canvas": [
+    2560,
+    1440
+  ],
+  "python_tests": 84,
+  "extension_tests": 34,
+  "robot_scenarios": {
+    "windows_host_remote_input": "PASS",
+    "windows_native_pdf_print": "PASS",
+    "pdf_replay_with_local_verification": "PASS"
+  },
+  "limits": [
+    "No physical Windows host test",
+    "Local fixture pages, no production ERP integration",
+    "Windows vision runs on Ubuntu controller",
+    "No measured LLM-token saving percentage"
+  ],
+  "first": {
+    "status": "succeeded",
+    "verification": "rendered_pdf_ocr_and_sha256",
+    "bytes": 33185,
+    "sha256": "2805ec94b1d5c1925fc4420c54d86f0485534766e41efdc0a8fc0cf2486dc182",
+    "duration_seconds": 68.13
+  },
+  "replay": {
+    "status": "succeeded",
+    "verification": "rendered_pdf_ocr_and_sha256",
+    "bytes": 33185,
+    "sha256": "c1ac4b5fdfd93985f956ef39798a9476d03793fd552147797be09e341c0ffb4c",
+    "duration_seconds": 43.94
+  },
+  "model_workers_reused": true
+}

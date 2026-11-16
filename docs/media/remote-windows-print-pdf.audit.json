@@ -1,0 +1,25 @@
+{
+  "source": "artifacts/remote-pdf-validation/pdf-fhd-qhd-02/print-invoice-with-microsoft-print-to-pdf.mp4",
+  "output": "docs/media/remote-windows-print-pdf.mp4",
+  "source_metadata": {
+    "size": [
+      2560,
+      1440
+    ],
+    "fps": 2.0,
+    "duration_seconds": 68.5
+  },
+  "output_metadata": {
+    "size": [
+      2560,
+      1440
+    ],
+    "fps": 2.0,
+    "duration_seconds": 68.5
+  },
+  "encoder": "libx264",
+  "decode_verified": true,
+  "editing": "No cuts, scaling, inserted frames, or speed changes. Silent.",
+  "source_sha256": "629eefdd608606fbcfceb64bdbcec1b93e147792d59b4ff4ca4696342bdab799",
+  "sha256": "0cab8974f520ca19513861e13f6f68dfff4e930e1ed6491b35fe5b9febe51577"
+}

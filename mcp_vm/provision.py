@@ -77,9 +77,10 @@ def create(controller, name, image_path='', iso_path='', seed_iso_path='', memor
     args = ['virt-install', '--connect', uri, '--name', name, '--virt-type', 'kvm',
             '--memory', str(memory_mb), '--vcpus', f'{cpus},sockets=1,cores={cpus},threads=1', '--cpu', 'host-passthrough',
             '--disk', f'path={disk},format=qcow2,bus={"sata" if guest_os == "windows11" else "virtio"}', '--osinfo', 'win11' if guest_os == 'windows11' else 'debian13',
-            '--graphics', 'vnc,listen=127.0.0.1', '--video', 'vga' if guest_os == 'windows11' else 'virtio', '--input', 'tablet,bus=usb',
+            '--graphics', 'vnc,listen=127.0.0.1', '--video', 'vga,model.vram=65536' if guest_os == 'windows11' else 'virtio', '--input', 'tablet,bus=usb',
             '--network', ('user,model=e1000e' if guest_os == 'windows11' else 'user,model=virtio') if uri.endswith('/session') else 'network=default,model=virtio',
-            '--noautoconsole', '--xml', './devices/graphics/@sharePolicy=ignore', '--serial', f'pty,log.file={directory / "serial.log"},log.append=on']
+            '--noautoconsole', '--xml', './devices/graphics/@sharePolicy=ignore',
+            '--xml', './devices/video/model/resolution/@x=1920', '--xml', './devices/video/model/resolution/@y=1080', '--serial', f'pty,log.file={directory / "serial.log"},log.append=on']
     if nested_virtualization:
         flags = Path('/proc/cpuinfo').read_text().split()
         extension = 'svm' if 'svm' in flags else 'vmx' if 'vmx' in flags else None

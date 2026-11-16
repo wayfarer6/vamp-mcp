@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.8
+
+- Fix the actual remote stdio MCP startup path and add a process-level handshake regression test.
+- Add simultaneous guest hotkeys and paced KVM keyboard batches; split tablet press/release requests so real Windows dialogs receive clicks.
+- Add remote pointer movement and VirtualBox SDK mouse support when the repository and matching Python runtime are configured.
+- Clarify local RPA verification and compact output guidance to avoid repeatedly forwarding full OCR, YOLO, images or logs to an LLM.
+- Fix Windows recorder dependency verification under PowerShell 5.1 and allow recorder/display setup to update files copied from read-only ISO media.
+- Repository demos include Windows-host remote input and Microsoft Print to PDF workflows; full local vision/Robot dependencies remain separate from the basic VSIX runtime.
+
 ## 0.1.7
 
 - Add **VAMP Remote (SSH)**: an SSH-based MCP server for desktops that live on another host, with `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click` and `remote_rpa_run`.

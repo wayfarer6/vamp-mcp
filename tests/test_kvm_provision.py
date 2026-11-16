@@ -33,3 +33,8 @@ class ProvisionTests(unittest.TestCase):
             result=subprocess.run(command,capture_output=True,text=True,timeout=30)
             self.assertEqual(result.returncode,0,result.stderr)
             self.assertIn("cores=\"8\"",result.stdout.replace("'",'"'))
+            import xml.etree.ElementTree as ET
+            xml=ET.fromstring(result.stdout)
+            video=xml.find('devices/video/model')
+            self.assertEqual(video.get('vram'),'65536')
+            self.assertEqual(video.find('resolution').attrib,{'x':'1920','y':'1080'})

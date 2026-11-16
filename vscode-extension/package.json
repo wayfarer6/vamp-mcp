@@ -2,7 +2,7 @@
   "name": "vamp-mcp",
   "displayName": "VAMP — Virtual Agent Machine Platform",
   "description": "Local & remote (SSH) hypervisors (VirtualBox, KVM, Hyper-V) with VM-isolated GUI RPA & screenshot control for AI agents",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -303,7 +303,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.7.vsix",
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.8.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
     "test:manager": "node --test test/vm-manager.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs",

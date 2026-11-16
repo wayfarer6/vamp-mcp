@@ -1,0 +1,136 @@
+{
+  "test": "Print Invoice With Microsoft Print To PDF",
+  "status": "PASS",
+  "duration_seconds": 68.1284498999994,
+  "fps": 2,
+  "frames": 137,
+  "canvas": [
+    2560,
+    1440
+  ],
+  "guest_dimensions": [
+    [
+      1920,
+      1080
+    ]
+  ],
+  "padded": true,
+  "timeline": [
+    {
+      "seconds": 0,
+      "event": "test_start",
+      "name": "Print Invoice With Microsoft Print To PDF"
+    },
+    {
+      "seconds": 0.0,
+      "event": "keyword",
+      "name": "Desktop.Remote Chord"
+    },
+    {
+      "seconds": 0.039,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 1.04,
+      "event": "keyword",
+      "name": "Desktop.Remote Type"
+    },
+    {
+      "seconds": 1.876,
+      "event": "keyword",
+      "name": "Desktop.Remote Press"
+    },
+    {
+      "seconds": 1.909,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 10.01,
+      "event": "keyword",
+      "name": "Desktop.Remote Press"
+    },
+    {
+      "seconds": 10.051,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 11.052,
+      "event": "keyword",
+      "name": "Desktop.Verify Remote Text"
+    },
+    {
+      "seconds": 29.914,
+      "event": "keyword",
+      "name": "Desktop.Analyze Remote Screen"
+    },
+    {
+      "seconds": 30.639,
+      "event": "keyword",
+      "name": "Desktop.Remote Chord"
+    },
+    {
+      "seconds": 30.674,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 33.675,
+      "event": "keyword",
+      "name": "Workflow.Select PDF Printer"
+    },
+    {
+      "seconds": 56.08,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 58.081,
+      "event": "keyword",
+      "name": "Desktop.Remote Type"
+    },
+    {
+      "seconds": 58.855,
+      "event": "keyword",
+      "name": "Desktop.Remote Press"
+    },
+    {
+      "seconds": 58.888,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 62.982,
+      "event": "keyword",
+      "name": "Workflow.Verify PDF Artifact"
+    },
+    {
+      "seconds": 68.127,
+      "event": "keyword",
+      "name": "Contract.Publish Result"
+    },
+    {
+      "seconds": 68.127,
+      "event": "keyword",
+      "name": "Should Be Equal"
+    },
+    {
+      "seconds": 68.128,
+      "event": "keyword",
+      "name": "Report PDF Failure"
+    },
+    {
+      "seconds": 68.128,
+      "event": "keyword",
+      "name": "Contract.Publish Failure If Missing"
+    },
+    {
+      "seconds": 68.128,
+      "event": "test_end",
+      "status": "PASS"
+    }
+  ],
+  "recording_error": null
+}

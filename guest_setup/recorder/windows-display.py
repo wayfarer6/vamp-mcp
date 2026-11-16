@@ -21,7 +21,9 @@ def registry_snapshot():
             'stored_modes':values}
 
 
-def apply():
+def apply(width=1920, height=1080):
+    if (width, height) not in ((1920, 1080), (2560, 1440)):
+        raise ValueError('Supported guest modes are FHD and QHD')
     class Point(ctypes.Structure):
         _fields_=[('x',w.LONG),('y',w.LONG)]
     class Display(ctypes.Structure):
@@ -52,21 +54,21 @@ def apply():
     while True:
         mode=DeviceMode();mode.size=ctypes.sizeof(mode)
         if not enum(None,index,ctypes.byref(mode)):break
-        if (mode.width,mode.height,mode.bits_per_pixel)==(1920,1080,32):
+        if (mode.width,mode.height,mode.bits_per_pixel)==(width,height,32):
             if selected is None or abs(mode.frequency-before.frequency)<abs(selected.frequency-before.frequency):selected=mode
         index+=1
     mode_source='enumerated'
     if selected is None:
         # Dynamic virtual displays may omit a usable mode from the enumerated list.
         # Reuse the current driver DEVMODE and require CDS_TEST before applying.
-        selected=current();selected.width=1920;selected.height=1080;selected.bits_per_pixel=32
+        selected=current();selected.width=width;selected.height=height;selected.bits_per_pixel=32
         mode_source='current_mode_with_tested_target'
     selected.fields=0x00080000|0x00100000|0x00040000|0x00400000 # width/height/bpp/frequency
     tested=change(None,ctypes.byref(selected),None,2,None) # CDS_TEST
     if tested!=0:raise RuntimeError(f'Display driver rejected requested mode: {tested}')
     updated=change(None,ctypes.byref(selected),None,1,None) # CDS_UPDATEREGISTRY
     after=current()
-    verified=(after.width,after.height)==(1920,1080) and updated==0
+    verified=(after.width,after.height)==(width,height) and updated==0
     return {'status':'succeeded' if verified else 'needs_attention','resolution_verified':verified,
             'before':[before.width,before.height],'observed_resolution':[after.width,after.height],
             'mode_source':mode_source,'change_result':int(updated),'restart_required':updated==1,'registry':snapshot,

@@ -166,9 +166,10 @@ test('VM arguments are validated and remote failures stay readable', async () =>
   await assert.rejects(() => tools.start({ vm: '--delete' }), /Invalid VM identifier/);
   await assert.rejects(() => tools.status({ vm: 'bad\nname' }), /Invalid VM identifier/);
   await assert.rejects(() => tools.stop({}), /required/);
-  // No virsh on PATH: the list call explains libvirt is unreachable.
-  await assert.rejects(() => tools.list(), /libvirt is not reachable/);
-  const check = await tools.envCheck();
+  // Simulate an unreachable host independently of installed local hypervisors.
+  const unavailable = createTools({ run: async () => { throw new Error('unavailable test host'); }, config });
+  await assert.rejects(() => unavailable.list(), /libvirt is not reachable/);
+  const check = await unavailable.envCheck();
   assert.equal(check.ready, false);
   assert.ok(check.blockers.some(blocker => blocker.id === 'libvirt'));
   const plan = await tools.envSetup({ dry_run: true, python_venv: false });
@@ -381,4 +382,47 @@ test('the SSH client quotes arguments and maps connection failures to plain lang
   };
   const failing = new client.RemoteSshClient(config, { spawnImpl: denied });
   await assert.rejects(() => failing.call('remote_vm_list'), /SSH authentication failed for dev@lab-host\.local/);
+});
+
+test('remote chords hold modifiers through the target key and release in reverse order', async () => {
+  const { createTools } = await load('tools.mjs');
+  const { resolveConfig } = await load('config.mjs');
+  const calls = [];
+  const tools = createTools({ config: resolveConfig(), run: async (exe, args) => {
+    calls.push(args); return { stdout: '{"return":{}}', stderr: '' };
+  }});
+  await tools.sendKeys({vm: VM_A, hotkey:['super','r']});
+  const events = JSON.parse(calls[0].at(-1)).arguments.events;
+  assert.deepEqual(events.map(e => [e.data.key.data,e.data.down]), [['meta_l',true],['r',true],['r',false],['meta_l',false]]);
+  calls.length = 0;
+  await assert.rejects(() => tools.sendKeys({vm:VM_A,text:'do not send',hotkey:['unknown']}), /Unsupported hotkey/);
+  assert.equal(calls.length,0);
+});
+
+test('actual server entrypoint completes the stdio MCP handshake', async () => {
+  const server = path.join(repo, 'backends/remote_ssh/server.mjs');
+  const child = spawn(process.execPath, [server], {stdio:['pipe','pipe','pipe']});
+  let output = '', error = '';
+  child.stdout.on('data', b => output += b); child.stderr.on('data', b => error += b);
+  child.stdin.end(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'test',version:'1'}}})+'\n');
+  const code = await new Promise(resolve => child.on('close',resolve));
+  assert.equal(code,0,error);
+  assert.equal(JSON.parse(output).result.serverInfo.name,'vamp-remote');
+});
+
+test('remote tablet clicks use separate down/up requests, including release after a failed down', async () => {
+  const { createTools } = await load('tools.mjs');
+  const { resolveConfig } = await load('config.mjs');
+  const calls = [];
+  let failDown = false;
+  const tools = createTools({config:resolveConfig(),run:async (exe,args) => {
+    const payload = JSON.parse(args.at(-1)); calls.push(payload.arguments.events);
+    if(failDown && calls.length === 2) throw new Error('injected delivery failure');
+    return {stdout:'{"return":{}}',stderr:''};
+  }});
+  await tools.mouseClick({vm:VM_A,x:.25,y:.75});
+  assert.deepEqual(calls.map(events => events.map(e => [e.type,e.data.down])), [[['abs',undefined],['abs',undefined]],[['btn',true]],[['btn',false]]]);
+  calls.length=0;failDown=true;
+  await assert.rejects(() => tools.mouseClick({vm:VM_A}), /delivery failure/);
+  assert.equal(calls.at(-1)[0].data.down,false);
 });

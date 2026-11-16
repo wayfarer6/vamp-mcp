@@ -1,12 +1,28 @@
 #!/usr/bin/env python3
 """Stdio VM MCP server. Keep all diagnostic output off stdout."""
 import asyncio
+import logging
+import os
+import sys
+from contextlib import asynccontextmanager
 from typing import Any,Literal
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 from mcp_vm.controller import VMController
 
-mcp=FastMCP('VAMP',instructions='Before repeated CUA, OCR or multimodal work, use the VAMP RPA Library provider rpa_search and rpa_details to find a compatible reviewed skill. Prefer reuse when authorized; read compact results and verify expected outcomes. Fall back to targeted CUA when no suitable skill exists or verification fails. Use VM profiles to keep Debian and Windows RPAs separate. Prefer compact results and OCR. Hyper-V console launch is not RDP input automation. Credentials stay in dedicated local flows.')
+@asynccontextmanager
+async def model_lifespan(server):
+    # Detached workers survive the MCP session and are reused by later calls.
+    if sys.platform != 'win32' and os.environ.get('VAMP_PRELOAD_MODELS', '1') != '0':
+        try:
+            from model_daemon import ensure_services
+            await asyncio.to_thread(ensure_services, wait=False)
+        except (OSError, RuntimeError, TimeoutError) as error:
+            logging.getLogger('vamp').warning('Vision preload unavailable: %s', error)
+    yield {}
+
+
+mcp=FastMCP('VAMP',lifespan=model_lifespan,instructions='Before repeated CUA, OCR or multimodal work, use the VAMP RPA Library provider rpa_search and rpa_details to find a compatible reviewed skill. Prefer reuse when authorized; read compact results and verify expected outcomes. Fall back to targeted CUA when no suitable skill exists or verification fails. Use VM profiles to keep Debian and Windows RPAs separate. Prefer compact results and OCR. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Hyper-V console launch is not RDP input automation. Credentials stay in dedicated local flows.')
 controller=VMController()
 READ=ToolAnnotations(readOnlyHint=True,destructiveHint=False)
 WRITE=ToolAnnotations(readOnlyHint=False,destructiveHint=True)

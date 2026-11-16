@@ -1,0 +1,17 @@
+{
+  "status": "succeeded",
+  "verification": "rendered_pdf_ocr_and_sha256",
+  "sha256": "2805ec94b1d5c1925fc4420c54d86f0485534766e41efdc0a8fc0cf2486dc182",
+  "bytes": 33185,
+  "printer": "Microsoft Print to PDF",
+  "expected_total_krw": 192500,
+  "pdf": "vamp-invoice-example.pdf",
+  "guest_dimensions": [
+    1920,
+    1080
+  ],
+  "recording_canvas": [
+    2560,
+    1440
+  ]
+}

@@ -39,7 +39,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "Recorder setup failed: $LASTEXITCODE" }
     & (Join-Path $root 'vault\setup-guest-vault.ps1')
     $recorderPython = Join-Path ([Environment]::GetFolderPath('Desktop')) 'RPA-Recorder\.venv\Scripts\python.exe'
-    & $recorderPython -c 'import importlib.metadata as m; assert m.version("PyAutoGUI"); assert m.version("pynput")'
+    & $recorderPython (Join-Path $root 'recorder\verify-recorder.py')
     if ($LASTEXITCODE -ne 0) { throw 'Recorder dependency verification failed' }
     $result = @{status='configured';python=$python;recorder_python=$recorderPython;keepassxc_proxy='C:\Program Files\KeePassXC\keepassxc-proxy.exe';veracrypt='C:\Program Files\VeraCrypt\VeraCrypt.exe';passkey_login_verified=$false}
     $result | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'result.json') -Encoding utf8

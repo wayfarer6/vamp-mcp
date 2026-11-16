@@ -1,0 +1,27 @@
+{
+  "format_version": 1,
+  "id": "remote_host_validation",
+  "name": "Windows host remote keyboard and mouse",
+  "version": "0.1.0",
+  "default_entrypoint": "run",
+  "entrypoints": [
+    {
+      "name": "run",
+      "file": "run.robot",
+      "credentials": "none"
+    }
+  ],
+  "python_libraries": [
+    "workflow.py"
+  ],
+  "dependencies": [
+    "mcp",
+    "ocr"
+  ],
+  "skill": "spice-vm-rpa",
+  "outputs": {
+    "summary": "${OUTPUT DIR}/summary.json",
+    "robot_log": "${OUTPUT DIR}/log.html",
+    "robot_report": "${OUTPUT DIR}/report.html"
+  }
+}

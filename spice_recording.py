@@ -15,7 +15,9 @@ def sample(spice):
 class RecordingListener:
     ROBOT_LISTENER_API_VERSION = 3
 
-    def __init__(self):
+    def __init__(self, width=1920, height=1080, strict=False):
+        self.width, self.height = int(width), int(height)
+        self.strict = str(strict).lower() in ('true', '1', 'yes')
         self.output = None
         self.process = None
         self.frame = None
@@ -52,9 +54,11 @@ class RecordingListener:
             return
         image = spice._raw_image()
         self.dimensions.add(image.size)
+        if self.strict and image.size != (self.width, self.height):
+            raise AssertionError(f'Native recording needs {self.width}x{self.height}; guest is {image.size}')
         from PIL import Image
         # Changing boot resolutions are padded, never advertised as native QHD.
-        canvas = Image.new('RGB', (1920, 1080), '#101826')
+        canvas = Image.new('RGB', (self.width, self.height), '#101826')
         if image.width > canvas.width or image.height > canvas.height:
             image.thumbnail(canvas.size)
         canvas.paste(image, ((canvas.width-image.width)//2, (canvas.height-image.height)//2))
@@ -62,7 +66,7 @@ class RecordingListener:
         if self.process is None:
             import imageio_ffmpeg
             self.process = subprocess.Popen([imageio_ffmpeg.get_ffmpeg_exe(), '-hide_banner', '-loglevel', 'error', '-y',
-                '-f', 'rawvideo', '-pixel_format', 'rgb24', '-video_size', '1920x1080', '-framerate', str(self.fps),
+                '-f', 'rawvideo', '-pixel_format', 'rgb24', '-video_size', f'{self.width}x{self.height}', '-framerate', str(self.fps),
                 '-i', 'pipe:0', '-an', '-c:v', 'libx264', '-preset', 'ultrafast', '-crf', '23', '-pix_fmt', 'yuv420p',
                 '-movflags', '+faststart', str(self.output/(self.slug+'.mp4'))], stdin=subprocess.PIPE, stderr=subprocess.PIPE)
         while self.frames < desired-1:
@@ -90,8 +94,8 @@ class RecordingListener:
                 logger.error('SPICE video encoding failed: '+recording_error)
         self.timeline.append({'seconds': round(duration, 3), 'event': 'test_end', 'status': result.status})
         metadata = {'test': data.name, 'status': result.status, 'duration_seconds': duration,
-                    'fps': self.fps, 'frames': self.frames, 'canvas': [1920,1080],
-                    'guest_dimensions': sorted(self.dimensions), 'padded': True, 'timeline': self.timeline,
+                    'fps': self.fps, 'frames': self.frames, 'canvas': [self.width,self.height],
+                    'guest_dimensions': sorted(self.dimensions), 'padded': any(d != (self.width, self.height) for d in self.dimensions), 'timeline': self.timeline,
                     'recording_error': recording_error}
         (self.output/(self.slug+'.json')).write_text(json.dumps(metadata, indent=2))
         self.output = None

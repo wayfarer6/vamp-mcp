@@ -21,6 +21,8 @@ GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골�
 
 사용자가 직접 조작하거나 CUA(화면을 보고 컴퓨터를 조작하는 AI)가 수행한 GUI 작업을 기록하고, 검토한 기록을 Robot Framework·Python RPA로 묶어 두려 합니다. 이후에는 AI가 작업 설명과 입력값만 보고 패키지를 골라 실행하고, 결과 요약을 받으면 됩니다. 좌표나 입력 순서 같은 세부 구현은 로컬 코드에 두고, 필요할 때만 로그와 화면을 확인하는 방식으로 토큰 비용을 줄이는 것이 목적입니다.
 
+정상 재실행은 로컬 검증 후 상태와 증거 경로만 반환하고, 실패할 때 필요한 OCR·YOLO·화면만 확인합니다. 인식 결과 전문이나 이미지를 LLM에 계속 보내면 토큰이 발생하므로 [짧은 결과 반환 원칙](docs/LOW_TOKEN_AUTOMATION.md)을 스킬과 MCP 안내문에 포함했습니다.
+
 하루 동안 Codex와 바이브 코딩으로 만들었습니다. 아직 거친 부분과 빠진 기능이 많습니다. 현재 시험한 환경은 KVM/VNC·SPICE와 VirtualBox이며, 토큰 절감량을 측정한 상태는 아닙니다.
 
 ### 왜 컨테이너(Docker)가 아닌 가상머신(VM)인가?
@@ -28,7 +30,7 @@ GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골�
 많은 에이전트 프로젝트가 가벼운 Docker 컨테이너를 먼저 시도하지만, VAMP는 의도적으로 하이퍼바이저 기반 가상머신(VirtualBox, KVM, Hyper-V)을 선택했습니다:
 
 1. **진짜 Windows GUI 및 엔드포인트 소프트웨어 지원**: 사내 ERP, 공공 행정 포털, 레거시 데스크톱 업무 소프트웨어 및 드라이버는 호스트 커널을 공유하는 리눅스 컨테이너 안에서는 동작하지 않습니다. 완전한 Windows 데스크톱 OS 환경이 필수적입니다.
-2. **가상 하드웨어 인터럽트 입력**: 컨테이너의 X11 합성기나 OS 레벨 가상 입력 주입은 안티 매크로/안티 후킹 모듈에 즉시 탐지되어 차단됩니다. 반면 가상머신은 USB Tablet/키보드 가상 하드웨어 인터럽트 레벨에서 신호를 발생시키므로 게스트 보안 모듈이 물리 장치 입력과 구분하지 못합니다.
+2. **게스트 장치 기반 입력**: 호스트 마우스를 움직이는 대신 하이퍼바이저의 키보드·USB Tablet API로 게스트에 입력합니다. 실제 앱의 입력 반응과 업무 성공 여부는 게스트에서 검증합니다.
 3. **가상 스토리지 및 Removable USB 에뮬레이션**: 외부 하드웨어 보안 토큰이나 암호화 키스토어를 게스트 시스템에 '이동식 USB 드라이브'로 인식시키거나 VeraCrypt VHD 볼륨을 보조 블록 장치로 패스스루하려면 하이퍼바이저 레벨의 하드웨어 스토리지 컨트롤러 에뮬레이션이 필요합니다.
 4. **하드웨어 가상화(VT-x) 레벨의 격리**: 에이전트의 오동작이나 악의적인 스크립트로부터 사용자 호스트 환경을 원천 차단하기 위해, 컨테이너 네임스페이스보다 격리 신뢰도가 높은 하드웨어 샌드박스를 사용합니다.
 
@@ -116,7 +118,7 @@ KVM VM의 화면은 스크린샷을 반복 조회하는 대신 **VNC(RFB) → �
 
 데스크톱이 다른 컴퓨터(홈 서버, 랩 장비, 클라우드 VM)에 있고 지금 쓰는 노트북이나 원격 에이전트에서 제어해야 할 때는 **VAMP Remote (SSH)** 를 사용합니다. VM을 소유한 호스트에서 원격 서버가 돌고, MCP 통신은 SSH 채널 안으로만 오갑니다. 하이퍼바이저 포트를 열지 않으며 게스트 디스크·자격증명·Vault는 원격 호스트를 떠나지 않습니다.
 
-이 모드의 화면은 **스크린샷**입니다. 요청할 때마다 PNG 한 장을 받아 보여 주고, 실시간 스트리밍은 하지 않습니다. VM 기동·정지, 목록·상태 조회, 키 입력, KVM 절대 좌표 클릭, 검토한 RPA 재생까지 원격에서 동작합니다.
+이 모드의 화면은 **스크린샷**입니다. 요청할 때마다 PNG 한 장을 받아 보여 주고, 실시간 스트리밍은 하지 않습니다. VM 기동·정지, 목록·상태 조회, 조합키·텍스트 입력, KVM 절대 좌표 클릭, SDK를 갖춘 VirtualBox의 클릭·이동, 검토한 RPA 재생까지 원격에서 동작합니다.
 
 Vault도 같은 방식의 원격 기능을 가집니다. **VAMP Vault: Set Up Remote Vault (SSH)** 로 원격 호스트에 볼트 서버를 올리면 그 호스트는 `~/.vamp/vault/vault.kdbx` 라는 **자기 볼트**를 따로 가집니다. 로컬 볼트와 원격 볼트는 서버·마스터 암호·세션 캐시를 공유하지 않고, 원격 서버 A와 B도 서로 공유하지 않습니다. 에이전트에게는 **VAMP Vault (Remote) · user@host** 라는 별도 MCP 서버로 보이며, 읽기 승인과 마스터 암호는 이 컴퓨터에 남고 명령은 SSH 표준 입력으로만 전달됩니다. [원격 볼트 안내](vscode-vault-extension/README.md#remote-vaults-ssh)
 
@@ -132,6 +134,22 @@ scripts/remote_host_setup.sh --backend kvm --repo ~/vamp-mcp --dry-run
 [원격 설정 안내](docs/REMOTE_SETUP.md) · [원격 서버 README](backends/remote_ssh/README.md)
 
 ## 실행 영상과 문서
+
+### 원격 제어와 Windows PDF 출력
+
+두 VM 화면은 **FHD 1920×1080 고정**, Robot Framework 녹화 파일은 **QHD 2560×1440·2fps**입니다. 원본을 확대하지 않고 여백을 추가했으며 전체 디코딩을 검사했습니다.
+
+[![Windows 호스트에서 SSH MCP로 Debian 제어](docs/media/windows-remote-fhd-qhd.png)](docs/media/windows-remote-fhd-qhd.mp4)
+
+[Windows 호스트 원격 키보드·SDK 마우스 영상](docs/media/windows-remote-fhd-qhd.mp4): Ubuntu/KVM → Windows 11 호스트(1소켓·8코어·8GiB) → VirtualBox/Debian에서 실제 버튼 클릭 전후 문구를 OCR로 검증했습니다. 물리 Windows 장비 시험은 아닙니다.
+
+[![Windows Microsoft Print to PDF RPA](docs/media/remote-windows-print-pdf.png)](docs/media/remote-windows-print-pdf.mp4)
+
+[Ubuntu 호스트에서 Windows PDF 출력 영상](docs/media/remote-windows-print-pdf.mp4): SSH MCP로 송장을 열고 Windows의 **Microsoft Print to PDF**로 저장한 뒤, 실제 PDF 제작자·송장 번호·합계와 해시를 검증합니다. [재실행 영상](docs/media/remote-windows-print-pdf-replay.mp4) · [결과 PDF](docs/media/vamp-invoice-example.pdf) · [검증 JSON](docs/media/remote-windows-print-pdf-verification.json)
+
+[재현 방법과 범위](docs/REMOTE_PDF_VALIDATION.md) · [PDF RPA](rpas/windows_print_pdf/README.md) · [원격 입력 RPA](rpas/remote_host_validation/README.md) · [GeekNews 소개글 초안](docs/GEEKNEWS_DRAFT.md)
+
+### 기존 시나리오
 
 [![키보드 입력과 OCR 시연](docs/media/keyboard-ocr.gif)](docs/media/keyboard-ocr.mp4)
 

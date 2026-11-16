@@ -29,8 +29,10 @@ VS Code / AI agent            SSH (22, keys only)          Remote host
 | KVM: libvirt + `virsh` (+ `virt-install`, `qemu-img` to create desktops) | hypervisor control | `remote_env_check` |
 | VirtualBox: `VBoxManage` | hypervisor control | `remote_env_check` |
 
-The remote server expects a POSIX shell (Linux, macOS, or WSL/Git Bash on
-Windows). On Windows, run it inside WSL rather than through `cmd.exe`.
+The extension automatic uploader expects a POSIX shell. Native Windows can run
+the VirtualBox remote server with an explicit PowerShell SSH command; see
+[the Windows lab setup](REMOTE_PDF_VALIDATION.md). WSL does not establish native
+Windows VirtualBox SDK support by itself.
 
 KVM guests need a graphics device for screenshots and an absolute pointing
 device (USB tablet) for clicks. Desktops created by VAMP already have both.
@@ -182,8 +184,9 @@ The remote server exposes:
 | `remote_vm_start` | no | Start a desktop headless. |
 | `remote_vm_stop` | no | Graceful guest shutdown; `force` powers off. |
 | `remote_vm_screenshot` | yes | PNG of the guest screen, returned as image data. |
-| `remote_vm_send_keys` | no | Type text and press named keys (US layout). |
-| `remote_vm_mouse_click` | no | Click at fractions of the screen (KVM, absolute pointer). |
+| `remote_vm_send_keys` | no | Type text, sequential `keys`, or simultaneous `hotkey` chords (US layout). |
+| `remote_vm_mouse_move` | no | Move the guest pointer without clicking (VirtualBox needs repository and matching Python SDK). |
+| `remote_vm_mouse_click` | no | Click at fractions of the screen (KVM absolute pointer; VirtualBox with matching Python SDK and repository). |
 | `remote_rpa_run` | no | Replay a reviewed saved RPA with `confirmed=true`. |
 
 Notes for agents:
@@ -218,7 +221,7 @@ Configuration can also come from `VAMP_REMOTE_BACKEND`, `VAMP_LIBVIRT_URI`,
 | `Nothing is listening on host:22` | SSH server down, wrong port, or firewall/VPN route. |
 | `libvirt is not reachable` | `libvirtd` not running, or your user lacks `libvirt` group membership (requires a new session). |
 | `Screenshot failed` | Guest is not running, or it has no graphics device. |
-| `remote_vm_mouse_click` returns `unsupported` | VirtualBox absolute pointer is not implemented; use keyboard navigation or the local VirtualBox MCP server. |
+| `remote_vm_mouse_click` returns `unsupported` | Configure `--repo` and `--python` with the matching VirtualBox SDK; otherwise use keyboard navigation. |
 | `The remote server could not start` | Node.js missing on the remote host, or the uploaded file is incomplete; run Prepare Environment again. |
 | Clicks land in the wrong place | The guest has no absolute pointing device, or a second screen is being captured; check `screen` in `remote_vm_screenshot`. |
 

@@ -13,3 +13,7 @@ Use the VAMP RPA Library MCP provider when available.
 6. If no compatible skill exists or verification fails, use CUA to complete the task with normal authorization. Offer to record/register a reusable RPA afterward when helpful.
 
 A user registers a skill through **RPA Library → Create**, or answers the questions in **Create with AI** and reviews the suggested metadata. The user controls its title, description, search tags, input contract and review checkbox. Recorded text may contain private values; never copy it into metadata or an AI request without the user's explicit action.
+
+## Keep repeated runs inexpensive
+
+Run the saved RPA and its outcome checks locally. For normal success, return only status, verification, a bounded error summary when present, and evidence paths; do not load or forward full OCR text, YOLO boxes, base64 images, Robot logs or source into the LLM context. Read a targeted query/page/region only when the result is ambiguous, verification fails, the UI changes or the user requests inspection. Avoid polling unchanged screenshots through the model. Local OCR/YOLO saves model tokens only when observations stay local or compact; it still uses compute, and no percentage saving is established without a comparable measurement. See [the output policy](../../../docs/LOW_TOKEN_AUTOMATION.md).

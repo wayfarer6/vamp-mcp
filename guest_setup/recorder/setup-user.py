@@ -18,7 +18,10 @@ if not (folder/'PyAutoGuiRecorder.py').exists():
     with zipfile.ZipFile(media/'recorder.zip') as archive:
         archive.extractall(folder)
 for name in ['prepare-recording.py','RECORDING-GUIDE.txt','vamp-recorder.py','RECORDER-LICENSE']:
-    shutil.copy2(media/name,folder/name)
+    destination=folder/name
+    if destination.exists():destination.chmod(0o644)
+    # ISO sources may be read-only; copy contents without propagating that flag.
+    shutil.copyfile(media/name,destination)
 subprocess.run([sys.executable,str(media/'install-display-startup.py')],check=True)
 venv.create(folder/'.venv',with_pip=True)
 python = folder/'.venv/Scripts/python.exe'

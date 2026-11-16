@@ -1,0 +1,96 @@
+{
+  "test": "Windows Host Remote Keyboard And Mouse",
+  "status": "PASS",
+  "duration_seconds": 64.42462690299999,
+  "fps": 2,
+  "frames": 129,
+  "canvas": [
+    2560,
+    1440
+  ],
+  "guest_dimensions": [
+    [
+      1920,
+      1080
+    ]
+  ],
+  "padded": true,
+  "timeline": [
+    {
+      "seconds": 0,
+      "event": "test_start",
+      "name": "Windows Host Remote Keyboard And Mouse"
+    },
+    {
+      "seconds": 0.0,
+      "event": "keyword",
+      "name": "Workflow.Launch Remote Fixture"
+    },
+    {
+      "seconds": 29.074,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 39.146,
+      "event": "keyword",
+      "name": "Desktop.Remote Press"
+    },
+    {
+      "seconds": 39.214,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 42.331,
+      "event": "keyword",
+      "name": "Desktop.Verify Remote Text"
+    },
+    {
+      "seconds": 51.909,
+      "event": "keyword",
+      "name": "Desktop.Remote Click"
+    },
+    {
+      "seconds": 52.476,
+      "event": "keyword",
+      "name": "Desktop.Wait And Capture"
+    },
+    {
+      "seconds": 54.476,
+      "event": "keyword",
+      "name": "Desktop.Verify Remote Text"
+    },
+    {
+      "seconds": 64.423,
+      "event": "keyword",
+      "name": "Workflow.Remote Validation Result"
+    },
+    {
+      "seconds": 64.423,
+      "event": "keyword",
+      "name": "Contract.Publish Result"
+    },
+    {
+      "seconds": 64.423,
+      "event": "keyword",
+      "name": "Should Be Equal"
+    },
+    {
+      "seconds": 64.424,
+      "event": "keyword",
+      "name": "Report Failure"
+    },
+    {
+      "seconds": 64.424,
+      "event": "keyword",
+      "name": "Contract.Publish Failure If Missing"
+    },
+    {
+      "seconds": 64.425,
+      "event": "test_end",
+      "status": "PASS"
+    }
+  ],
+  "recording_error": null
+}

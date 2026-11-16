@@ -7,10 +7,10 @@ import path from 'node:path';
 import { describeConfig } from './config.mjs';
 import { clickEvents, parseDomainIds, parseDomainInfo, parseDomainXml, CLICK_BUTTONS } from './libvirt.mjs';
 import { parseMachineReadable, parseVmList, vboxStatus, vboxVm } from './virtualbox.mjs';
-import { keyEvents, SCANCODES } from './input.mjs';
+import { keyEvents, chordKeys, SCANCODES } from './input.mjs';
 import { toPng } from './png.mjs';
 
-export const VERSION = '0.1.7';
+export const VERSION = '0.1.8';
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_SCREENSHOT_BYTES = 12 * 1024 * 1024;
 
@@ -221,11 +221,12 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     }
   }
 
-  async function sendKeys({ vm, text = '', keys = [], hold_time_ms }) {
+  async function sendKeys({ vm, text = '', keys = [], hotkey = [], hold_time_ms }) {
     const target = assertVm(vm);
     const typed = String(text || '');
     const named = Array.isArray(keys) ? keys : [];
-    if (!typed && !named.length) throw new Error('Provide text to type, named keys, or both.');
+    const chord = chordKeys(hotkey);
+    if (!typed && !named.length && !chord.length) throw new Error('Provide text to type, named keys, or both.');
     if (typed.length > 2000) throw new Error('Type at most 2000 characters per call.');
     if (config.backend === 'virtualbox') {
       if (typed) {
@@ -233,6 +234,8 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
         if (!result.ok) throw new Error(`Could not type into ${target}: ${detail(result)}`);
       }
       const scan = [];
+      const chordCodes = chord.map(({ key }) => SCANCODES[key]);
+      if (chordCodes.some(code => code === undefined)) throw new Error('Unsupported VirtualBox hotkey');
       const unsupported = [];
       for (const key of named) {
         const code = SCANCODES[String(key).toLowerCase().replace(/[\s_-]/g, '')];
@@ -245,6 +248,14 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
         if (code > 0xff) scan.push('e0');
         scan.push(((code & 0xff) | 0x80).toString(16).padStart(2, '0'));
       }
+      for (const code of chordCodes) {
+        if (code > 0xff) scan.push('e0');
+        scan.push((code & 0xff).toString(16).padStart(2, '0'));
+      }
+      for (const code of [...chordCodes].reverse()) {
+        if (code > 0xff) scan.push('e0');
+        scan.push(((code & 0xff) | 0x80).toString(16).padStart(2, '0'));
+      }
       if (scan.length) {
         const result = await vbox(['controlvm', target, 'keyboardputscancode', ...scan], { timeoutMs: 30000 });
         if (!result.ok) throw new Error(`Could not press keys in ${target}: ${detail(result)}`);
@@ -253,10 +264,12 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       return { status: 'ok', vm: target, typed_characters: typed.length, keys: named, note: 'Input was delivered to the guest keyboard device; the guest application may still ignore it.' };
     }
     const { events, unsupported } = keyEvents({ text: typed, keys: named });
+    events.push(...chord.map(({ qcode }) => ({ type: 'key', data: { down: true, key: { type: 'qcode', data: qcode } } })),
+      ...[...chord].reverse().map(({ qcode }) => ({ type: 'key', data: { down: false, key: { type: 'qcode', data: qcode } } })));
     if (!events.length) throw new Error('No supported characters or keys were provided.');
-    for (let index = 0; index < events.length; index += 240) {
-      await qmp(target, { execute: 'input-send-event', arguments: { events: events.slice(index, index + 240) } });
-      if (hold_time_ms) await new Promise(resolve => setTimeout(resolve, Math.min(1000, Math.max(0, Number(hold_time_ms)))));
+    for (let index = 0; index < events.length; index += 8) {
+      await qmp(target, { execute: 'input-send-event', arguments: { events: events.slice(index, index + 8) } });
+      await new Promise(resolve => setTimeout(resolve, Math.min(1000, Math.max(15, Number(hold_time_ms) || 15))));
     }
     return {
       status: 'ok',
@@ -272,16 +285,36 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
   async function mouseClick({ vm, x = 0.5, y = 0.5, button = 'left', double = false }) {
     const target = assertVm(vm);
     if (!CLICK_BUTTONS.includes(button)) throw new Error(`Unsupported button "${button}".`);
+    if (config.backend === 'virtualbox' && config.repo) {
+      const measured = await screenshot({ vm: target, include_image: false });
+      const { width, height } = measured.text;
+      const px = Math.round(positiveNumber(x, 0.5, 0, 1) * (width - 1));
+      const py = Math.round(positiveNumber(y, 0.5, 0, 1) * (height - 1));
+      const script = path.join(config.repo, 'backends', 'virtualbox', 'mouse_click.py');
+      const result = await exec(config.python, [script, target, String(px), String(py), button, ...(double ? ['--double'] : [])]);
+      if (!result.ok) throw new Error(`VirtualBox mouse input failed: ${detail(result)}`);
+      return { status: 'ok', vm: target, backend: 'virtualbox', pixels: [px, py],
+        note: 'SDK input dispatched; verify the application result with a fresh screenshot.' };
+    }
     if (config.backend === 'virtualbox') {
       return {
         status: 'unsupported',
         vm: target,
         backend: 'virtualbox',
-        message: 'Absolute pointer injection is only implemented for KVM guests over the QEMU monitor. For VirtualBox use the VAMP VirtualBox MCP server on that host, or keyboard navigation, instead.',
+        message: 'KVM uses QEMU absolute input. VirtualBox requires --repo pointing to VAMP and --python with the matching VirtualBox SDK installed.',
       };
     }
     const events = clickEvents({ x: positiveNumber(x, 0.5, 0, 1), y: positiveNumber(y, 0.5, 0, 1), button, double: Boolean(double) });
-    await qmp(target, { execute: 'input-send-event', arguments: { events } });
+    // USB tablets can coalesce down/up pairs from a single monitor batch.
+    await qmp(target, { execute: 'input-send-event', arguments: { events: events.slice(0, 2) } });
+    for (let index = 2; index < events.length; index += 2) {
+      try {
+        await qmp(target, { execute: 'input-send-event', arguments: { events: [events[index]] } });
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
+      finally { await qmp(target, { execute: 'input-send-event', arguments: { events: [events[index + 1]] } }); }
+      if (index + 2 < events.length) await new Promise(resolve => setTimeout(resolve, 100));
+    }
     return {
       status: 'ok',
       vm: target,
@@ -291,6 +324,21 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       double: Boolean(double),
       note: 'Coordinates are fractions of the guest screen, so they follow the last screenshot. The guest needs an absolute pointing device (USB tablet); otherwise the click is ignored.',
     };
+  }
+
+  async function mouseMove({vm, x = 0.5, y = 0.5}) {
+    const target = assertVm(vm);
+    const fx = positiveNumber(x, .5, 0, 1), fy = positiveNumber(y, .5, 0, 1);
+    if (config.backend === 'kvm') {
+      await qmp(target, {execute:'input-send-event', arguments:{events:clickEvents({x:fx,y:fy}).slice(0,2)}});
+    } else {
+      if (!config.repo) return {status:'unsupported',message:'VirtualBox move requires --repo and a matching Python SDK'};
+      const measured = await screenshot({vm:target, include_image:false});
+      const result = await exec(config.python, [path.join(config.repo,'backends','virtualbox','mouse_move.py'),target,
+        String(Math.round(fx*(measured.text.width-1))),String(Math.round(fy*(measured.text.height-1)))]);
+      if (!result.ok) throw new Error(`VirtualBox mouse move failed: ${detail(result)}`);
+    }
+    return {status:'ok',vm:target,x:fx,y:fy,action:'move',note:'Input dispatched; observe the guest to verify.'};
   }
 
   async function rpaRun({ registry, id, vm_id, inputs = {}, confirmed = false, timeout_ms }) {
@@ -339,7 +387,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
   async function envCheck() {
     const checks = [];
     const add = (id, label, state, value, fix) => checks.push({ id, label, status: state, detail: value, fix });
-    add('platform', 'Remote host operating system', process.platform === 'win32' ? 'warn' : 'ok', `${process.platform} ${process.arch}`, process.platform === 'win32' ? 'This server expects a POSIX shell for the SSH command line. On Windows, run it inside WSL or configure a bash login shell for SSH.' : undefined);
+    add('platform', 'Remote host operating system', 'ok', `${config.platform} ${process.arch}`, config.platform === 'win32' ? 'Native VirtualBox stdio is supported. For native Windows SSH use an explicit PowerShell launch command; the extension automatic uploader uses a POSIX shell.' : undefined);
     const nodeVersion = process.versions.node;
     add('node', 'Node.js runtime for this server', compare(nodeVersion, '20.0.0') >= 0 ? 'ok' : 'warn', `v${nodeVersion}`, compare(nodeVersion, '20.0.0') >= 0 ? undefined : 'Node.js 20 or newer is recommended on the remote host.');
 
@@ -604,7 +652,8 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
         properties: {
           vm: { type: 'string', description: 'VM name or UUID.' },
           text: { type: 'string', description: 'Literal text to type.' },
-          keys: { type: 'array', items: { type: 'string' }, description: 'Named keys such as enter, tab, esc, ctrl, alt, f5, up.' },
+          keys: { type: 'array', items: { type: 'string' }, description: 'Sequential key presses, such as enter or tab.' },
+          hotkey: { type: 'array', items: { type: 'string' }, maxItems: 8, description: 'Simultaneous chord after text/keys, e.g. ["super","r"] or ["ctrl","p"].' },
           hold_time_ms: { type: 'number', description: 'Pause between batches of key events.' },
         },
         required: ['vm'],
@@ -613,9 +662,15 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       handler: args => sendKeys(args),
     },
     {
+      name:'remote_vm_mouse_move',title:'Move the remote guest pointer',
+      description:'Move the guest absolute pointer without clicking. Fractions match the guest screenshot; VirtualBox needs --repo and matching SDK.',
+      inputSchema:{type:'object',properties:{vm:{type:'string'},x:{type:'number',minimum:0,maximum:1},y:{type:'number',minimum:0,maximum:1}},required:['vm','x','y'],additionalProperties:false},
+      handler: args => mouseMove(args),
+    },
+    {
       name: 'remote_vm_mouse_click',
       title: 'Click in a remote desktop',
-      description: 'Click at a point given as fractions of the guest screen (0-1), so it matches the last screenshot. KVM only; requires an absolute pointing device.',
+      description: 'Click at a point given as fractions of the guest screen (0-1), so it matches the last screenshot. Requires an absolute pointing device; VirtualBox also needs --repo and a Python SDK runtime.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -651,5 +706,5 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     },
   ];
 
-  return { tools, envCheck, envSetup, list, status, start, stop, screenshot, sendKeys, mouseClick, rpaRun };
+  return { tools, envCheck, envSetup, list, status, start, stop, screenshot, sendKeys, mouseClick, mouseMove, rpaRun };
 }
