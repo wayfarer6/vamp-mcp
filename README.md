@@ -103,7 +103,7 @@ Use the MCP servers directly from VS Code, Codex, or another stdio MCP client wi
 - [`vamp-mcp`](https://www.npmjs.com/package/vamp-mcp): VirtualBox and KVM/libvirt control, plus the reviewed RPA library.
 - [`vamp-mcp-vault`](https://www.npmjs.com/package/vamp-mcp-vault): KeePassXC credentials and optional VeraCrypt volumes.
 
-> VAMP 0.1.8 and Vault 0.1.6 are public on npm. The VAMP 0.1.9 commands below target the creation/startup fixes and will be available after release verification.
+> VAMP 0.1.8 and Vault 0.1.6 are public on npm. VAMP 0.1.9 is released on GitHub; its npm registry publication is awaiting browser authentication. Until it is available in the registry, install the tested release tarball with `npm install -g https://github.com/wayfarer6/vamp-mcp/releases/download/v0.1.9/vamp-mcp-0.1.9.tgz`.
 
 Once the real releases are available, install both packages:
 
@@ -126,7 +126,7 @@ npm installation does not automatically register every client, install a hypervi
 
 ## npm으로 MCP 서버 설치
 
-> VAMP 0.1.8과 Vault 0.1.6은 npm에 공개됐습니다. 아래의 VAMP 0.1.9 설치 안내는 생성·기동 수정 버전의 게시 검증 후 사용할 수 있습니다.
+> VAMP 0.1.8과 Vault 0.1.6은 npm에 공개됐습니다. 0.1.9는 GitHub에 릴리스했으며 npm 레지스트리 게시 인증을 기다리고 있습니다. 인증 전에도 `npm install -g https://github.com/wayfarer6/vamp-mcp/releases/download/v0.1.9/vamp-mcp-0.1.9.tgz`로 검증한 릴리스 파일을 설치할 수 있습니다.
 
 VS Code 확장 없이 MCP 서버만 사용하려면 npm으로 설치할 수 있습니다. Node.js 22 이상이 필요합니다. 패키지는 **VAMP와 Vault 두 개**이며, VirtualBox와 KVM은 VAMP 안에서 선택합니다.
 
