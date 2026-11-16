@@ -86,7 +86,7 @@ class RecordedWorkflow:
             raise AssertionError('Recorded absolute pointer input requires SPICE CLIENT mode')
 
     def _scan(self,key):
-        from spice_robot import SCANCODES,SHIFTED
+        from guest_keys import SCANCODES,SHIFTED
         key=key_name(key)
         base=SHIFTED.get(key,key.lower())
         code={**SCANCODES,**EXTRA_SCANS}.get(base)

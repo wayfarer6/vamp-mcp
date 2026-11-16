@@ -24,7 +24,7 @@ export const TOOLS = {
     repo: 'keepassxreboot/keepassxc',
     versionArgs: ['--version'],
     manual: {
-      win32: 'winget install --id KeePassXCTeam.KeePassXC -e',
+      win32: 'winget install --id Microsoft.VCRedist.2015+.x64 -e; if ($LASTEXITCODE -eq 0) { winget install --id KeePassXCTeam.KeePassXC -e }',
       darwin: 'brew install keepassxc',
       linux: 'sudo apt install keepassxc   # or: flatpak install flathub org.keepassxc.KeePassXC',
     },
@@ -124,8 +124,19 @@ export function standardLocations(tool, platform = process.platform, env = proce
   return ['/usr/bin/veracrypt', '/usr/local/bin/veracrypt', '/snap/bin/veracrypt'];
 }
 
-export function cliVersionArgs(tool) {
+export function cliVersionArgs(tool, platform = process.platform) {
+  if (tool === 'veracrypt' && platform !== 'win32') return ['--text', '--version'];
   return TOOLS[tool]?.versionArgs ?? ['--version'];
+}
+
+/** Windows VeraCrypt is a GUI executable, not the Unix console program. */
+export async function probeCli(command, tool, { platform = process.platform, env = process.env } = {}) {
+  if (tool === 'veracrypt' && platform === 'win32') {
+    return run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      '(Get-Item -LiteralPath $env:VAMP_PROBE_BINARY -ErrorAction Stop).VersionInfo.ProductVersion'],
+    { timeout: 20000, env: { ...env, VAMP_PROBE_BINARY: command } });
+  }
+  return run(command, cliVersionArgs(tool, platform), { timeout: 20000, env, allowFailure: true });
 }
 
 export function manualInstructions(tool, platform = process.platform) {
@@ -212,7 +223,7 @@ export async function resolveCli(tool, { binDir, override, platform = process.pl
     let version = null;
     if (verify) {
       try {
-        const result = await run(candidate.path, cliVersionArgs(tool), { timeout: 20000, env, allowFailure: true });
+        const result = await probeCli(candidate.path, tool, { platform, env });
         version = `${result.stdout} ${result.stderr}`.split('\n').map(line => line.trim()).find(line => /\d+\.\d+/.test(line)) ?? null;
         if (!version) {
           // A file that exists but cannot answer --version (missing library, wrong
@@ -434,6 +445,12 @@ export async function installCli(tool, { binDir, platform = process.platform, ar
       }
     } catch (error) {
       checksum = { status: 'unavailable', error: cleanError(error.message) };
+    }
+
+    if (checksum.status !== 'verified') {
+      await rm(archive, { force: true });
+      return { status: 'checksum_unavailable', tool, asset: asset.name, checksum,
+        error: 'Publisher SHA-256 unavailable; refusing to execute unverified download.' };
     }
 
     if (/\.AppImage$/i.test(asset.name)) {

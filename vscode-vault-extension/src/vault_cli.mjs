@@ -1,11 +1,12 @@
 // VAMP Vault — thin, auditable wrapper around keepassxc-cli and veracrypt.
 //
 // Only this module talks to the two CLI programs. Passwords reach them over
-// stdin (never argv), so they do not appear in a process list, and every
+// stdin (or VeraCrypt's native Windows dialog, never argv), and every
 // method returns plain data instead of printing anything.
 import path from 'node:path';
+import { spawn } from 'node:child_process';
 import { access, mkdir, stat } from 'node:fs/promises';
-import { cleanError, run } from './downloader.mjs';
+import { cleanError, probeCli, run } from './downloader.mjs';
 
 /** keepassxc-cli wants one password per line on stdin. */
 const lines = values => values.filter(value => value !== undefined && value !== null).map(value => `${value}\n`).join('');
@@ -106,7 +107,7 @@ export class VaultCli {
     const cli = tool === 'veracrypt' ? this.veracryptCli : this.keepassxcCli;
     if (!cli) return null;
     try {
-      const result = await run(cli, ['--version'], { timeout: 20000, env: this.env, allowFailure: true });
+      const result = await probeCli(cli, tool, { platform: this.platform, env: this.env });
       return `${result.stdout} ${result.stderr}`.split('\n').map(line => line.trim()).find(detail => /\d+\.\d+/.test(detail)) ?? null;
     } catch { return null; }
   }
@@ -255,6 +256,7 @@ export class VaultCli {
 
   async veracrypt(args, { password, timeout = 300000, allowFailure = false } = {}) {
     const cli = this.requireVeracrypt();
+    if (this.platform === 'win32') throw new Error('Use the native Windows VeraCrypt operation; Unix console arguments are unsupported.');
     const base = ['--text', '--non-interactive'];
     if (password !== undefined) base.push('--stdin');
     const result = await run(cli, [...base, ...args], { timeout, env: this.env, input: password !== undefined ? lines([password]) : '', allowFailure });
@@ -265,7 +267,7 @@ export class VaultCli {
 
   async createVolume({ file = this.volumePath, password, sizeBytes = 512 * 1024 * 1024, filesystem = 'fat', encryption = 'AES', hash = 'SHA-512', quick = true, pim, overwrite = false } = {}) {
     if (!file) throw new Error('No volume path was given and no default volume is configured.');
-    if (!password) throw new Error('A password is required to create a VeraCrypt volume.');
+    if (!password && this.platform !== 'win32') throw new Error('A password is required to create a VeraCrypt volume.');
     if (!overwrite && (await exists(file))) {
       const error = new Error(`A volume already exists at ${file}. Refusing to overwrite it.`);
       error.code = 'already_exists';
@@ -273,6 +275,15 @@ export class VaultCli {
     }
     if (sizeBytes < 1024 * 1024) throw new Error('Volume size must be at least 1 MiB.');
     await mkdir(path.dirname(file), { recursive: true });
+    if (this.platform === 'win32') {
+      const wizard = path.join(path.dirname(this.requireVeracrypt()), 'VeraCrypt Format.exe');
+      await access(wizard);
+      const process = spawn(wizard, [], { env: this.env, stdio: 'ignore', windowsHide: false });
+      await new Promise((resolve, reject) => { process.once('spawn', resolve); process.once('error', reject); });
+      process.unref();
+      return { status: 'interactive_setup_required', created: false, file, size_bytes: sizeBytes,
+        wizard_pid: process.pid, hint: 'Complete volume creation in the native VeraCrypt wizard. Enter the volume password there; it is not passed on the command line.' };
+    }
     const args = ['--create', file, `--size=${Math.round(sizeBytes)}`, `--encryption=${encryption}`, `--hash=${hash}`, `--filesystem=${filesystem}`, '--volume-type=normal'];
     if (quick) args.push('--quick');
     if (pim) args.push(`--pim=${pim}`);
@@ -295,6 +306,20 @@ export class VaultCli {
   async mountVolume({ file = this.volumePath, mountPoint = this.mountPoint, password, pim, keyFiles, mountOptions, readOnly = false, confirm = false, slot } = {}) {
     if (!file) throw new Error('No volume path was given and no default volume is configured.');
     if (!mountPoint) throw new Error('No mount point is configured.');
+    if (this.platform === 'win32') {
+      const letter = String(mountPoint).match(/^([a-z]):\\?$/i)?.[1]?.toUpperCase();
+      if (!letter) throw new Error('Use a Windows drive letter such as V: for the mount point.');
+      if (!(await exists(file))) throw new Error('The volume file does not exist.');
+      const args = ['/q', '/v', file, '/l', letter, '/m', 'rm', '/c', 'n', '/h', 'n'];
+      if (readOnly) args.push('/m', 'ro');
+      if (pim) args.push('/pim', String(pim));
+      for (const key of keyFiles ?? []) args.push('/k', key);
+      // The native password dialog keeps the password out of argv and MCP output.
+      const result = await run(this.requireVeracrypt(), args, { timeout: 300000, env: this.env, allowFailure: true });
+      const mounted = (await this.listVolumes()).mounted.some(item => item.mount_point === `${letter}:`);
+      return { mounted, file, mount_point: `${letter}:`, read_only: Boolean(readOnly),
+        password_source: 'native_windows_dialog', exit_code: result.code };
+    }
     if (!password) throw new Error('A password is required to mount the volume.');
     await mkdir(mountPoint, { recursive: true }).catch(() => {});
     const args = ['--mount', file, mountPoint];
@@ -321,6 +346,14 @@ export class VaultCli {
   }
 
   async unmountVolume({ mountPoint = this.mountPoint, all = false } = {}) {
+    if (this.platform === 'win32') {
+      const letter = String(mountPoint ?? '').match(/^([a-z]):\\?$/i)?.[1]?.toUpperCase();
+      if (!all && !letter) throw new Error('Use a Windows drive letter such as V: for the mount point.');
+      const result = await run(this.requireVeracrypt(), ['/q', '/u', ...(all ? [] : [letter])], { timeout: 120000, env: this.env, allowFailure: true });
+      const remaining = (await this.listVolumes()).mounted;
+      return { unmounted: result.code === 0 && (all ? remaining.length === 0 : !remaining.some(item => item.mount_point === `${letter}:`)),
+        mount_point: all ? null : `${letter}:`, exit_code: result.code };
+    }
     const args = all || !mountPoint ? ['-u'] : ['-u', mountPoint];
     const result = await this.veracrypt(args, { timeout: 120000, allowFailure: true });
     const text = `${result.stdout}${result.stderr}`;
@@ -333,6 +366,14 @@ export class VaultCli {
 
   async listVolumes() {
     if (!this.veracryptCli) return { available: false, mounted: [], slots: [] };
+    if (this.platform === 'win32') {
+      const script = `Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class VAMPDrive { [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern uint QueryDosDevice(string name, StringBuilder target, int length); }';
+        $items=@(foreach($drive in [IO.DriveInfo]::GetDrives()) { $name=$drive.Name.Substring(0,2); $buffer=[Text.StringBuilder]::new(4096); if([VAMPDrive]::QueryDosDevice($name,$buffer,4096) -and $buffer.ToString() -match '^\\\\Device\\\\(?:VeraCrypt|TrueCrypt)Volume') { @{mount_point=$name;device=$buffer.ToString();volume=$null;slot=[int][char]$name[0]-64} } });
+        ConvertTo-Json -InputObject $items -Compress`;
+      const result = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { timeout: 30000, env: this.env });
+      const mounted = JSON.parse(result.stdout || '[]');
+      return { available: true, mounted, slots: mounted.map(item => item.slot) };
+    }
     const result = await this.veracrypt(['-l', '-v'], { timeout: 60000, allowFailure: true });
     const text = `${result.stdout}${result.stderr}`;
     if (/no volumes mounted/i.test(text)) return { available: true, mounted: [], slots: [] };

@@ -1,0 +1,11 @@
+# Optional stdio MCP server; install the host backend requirements separately.
+mcp==1.30.0
+robotframework==7.5.1
+
+pycdlib==1.14.0
+
+# Shared VNC control and optional Robot video recording
+asyncvnc==1.3.0
+imageio-ffmpeg==0.8.1
+PyYAML>=6.0
+requests>=2.31

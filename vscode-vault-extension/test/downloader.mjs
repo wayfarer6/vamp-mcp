@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import os from 'node:os';
 import path from 'node:path';
 import { mkdtemp, readdir, rm, stat } from 'node:fs/promises';
-import { cliStatus, detectPlatform, ensureClis, run } from '../src/downloader.mjs';
+import { cliStatus, cliVersionArgs, detectPlatform, ensureClis, run } from '../src/downloader.mjs';
 
 const requested = process.argv.slice(2).filter(name => ['keepassxc', 'veracrypt'].includes(name));
 const tools = requested.length ? requested : ['keepassxc', 'veracrypt'];
@@ -45,7 +45,7 @@ for (const tool of tools) {
       console.log('  ! checksum was not verified — treat this installation with care');
       failures += 1;
     }
-    const version = await run(entry.path, ['--version'], { allowFailure: true });
+    const version = await run(entry.path, cliVersionArgs(tool), { allowFailure: true });
     assert.equal(version.code, 0, `${tool} did not run after installation`);
     console.log(`  ran:      ${`${version.stdout}${version.stderr}`.split('\n')[0].trim()}`);
     const files = await readdir(binDir);

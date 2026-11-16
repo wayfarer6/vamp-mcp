@@ -14,14 +14,20 @@ $ErrorActionPreference = 'Stop'
 
 Write-Output "=== VAMP Vault Guest Setup: KeePassXC, VeraCrypt & Passkey ==="
 
+# The standalone winget path needs the same prerequisite as offline setup.
+# Stop before KeePassXC if the runtime cannot be installed and verified.
+$vcRuntime = & (Join-Path $PSScriptRoot 'Install-VCRuntime.ps1')
+
 # 1. Install KeePassXC
 $keepass = Get-Command keepassxc.exe -ErrorAction SilentlyContinue
+if (-not $keepass -and (Test-Path 'C:\Program Files\KeePassXC\keepassxc.exe')) { $keepass = @{Source='C:\Program Files\KeePassXC\keepassxc.exe'} }
 if (-not $keepass) {
     Write-Output "[1/4] Installing KeePassXC via winget..."
     try {
         winget install --exact --id KeePassXCTeam.KeePassXC --scope machine --accept-package-agreements --accept-source-agreements --silent
+        if ($LASTEXITCODE -notin @(0, 3010)) { throw "KeePassXC winget exit code: $LASTEXITCODE" }
     } catch {
-        Write-Warning "winget install failed; attempting direct download fallback..."
+        throw "KeePassXC installation failed: $_"
     }
 } else {
     Write-Output "[1/4] KeePassXC already installed: $($keepass.Source)"
@@ -29,6 +35,7 @@ if (-not $keepass) {
 
 # Locate KeePassXC installation
 $proxyPath = "C:\Program Files\KeePassXC\keepassxc-proxy.exe"
+if (-not (Test-Path -LiteralPath $proxyPath)) { throw "KeePassXC proxy was not installed: $proxyPath" }
 
 # 2. Register KeePassXC-Browser Native Messaging Host for Passkey support
 Write-Output "[2/4] Registering KeePassXC-Browser native messaging for Chrome/Edge Passkeys..."
@@ -63,12 +70,14 @@ Write-Output "Native messaging registered at: $manifestPath"
 
 # 3. Install VeraCrypt CLI
 $veracrypt = Get-Command VeraCrypt.exe -ErrorAction SilentlyContinue
+if (-not $veracrypt -and (Test-Path 'C:\Program Files\VeraCrypt\VeraCrypt.exe')) { $veracrypt = @{Source='C:\Program Files\VeraCrypt\VeraCrypt.exe'} }
 if (-not $veracrypt) {
     Write-Output "[3/4] Installing VeraCrypt via winget..."
     try {
         winget install --exact --id IDRIX.VeraCrypt --scope machine --accept-package-agreements --accept-source-agreements --silent
+        if ($LASTEXITCODE -notin @(0, 3010)) { throw "VeraCrypt winget exit code: $LASTEXITCODE" }
     } catch {
-        Write-Warning "winget install failed for VeraCrypt."
+        throw "VeraCrypt installation failed: $_"
     }
 } else {
     Write-Output "[3/4] VeraCrypt already installed: $($veracrypt.Source)"
@@ -105,10 +114,10 @@ if "%HC_PATH%"=="" (
 )
 
 echo Found vault container: %HC_PATH%
-set /p "PASSWORD=Enter Master Password for Vault: "
+rem VeraCrypt asks for the password in its guest GUI; never use /p.
 
 :: 2. Mount with /m rm (Mount volume as removable media)
-:: This flag forces Windows and bank NPKI modules to detect the drive as a USB Flash Drive!
+:: Requests VeraCrypt removable media mode; application compatibility needs separate verification.
 set "VC_EXE=C:\Program Files\VeraCrypt\VeraCrypt.exe"
 if not exist "%VC_EXE%" (
     echo [ERROR] VeraCrypt not found at %VC_EXE%!
@@ -117,11 +126,11 @@ if not exist "%VC_EXE%" (
 )
 
 echo Mounting %HC_PATH% as Removable USB drive...
-"%VC_EXE%" /q /v "%HC_PATH%" /m rm /p "%PASSWORD%"
+"%VC_EXE%" /v "%HC_PATH%" /m rm /a
 
 if %ERRORLEVEL% equ 0 (
     echo [SUCCESS] Vault mounted successfully as Removable Media!
-    echo Financial security programs will now see your certificates under 'Removable Disk'.
+    echo Check the guest drive before proceeding with authentication.
 ) else (
     echo [ERROR] Failed to mount vault (code %ERRORLEVEL%).
 )
@@ -130,6 +139,10 @@ pause
 
 Set-Content -LiteralPath (Join-Path $toolsDir 'Mount-Vault-USB.cmd') -Value $mountScript -Encoding ascii
 
-Write-Output "=== VAMP Vault Guest Setup Completed Successfully! ==="
-Write-Output "KeePassXC Passkey host: Registered for Chrome & Edge"
+$vcPath = 'C:\Program Files\VeraCrypt\VeraCrypt.exe'
+if (-not (Test-Path -LiteralPath $vcPath)) { throw "VeraCrypt was not installed: $vcPath" }
+$result = @{ status = 'configured'; keepassxc_proxy = $proxyPath; veracrypt = $vcPath; native_messaging_registered = $true; browser_extension_installed = $false; passkey_login_verified = $false }
+$result | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $toolsDir 'setup-result.json') -Encoding utf8
+Write-Output "=== VAMP Vault Guest Setup Configured (passkey login not verified) ==="
+Write-Output "KeePassXC native messaging host: registered for Chrome & Edge"
 Write-Output "Removable Mount helper: $toolsDir\Mount-Vault-USB.cmd"

@@ -71,6 +71,23 @@ server.tool('vm_recording_share','Prepare host recording share (no overwriting e
     });child.stdin.end(JSON.stringify(args));
   });return result(JSON.parse(output));
 });
+async function transferAction(action,values) {
+  const script=fileURLToPath(new URL('./transfers.py',import.meta.url));
+  const output=await new Promise((resolve,reject)=>{
+    const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{timeout:180000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
+      if(error && !stdout)reject(new Error(stderr || error.message));else resolve(stdout);
+    });child.stdin.end(JSON.stringify({action,...values}));
+  });return JSON.parse(output);
+}
+server.tool('vm_exchange_prepare','Configure the VM-scoped VAMPFiles shared folder. Requires Guest Additions; mount verification is separate.',{
+  vm:z.string().min(1),
+},async args=>result(await transferAction('prepare',args)));
+server.tool('vm_file_put','Stage a <=1 GiB host file in the VM shared folder. Returns staged, not proof of a guest mount. Existing files require overwrite=true.',{
+  vm:z.string().min(1),local_path:z.string().min(1),guest_path:z.string().min(1),overwrite:z.boolean().default(false),
+},async args=>result(await transferAction('put',args)));
+server.tool('vm_file_get','Copy a <=1 GiB shared guest file to the host and return size/SHA-256 without file contents.',{
+  vm:z.string().min(1),guest_path:z.string().min(1),local_path:z.string().min(1),overwrite:z.boolean().default(false),
+},async args=>result(await transferAction('get',args)));
 server.tool('vm_import_recording','Copy a user-chosen .py/.handoff.json under guest RPA-Recorder using Guest Additions. Parse without execution; authorized sandbox account only.',{
   vm:z.string().min(1),guest_path:z.string().min(1),username:z.string().default('vboxuser'),
 },async args=>{
@@ -94,13 +111,27 @@ server.tool('vm_snapshot','List/take/restore snapshots. Ask about extra disk spa
     });child.stdin.end(JSON.stringify(args));
   });return result(JSON.parse(output));
 });
+async function vncAction(values) {
+  const script=fileURLToPath(new URL('./vnc.py',import.meta.url));
+  const output=await new Promise((resolve,reject)=>{
+    const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{timeout:180000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
+      if(error && !stdout)reject(new Error(stderr || error.message));else resolve(stdout);
+    });child.stdin.end(JSON.stringify(values));
+  });return JSON.parse(output);
+}
+const initialVncProbe=vncAction(process.env.VAMP_VBOX_VNC_EXTPACK ?
+  {action:'setup',extpack_path:process.env.VAMP_VBOX_VNC_EXTPACK,sha256:process.env.VAMP_VBOX_VNC_SHA256,allow_install:true} :
+  {action:'probe'}).catch(error=>({status:'error',error_summary:error.message}));
+server.tool('vm_vnc_setup','Inspect the open-source VNC module or install a user-selected matching package with a verified SHA-256, then configure loopback VNC for one powered-off VM. Does not install Oracle paid VRDP.',{
+  vm:z.string().min(1).optional(),extpack_path:z.string().optional(),sha256:z.string().regex(/^[a-fA-F0-9]{64}$/).optional(),allow_install:z.boolean().default(false),port:z.number().int().min(1024).max(65535).default(5901),
+},async args=>result(await vncAction({action:'setup',...args})));
 server.tool('vamp_setup','First-run setup: check VirtualBox, show current resource profiles and ask about Debian default or optional Windows; no installation/VM mutation.',{},async()=>{
   let installed=false,version='';
   try { version=(await vboxManage('--version')).trim(); installed=true; } catch {}
   const {readFile}=await import('node:fs/promises');
   const profiles=JSON.parse(await readFile(new URL('./profiles.json',import.meta.url),'utf8'));
   return result({status:'needs_user_input',virtualbox_installed:installed,virtualbox_version:version,
-    default_guest:'debian',profiles:profiles.profiles,
+    default_guest:'debian',profiles:profiles.profiles,vnc:await initialVncProbe,
     questions:['At this session, take a snapshot before changes? It uses additional disk space and only preserves the captured point in time.','Set up the VM environment now?','Provide the host OS installation ISO path. Debian is the default.','Create a Windows VM too? Recommend it when your certificate workflow needs Windows-only security software.'],
     windows_notice:'Windows requires a valid license. Activate it yourself after installation. No license is included.',
     public_credentials:{username:'vboxuser',password:'password123!'},

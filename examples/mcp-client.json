@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "vm-rpa": {
+      "command": "/path/to/vamp-mcp/.venv/bin/python",
+      "args": [
+        "/path/to/vamp-mcp/vm_mcp_server.py"
+      ]
+    }
+  }
+}

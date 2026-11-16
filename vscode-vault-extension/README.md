@@ -4,6 +4,8 @@
 
 # VAMP Vault · Credential & Certificate Isolation for AI Agents
 
+**VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents**
+
 The AI agent on this machine can click, type and read screens, but it should not be able to take your passwords with it. VAMP Vault keeps them in a local KeePassXC database, keeps the certificates that prove who you are in an encrypted VeraCrypt volume, and hands a single approved value to the agent only when the current step of a task needs it.
 
 It is the companion to [VAMP](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp), the local hypervisor MCP extension. VAMP gives an agent a machine to work in; VAMP Vault gives that work an identity. Enterprise identity tokens and certificates are the primary concrete case: mount the encrypted volume as removable media, let the agent perform signing or authentication in the isolated guest VM, and unmount when the step is finished.
@@ -170,6 +172,7 @@ KeePassXC 2.8 already stores passkeys and exposes them through the KeePassXC-Bro
 
 ## Limitations
 
+- Windows VeraCrypt uses its native password dialog for mounting; the Unix `--stdin` switches are not sent to the Windows executable. Creating a new Windows encrypted volume opens the native creation wizard and returns `interactive_setup_required` until the user completes it. Windows volume enumeration checks the actual VeraCrypt device mappings. KeePassXC database operations remain available through MCP.
 - Mounting needs the VeraCrypt driver on Windows and macOS, and FUSE plus mount permission on Linux. A container or a locked-down host will report `failed` with the reason rather than silently succeed.
 - `keepassxc-cli` has no solver for hidden-volume protection, passkey writes, or entry attributes beyond the standard set; those are done in the KeePassXC application.
 - One master password per database is remembered at a time by the dialog flow; several databases work, each with its own stored password.

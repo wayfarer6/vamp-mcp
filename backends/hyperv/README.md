@@ -10,7 +10,7 @@
 - 관리자 프로세스가 `vmconnect.exe <server> <VMName>`을 실행합니다.
 - 짧은 JSON과 Robot 보고서를 저장합니다.
 
-**Ubuntu에서 코드를 작성했으며 Windows/Hyper-V에서 실행 검증하지 않았습니다. 사용자가 Windows에서 테스트할 코드입니다.** RDP 화면 스트림·키보드·마우스 제어 어댑터는 아직 구현하지 않았습니다. VMConnect 창 실행과 실제 게스트 접속/로그인 성공은 별개입니다.
+**2026-11-16 중첩 Windows 11 Pro 랩에서 VMConnect·실제 Windows 게스트 부팅·파일 왕복 전송·MCP 인벤토리를 검증했습니다.** [검증 범위](../../docs/VALIDATION.md)를 확인하세요. 물리 Windows 호스트와 RDP 화면 스트림·키보드·마우스 제어 어댑터는 아직 검증·구현 범위에 포함되지 않습니다. VMConnect 창 실행과 실제 게스트 접속/로그인 성공은 별개입니다.
 
 ## Windows 호스트에서 준비
 

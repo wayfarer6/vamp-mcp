@@ -1,8 +1,8 @@
 {
   "name": "vamp-vault",
   "displayName": "VAMP Vault — Credential & Certificate Isolation for AI Agents",
-  "description": "Local KeePassXC & VeraCrypt MCP vault for AI agents, providing isolated credential injection and virtual USB certificate mounting.",
-  "version": "0.1.1",
+  "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
+  "version": "0.1.2",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -263,19 +263,19 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out vamp-vault-0.1.1.vsix",
+    "package": "npm run build && vsce package --out vamp-vault-0.1.2.vsix",
     "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "zod": "^3.25.76"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.25.0"
   },
-  "preview": true,
+  "preview": false,
   "overrides": {
     "@vscode/vsce": {
       "minimatch": "^11.0.1"

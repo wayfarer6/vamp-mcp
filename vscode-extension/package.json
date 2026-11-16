@@ -1,8 +1,8 @@
 {
   "name": "vamp-mcp",
-  "displayName": "VAMP \u2014 Virtual Agent Machine Platform",
-  "description": "Local hypervisor MCP tools for AI agents and RPA (VirtualBox, KVM, Hyper-V), with detachable observation and unattended VM provisioning.",
-  "version": "0.1.4",
+  "displayName": "VAMP — Virtual Agent Machine Platform",
+  "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
+  "version": "0.1.5",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -18,7 +18,8 @@
   ],
   "keywords": [
     "MCP",
-    "VirtualBox",
+    "VM",
+    "VNC",
     "RPA",
     "AI agent",
     "VAMP"
@@ -52,12 +53,20 @@
       {
         "command": "vamp.onboard",
         "title": "VAMP: First-Time VM Setup"
+      },
+      {
+        "command": "vamp.openKvmViewer",
+        "title": "VAMP: Open KVM Viewer (Live VNC)"
       }
     ],
     "mcpServerDefinitionProviders": [
       {
         "id": "vamp.virtualbox",
         "label": "VAMP VirtualBox"
+      },
+      {
+        "id": "vamp.kvm",
+        "label": "VAMP KVM (VNC)"
       }
     ],
     "configuration": {
@@ -77,24 +86,44 @@
           "type": "string",
           "default": "",
           "description": "Optional host Python with VirtualBox SDK vboxapi for mouse input."
+        },
+        "vamp.kvmRepositoryPath": {
+          "type": "string",
+          "default": "",
+          "description": "Local VAMP repository containing vm_mcp_server.py. KVM uses the shared VNC display."
+        },
+        "vamp.kvmPythonExecutable": {
+          "type": "string",
+          "default": "",
+          "description": "KVM MCP Python with requirements-mcp.txt installed. Defaults to the repository .venv."
+        },
+        "vamp.kvmConfigPath": {
+          "type": "string",
+          "default": "",
+          "description": "Optional VM profile JSON for the KVM MCP server. Defaults to config/vm-mcp.json in the repository."
         }
       }
     }
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.4.vsix",
-    "vscode:prepublish": "npm run build"
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.5.vsix",
+    "vscode:prepublish": "npm run build",
+    "test:viewer": "node --test test/viewer-bridge.mjs"
   },
   "devDependencies": {
     "@vscode/vsce": "^4.1.1",
     "esbuild": "^0.25.0"
   },
-  "preview": true,
+  "preview": false,
   "overrides": {
     "@vscode/vsce": {
       "minimatch": "^11.0.1"
     }
   },
-  "icon": "icon.png"
+  "icon": "icon.png",
+  "dependencies": {
+    "@novnc/novnc": "^1.7.0",
+    "ws": "^8.23.0"
+  }
 }

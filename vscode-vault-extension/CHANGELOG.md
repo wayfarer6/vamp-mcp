@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.2
+
+- Probe the Windows VeraCrypt executable's PE version instead of launching it with Unix console flags.
+- Mount through the native Windows password dialog, enumerate actual VeraCrypt drive mappings, and verify dismount without putting passwords in process arguments.
+- Return an explicit interactive creation-wizard state for new Windows VeraCrypt volumes.
+- Require the Visual C++ x64 runtime before Windows KeePassXC installation.
+- Use the shared platform introduction and keep the VSIX checksum alongside the package instead of inside it.
+
 ## 0.1.1
 
 Sidebar for the vault, and the .kdbx file as a first-class object.

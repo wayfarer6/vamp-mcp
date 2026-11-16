@@ -4,6 +4,8 @@
 
 # VAMP · Virtual Agent Machine Platform
 
+**VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents**
+
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
 [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md)
@@ -14,7 +16,7 @@ GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골�
 
 사용자가 직접 조작하거나 CUA(화면을 보고 컴퓨터를 조작하는 AI)가 수행한 GUI 작업을 기록하고, 검토한 기록을 Robot Framework·Python RPA로 묶어 두려 합니다. 이후에는 AI가 작업 설명과 입력값만 보고 패키지를 골라 실행하고, 결과 요약을 받으면 됩니다. 좌표나 입력 순서 같은 세부 구현은 로컬 코드에 두고, 필요할 때만 로그와 화면을 확인하는 방식으로 토큰 비용을 줄이는 것이 목적입니다.
 
-하루 동안 Codex와 바이브 코딩으로 만들었습니다. 아직 거친 부분과 빠진 기능이 많습니다. 현재 시험한 환경은 KVM/SPICE와 VirtualBox 정도이며, 토큰 절감량을 측정한 상태는 아닙니다.
+하루 동안 Codex와 바이브 코딩으로 만들었습니다. 아직 거친 부분과 빠진 기능이 많습니다. 현재 시험한 환경은 KVM/VNC·SPICE와 VirtualBox이며, 토큰 절감량을 측정한 상태는 아닙니다.
 
 ### 왜 컨테이너(Docker)가 아닌 가상머신(VM)인가?
 
@@ -50,10 +52,12 @@ flowchart LR
 | 로컬 화면 제어 | VM 화면 캡처, 키보드·마우스 입력, 선택적 OCR·UI 영역 인식 |
 | 기록·로그 확인 | 녹화 소스, 실행 요약, Robot 로그·보고서와 SQLite 실행 이력 확인 |
 | 필요한 화면만 보기 | 현재 화면이나 저장한 스크린샷을 확인하고, 켜 둔 실행 영상은 로컬에서 재생 |
+| VS Code 실시간 VM 뷰어 | QEMU VNC 화면을 WebSocket으로 스트리밍하고, 보기 전용 탭과 외부 VNC 접속 정보 표 제공 |
+| KVM MCP | VM 생성·기동·전원·스냅샷 관리, 화면·입력, Robot 시나리오 실행 |
 | VirtualBox MCP | VS Code에서 VM 조회·기동, ISO 설치 시작, 해상도·공유폴더·스냅샷 도구 사용 |
 | VAMP Vault MCP | KeePassXC·VeraCrypt 기반 자격증명/인증서 격리 보관 및 사이드바 GUI |
 
-OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualBox MCP가 들어 있으며, SPICE·YOLO·PaddleOCR 전체가 포함되지는 않습니다. [구성도](docs/MCP_ARCHITECTURE.md) · [로그·스크린샷 조회](docs/EXECUTION_HISTORY.md)
+OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualBox MCP와 실시간 VNC 뷰어가 들어 있습니다. KVM MCP는 로컬 저장소의 Python 환경을 연결하며, VM 디스크·ISO·YOLO·PaddleOCR 모델은 VSIX에 포함하지 않습니다. [구성도](docs/MCP_ARCHITECTURE.md) · [로그·스크린샷 조회](docs/EXECUTION_HISTORY.md)
 
 ## 시작하기
 
@@ -62,9 +66,26 @@ OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualB
 3. 명령 팔레트에서 **VAMP: Set Up Python Environment**를 실행합니다.
 4. MCP 서버 목록에서 **VAMP VirtualBox**를 시작하고 기존 VM을 조회합니다.
 
-새 VM을 만들 때는 **VAMP: Create VM From ISO**를 사용합니다. Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 준비하고, 정품 인증도 직접 진행해야 합니다. VAMP에는 Windows ISO·제품 키·라이선스가 포함되지 않습니다. 기본 계정 `vboxuser` / `password123!`는 공개 테스트용입니다. 설치 시작 응답은 설치 완료를 뜻하지 않습니다.
+새 VM을 만들 때는 **VAMP: Create VM From ISO**를 사용합니다. Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 준비하고, 정품 인증도 직접 진행해야 합니다. VAMP에는 Windows ISO·정품 인증 키·라이선스가 포함되지 않습니다. 자동 설치의 공개 설치용 키는 에디션 선택용이며 Windows를 정품 인증하지 않습니다. **`vboxuser` / `password123!`는 MCP 서버가 VM 무인 설치 과정에서 지정하는 기본 테스트 계정 정보입니다. 운영체제가 원래 제공하는 계정이 아니며, 공개된 값입니다.** 설치 시작 응답은 설치 완료를 뜻하지 않습니다.
 
 [확장 사용법](vscode-extension/README.md) · [VirtualBox MCP 직접 연결](backends/virtualbox/README.md) · [SPICE 설치](docs/INSTALL.md) · [VM 준비사항](docs/GUEST_AUTOMATION.md)
+
+## VS Code에서 VM 화면 보기
+
+KVM VM의 화면은 스크린샷을 반복 조회하는 대신 **VNC(RFB) → 로컬 WebSocket 중계 → noVNC**로 실시간 표시합니다. VM의 VNC 서버는 QEMU가 제공하고, 확장은 뷰어와 중계를 담당합니다.
+
+1. 확장 설정 `vamp.kvmRepositoryPath`에 이 저장소 경로를 지정합니다.
+2. `vamp.kvmPythonExecutable`과 `vamp.kvmConfigPath`에 사용할 Python 및 VM 프로필을 지정합니다. 생략하면 저장소의 `.venv`와 `config/vm-mcp.json`을 사용합니다.
+3. MCP 서버 목록에서 **VAMP KVM (VNC)**를 시작합니다.
+4. **VAMP: Open KVM Viewer (Live VNC)** 명령으로 실행 중인 VM을 선택합니다.
+
+뷰어는 기본적으로 보기 전용이며, RPA와 사용자가 같은 화면을 함께 볼 수 있습니다. 창 크기에 맞춘 화면 표시와 재연결 버튼을 제공합니다. 화면 아래에는 외부 VNC 뷰어를 위한 다음 정보와 주소 복사 버튼이 표시됩니다.
+
+| VM 이름 | 호스트 | VNC 포트 | 접속 주소 |
+| --- | --- | --- | --- |
+| 선택한 VM 이름 | `127.0.0.1` | VM에서 조회한 실제 포트 | 예: `127.0.0.1:5900` |
+
+포트는 실행 시 조회하므로 고정값을 가정하지 않습니다. VM은 한 번에 한 대씩 검증하며, 시나리오는 Robot Framework의 보고서·타임라인·MP4로 남깁니다. [KVM MCP와 재현 절차](docs/VM_MCP.md)
 
 ## 실행 영상과 문서
 
@@ -83,7 +104,7 @@ OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualB
 | 설치와 백엔드 구성 | [문서 목차](docs/README.md) · [아키텍처](docs/MCP_ARCHITECTURE.md) |
 | 시험한 기능과 남은 문제 | [검증 기록](docs/VALIDATION.md) |
 
-새 OS 무인 설치 완료와 스냅샷 복원은 미검증입니다. Hyper-V는 실험적 기동 코드만 있으며 실제 동작을 시험하지 않았습니다. SPICE MCP 래퍼는 [`feat/vm-mcp-server`](https://github.com/wayfarer6/vamp-mcp/tree/feat/vm-mcp-server) 브랜치에 있습니다.
+KVM MCP의 VM 생성·화면 제어·RPA 실행은 [`vm_mcp_server.py`](vm_mcp_server.py)에서 제공하며, 프로필로 VNC와 SPICE 연결을 구분합니다.
 
 ## 책임 한계와 안전한 사용 (Responsible Use)
 

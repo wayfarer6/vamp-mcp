@@ -43,7 +43,7 @@ def main():
     os.chdir(ROOT)
     from robot import run
     return run(str(directory/selected['file']),outputdir=str(output),variable=args.var,
-               listener=args.listener,dryrun=args.dryrun)
+               listener=args.listener,dryrun=args.dryrun,exitonfailure=True)
 
 
 if __name__=='__main__':

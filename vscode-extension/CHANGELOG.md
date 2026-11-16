@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5
+
+- Add the shared live KVM/VNC viewer and binary VM exchange integration.
+- Prepare the matching checksum-verified VirtualBox Python SDK in the Windows managed environment so mouse input has its required COM bindings.
+- Use the platform introduction: VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents.
+- Record native Windows extension-host, Hyper-V and Vault integration coverage separately from remaining VirtualBox checks.
+
 ## 0.1.4
 
 - Generalize extension metadata from VirtualBox-only to local hypervisors (VirtualBox, KVM, Hyper-V).

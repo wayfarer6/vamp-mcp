@@ -1,0 +1,15 @@
+{
+  "libvirt_uri": "qemu:///system",
+  "vms": {
+    "debian13": {
+      "backend": "spice",
+      "guest_os": "debian",
+      "supported_rpas": ["desktop_control", "captcha_handoff", "firefox_launch", "firefox_naver", "naver_login", "debian_update"]
+    },
+    "windows-RPA": {
+      "backend": "spice",
+      "guest_os": "windows11",
+      "supported_rpas": ["desktop_control", "captcha_handoff", "windows_naver_recorded"]
+    }
+  }
+}

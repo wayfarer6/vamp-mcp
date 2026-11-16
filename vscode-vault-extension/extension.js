@@ -77,7 +77,7 @@ function loadModule(context, relative) {
 }
 
 function bridgeSocketPath(context) {
-  const stamp = crypto.createHash('sha1').update(context.globalStorageUri.fsPath).digest('hex').slice(0, 12);
+  const stamp = crypto.createHash('sha1').update(context.globalStorageUri.fsPath).digest('hex').slice(0, 8) + '-' + process.pid + '-' + crypto.randomBytes(4).toString('hex');
   if (process.platform === 'win32') return `\\\\.\\pipe\\vamp-vault-${stamp}`;
   const user = typeof process.getuid === 'function' ? process.getuid() : 'u';
   return path.join(os.tmpdir(), `vampvault-${user}-${stamp}.sock`);
@@ -430,7 +430,7 @@ function activate(context) {
         output.show(true);
         const keepassxc = report.tools.keepassxc ?? {};
         const veracrypt = report.tools.veracrypt ?? {};
-        const line = tool => tool.available
+        const line = tool => tool.available || tool.path && ['installed', 'downloaded_present', 'found', 'system_install'].includes(tool.status)
           ? `${tool.label ?? 'CLI'}: ${tool.version ?? 'ready'} — ${tool.path}`
           : `${tool.label ?? 'CLI'}: not available (${tool.status ?? 'unknown'}) ${tool.manual_install ? `· ${tool.manual_install}` : ''}`;
         const summary = [line({ ...keepassxc, label: 'KeePassXC' }), line({ ...veracrypt, label: 'VeraCrypt' })].join('\n');

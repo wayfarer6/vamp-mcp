@@ -1,9 +1,9 @@
 *** Settings ***
-Library           ${CURDIR}/../spice_robot.py    WITH NAME    Spice
+Library           ${CURDIR}/../vm_robot.py    WITH NAME    Spice
 Library           ${CURDIR}/../rpa_contract.py    WITH NAME    Contract
 
 *** Variables ***
-${SPICE_URI}      spice://127.0.0.1:5900
+${SPICE_URI}      vnc://127.0.0.1:5900
 
 *** Keywords ***
 Start RPA

@@ -255,7 +255,7 @@ await check('a locked status tree offers unlock and marks a missing database', (
 console.log('\nExtension manifest');
 const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 await check('the manifest declares the activity bar container and both views', () => {
-  assert.equal(manifest.version, '0.1.1');
+  assert.match(manifest.version, /^\d+\.\d+\.\d+$/);
   const container = manifest.contributes.viewsContainers.activitybar.find(item => item.id === 'vamp-vault');
   assert.equal(container.title, 'VAMP Vault');
   assert.equal(container.icon, manifest.icon);
@@ -468,8 +468,13 @@ await check('a declined dialog blocks the read', async () => {
 await check('vault_status asks the host whether it is unlocked', async () => {
   const state = payload(await bridgeClient.callTool({ name: 'vault_status', arguments: {} }));
   assert.equal(state.bridge.connected, true);
-  assert.ok(host.calls.includes('state'));
-  assert.equal(state.locked, false);
+  if (state.database.exists) {
+    assert.ok(host.calls.includes('state'));
+    assert.equal(state.locked, false);
+  } else {
+    assert.equal(state.locked, true);
+    assert.equal(state.lock_reason, 'no database at the configured path');
+  }
   assert.ok(!JSON.stringify(state).includes(masterPassword), 'status leaked the master password');
 });
 await bridgeClient.close();

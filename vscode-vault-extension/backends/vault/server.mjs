@@ -243,7 +243,7 @@ server.registerTool('vault_create', {
         return text(created);
       }
       let volumePassword = args.volume_password;
-      if (!volumePassword) {
+      if (!volumePassword && process.platform !== 'win32') {
         const resolved = await masterPassword({ create: true, file: args.volume_file, label: `New VeraCrypt password for ${args.volume_file}` });
         volumePassword = resolved.password;
       }
@@ -454,7 +454,7 @@ server.registerTool('vault_mount_volume', {
     const decision = await approve({ action: 'mount_volume', entry: volume, confirm: args.confirm, detail: `Mount ${volume}${args.read_only ? ' read-only' : ''} so the agent can use the certificates inside.` });
     if (decision.pending) return approvalNotice(volume, 'Mount this encrypted volume.');
     if (!decision.approved) return text({ status: 'denied', volume, reason: decision.how });
-    const password = await masterPassword({ file: volume, label: 'VeraCrypt volume password' });
+    const password = process.platform === 'win32' ? {} : await masterPassword({ file: volume, label: 'VeraCrypt volume password' });
     const result = await cli.mountVolume({
       file: volume,
       mountPoint: args.mount_point || settings.mountPoint,
