@@ -14,7 +14,7 @@
 2. **게스트 사후 설치 훅 (`setup-all.ps1` / `setup-all.sh`)**:
    - RPA 레코더 설치: PyAutoGUI, Tkinter, 가상환경 구성
    - KeePassXC 설치 및 Native Messaging Host 등록: Chrome/Edge 브라우저 확장과 연동해 패스키(Passkey)를 게스트 브라우저에서 투명하게 사용
-   - VeraCrypt CLI 설치 및 `/m rm` 마운트 헬퍼 등록: `Mount volume as removable media` 플래그로 마운트하여 윈도우 및 금융 보안 프로그램이 이를 '이동식 USB 플래시 드라이브'로 인식하도록 보장
+   - VeraCrypt CLI 설치 및 `/m rm` 마운트 헬퍼 등록: `Mount volume as removable media` 플래그로 마운트하여 윈도우 및 인증 클라이언트가 이를 '이동식 USB 드라이브'로 인식하도록 지원
 
 ---
 
@@ -37,7 +37,7 @@ sh ./guest_setup/setup-all.sh
 
 ---
 
-## 3. 금융권 공인인증서(NPKI) 및 패스키 동작 원리
+## 3. 이동식 USB 키스토어 및 패스키 동작 원리
 
-- **공인인증서(NPKI)**: 은행/증권사 보안 모듈은 일반 하드디스크나 네트워크 공유 폴더를 '이동식 디스크'로 인식하지 않습니다. VeraCrypt의 `/m rm` (Removable media) 옵션으로 마운트함으로써 가상 드라이브에 외장 USB 속성이 부여되어 인증서 선택창의 **'이동식 디스크'** 탭에 정상 노출됩니다.
+- **이동식 USB 키스토어**: 일부 엔터프라이즈 인증 및 레거시 클라이언트는 네트워크 공유 폴더나 고정 로컬 C: 드라이브를 외장 토큰으로 인식하지 않습니다. VeraCrypt의 `/m rm` (Removable media) 옵션으로 마운트함으로써 가상 드라이브에 외장 USB 미디어 속성이 부여되어 '이동식 드라이브' 탭에 정상 노출됩니다.
 - **패스키(Passkeys)**: KeePassXC는 v2.8+부터 WebAuthn/FIDO2 패스키 저장을 지원합니다. 게스트 브라우저(Chrome/Edge/Firefox)에 `KeePassXC-Browser` 확장을 설치하고 `setup-guest-vault.ps1`이 등록한 Native Messaging Host와 연결되면, 브라우저의 패스키 인증 팝업이 게스트 KeePassXC로 전달되어 자동으로 서명됩니다.

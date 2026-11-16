@@ -434,7 +434,7 @@ server.registerTool('vault_list_credentials', {
 
 server.registerTool('vault_mount_volume', {
   title: 'Mount encrypted volume',
-  description: 'Mount a VeraCrypt volume so its certificates (for example Korean NPKI 공인인증서) appear as a normal folder or virtual USB drive. Mounting needs the VeraCrypt driver on Windows/macOS or FUSE on Linux, and the user must approve the mount.',
+  description: 'Mount a VeraCrypt volume so its certificates and credentials appear as a normal folder or virtual USB drive. Mounting needs the VeraCrypt driver on Windows/macOS or FUSE on Linux, and the user must approve the mount.',
   inputSchema: {
     volume: z.string().optional().describe('Volume file or device. Defaults to the configured volume.'),
     mount_point: z.string().optional().describe('Where to mount. Defaults to the configured mount point.'),
