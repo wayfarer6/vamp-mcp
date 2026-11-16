@@ -1,4 +1,5 @@
 const vscode = require('vscode');
+const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const net = require('node:net');
@@ -9,6 +10,67 @@ const { promisify } = require('node:util');
 const run = promisify(execFile);
 
 const SECRET_KEY = 'vampVault.masterPasswords';
+// Reading a username costs one keepassxc-cli call per entry, so a very large
+// database is filled in the background only up to this many entries.
+const USERNAME_FILL_LIMIT = 200;
+
+/**
+ * A view that renders plain nodes from src/tree.mjs. The node is kept on the
+ * item (`element`) because a context-menu command receives the TreeItem, not
+ * the original element, and the command needs the entry path.
+ */
+class VaultView {
+  constructor(kind) {
+    this.kind = kind;
+    this.loader = null;
+    this.emitter = new vscode.EventEmitter();
+    this.onDidChangeTreeData = this.emitter.event;
+  }
+
+  refresh() { this.emitter.fire(undefined); }
+
+  dispose() { this.emitter.dispose(); }
+
+  getTreeItem(node) {
+    const collapsible = node.children?.length
+      ? vscode.TreeItemCollapsibleState.Collapsed
+      : vscode.TreeItemCollapsibleState.None;
+    const item = new vscode.TreeItem(node.label, collapsible);
+    item.id = `${this.kind}:${node.path ?? node.id ?? node.label}`;
+    if (node.description) item.description = node.description;
+    item.tooltip = node.tooltip || node.description || node.label;
+    item.iconPath = new vscode.ThemeIcon(node.icon || 'circle-outline');
+    item.contextValue = node.type === 'entry'
+      ? 'vampVault.credential'
+      : node.type === 'group' ? 'vampVault.group' : `vampVault.${node.type}`;
+    if (node.command) item.command = { command: node.command, title: node.label, arguments: [] };
+    item.element = node;
+    return item;
+  }
+
+  async getChildren(node) {
+    if (node) return node.children ?? [];
+    if (!this.loader) return [];
+    return this.loader();
+  }
+}
+
+function treeNode(arg) {
+  if (!arg) return null;
+  if (arg.element) return arg.element;
+  return arg.type ? arg : null;
+}
+
+/** Empty the clipboard after a copied secret, but only if it still holds it. */
+function scheduleClipboardClear(value, seconds = 30) {
+  const timer = setTimeout(async () => {
+    try {
+      const current = await vscode.env.clipboard.readText();
+      if (current === value) await vscode.env.clipboard.writeText('');
+    } catch {}
+  }, seconds * 1000);
+  timer.unref?.();
+}
 
 function loadModule(context, relative) {
   return import(pathToFileURL(context.asAbsolutePath(relative)).href);
@@ -178,6 +240,137 @@ function activate(context) {
 
   readSecretMap(context).then(map => { statusItem.text = map[kdbxPath()] ? '$(shield) Vault' : '$(lock) Vault'; }).catch(() => {});
 
+  // ------------------------------------------------------------------ sidebar
+  const credentialView = new VaultView('credentials');
+  const statusView = new VaultView('status');
+  context.subscriptions.push(credentialView, statusView, vscode.window.registerTreeDataProvider('vampVault.views.credentials', credentialView), vscode.window.registerTreeDataProvider('vampVault.views.status', statusView));
+
+  let vaultData = null;      // last read of the credentials view
+  let fillToken = 0;         // bumped whenever that read is discarded
+
+  const treeModule = () => loadModule(context, 'dist/runtime/src/tree.mjs');
+  const cliReport = () => loadModule(context, 'dist/runtime/src/downloader.mjs')
+    .then(({ cliStatus }) => cliStatus({ binDir, overrides: { keepassxc: config().get('keepassxcCliPath') || undefined, veracrypt: config().get('veracryptCliPath') || undefined } }));
+  const resetVault = () => { vaultData = null; fillToken += 1; };
+
+  const syncContext = async unlocked => {
+    await vscode.commands.executeCommand('setContext', 'vampVault.unlocked', Boolean(unlocked));
+    await vscode.commands.executeCommand('setContext', 'vampVault.databaseExists', fs.existsSync(kdbxPath()));
+  };
+
+  async function credentialData() {
+    const db = kdbxPath();
+    if (vaultData && vaultData.db === db) return vaultData;
+    const report = await cliReport();
+    const secrets = await readSecretMap(context);
+    const unlocked = Boolean(secrets[db]);
+    const exists = fs.existsSync(db);
+    const data = { db, report, unlocked, exists, listing: null, meta: {}, error: null, filled: false, cli: null };
+    if (report.keepassxc.available && exists && unlocked) {
+      const { VaultCli } = await loadModule(context, 'dist/runtime/src/vault_cli.mjs');
+      data.cli = new VaultCli({ keepassxcCli: report.keepassxc.path, kdbxPath: db, volumePath: volumePath(), mountPoint: mountPoint(), platform: process.platform });
+      try {
+        data.listing = await data.cli.listEntries({ file: db, databasePassword: secrets[db] });
+      } catch (error) {
+        data.error = error.code === 'vault_unlock_failed'
+          ? 'the stored master password was rejected — unlock again'
+          : error.message;
+      }
+    }
+    vaultData = data;
+    statusItem.text = unlocked ? '$(shield) Vault' : '$(lock) Vault';
+    syncContext(unlocked).catch(() => {});
+    return data;
+  }
+
+  /**
+   * Read usernames for the entry descriptions in the background, four at a
+   * time. `keepassxc-cli show` without -s prints "Password: PROTECTED", so no
+   * password passes through this path; only a username and a row label do.
+   */
+  async function fillUsernames(data) {
+    const token = fillToken;
+    const password = (await readSecretMap(context))[data.db];
+    if (!data.cli || !password) return;
+    const queue = data.listing.entries.slice(0, USERNAME_FILL_LIMIT);
+    let done = 0;
+    const worker = async () => {
+      while (queue.length) {
+        if (token !== fillToken || vaultData !== data) return;
+        const entry = queue.shift();
+        try {
+          const record = await data.cli.showEntry({ file: data.db, entry: entry.path, databasePassword: password, showProtected: false });
+          data.meta[entry.path] = { username: record.username ?? '' };
+        } catch {
+          data.meta[entry.path] = { username: '' };
+        }
+        done += 1;
+        if (done <= 8 || done % 25 === 0) credentialView.refresh();
+      }
+    };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+    credentialView.refresh();
+  }
+
+  credentialView.loader = async () => {
+    const { buildCredentialTree } = await treeModule();
+    let data;
+    try {
+      data = await credentialData();
+    } catch (error) {
+      return [{ type: 'info', id: 'loadError', label: 'Could not read the vault', description: error.message, tooltip: String(error.message), icon: 'warning' }];
+    }
+    const nodes = buildCredentialTree({
+      cliAvailable: Boolean(data.report?.keepassxc?.available),
+      databaseExists: data.exists,
+      locked: !data.unlocked,
+      kdbxPath: data.db,
+      listing: data.listing,
+      meta: data.meta,
+      error: data.error,
+    });
+    if (data.listing && !data.filled && !data.error) {
+      data.filled = true;
+      fillUsernames(data).catch(error => output.appendLine(`username fill stopped: ${error.message}`));
+    }
+    return nodes;
+  };
+
+  statusView.loader = async () => {
+    const { buildStatusTree } = await treeModule();
+    try {
+      const report = await cliReport();
+      const secrets = await readSecretMap(context);
+      let mounted = [];
+      if (report.veracrypt.available) {
+        const { VaultCli } = await loadModule(context, 'dist/runtime/src/vault_cli.mjs');
+        try {
+          mounted = (await new VaultCli({ veracryptCli: report.veracrypt.path, mountPoint: mountPoint() }).listVolumes()).mounted;
+        } catch {}
+      }
+      return buildStatusTree({
+        databaseExists: fs.existsSync(kdbxPath()),
+        kdbxPath: kdbxPath(),
+        volumeExists: fs.existsSync(volumePath()),
+        volumePath: volumePath(),
+        mounted,
+        unlocked: Boolean(secrets[kdbxPath()]),
+        keepassxcAvailable: report.keepassxc.available,
+        keepassxcVersion: report.keepassxc.version,
+        keepassxcPath: report.keepassxc.path,
+        veracryptAvailable: report.veracrypt.available,
+        veracryptVersion: report.veracrypt.version,
+        veracryptPath: report.veracrypt.path,
+        approvalMode: config().get('approvalMode') || 'per-session',
+        cacheMinutes: Number(config().get('sessionCacheMinutes') ?? 5),
+      });
+    } catch (error) {
+      return [{ type: 'info', id: 'statusError', label: 'Status unavailable', description: error.message, tooltip: String(error.message), icon: 'warning' }];
+    }
+  };
+
+  syncContext(false).catch(() => {});
+
   let bridge = { socketPath: '', token: '' };
   startBridge(context, state, output)
     .then(value => {
@@ -190,7 +383,12 @@ function activate(context) {
     .catch(error => { output.appendLine(`Approval bridge unavailable: ${error.message}`); vscode.window.showErrorMessage(`VAMP Vault: approval bridge failed (${error.message}). Credentials can only be released with an explicit confirm:true.`); });
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
-    if (event.affectsConfiguration('vampVault')) changes.fire();
+    if (event.affectsConfiguration('vampVault')) {
+      changes.fire();
+      resetVault();
+      credentialView.refresh();
+      statusView.refresh();
+    }
   }));
 
   context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.vault', {
@@ -237,6 +435,9 @@ function activate(context) {
           : `${tool.label ?? 'CLI'}: not available (${tool.status ?? 'unknown'}) ${tool.manual_install ? `· ${tool.manual_install}` : ''}`;
         const summary = [line({ ...keepassxc, label: 'KeePassXC' }), line({ ...veracrypt, label: 'VeraCrypt' })].join('\n');
         changes.fire();
+        resetVault();
+        credentialView.refresh();
+        statusView.refresh();
         const choice = await vscode.window.showInformationMessage(summary, { modal: true }, 'Open Guide');
         if (choice === 'Open Guide') await vscode.commands.executeCommand('vampVault.openGuide');
       });
@@ -275,6 +476,11 @@ function activate(context) {
         map[file] = password;
         await writeSecretMap(context, map);
         changes.fire();
+        resetVault();
+        credentialView.refresh();
+        statusView.refresh();
+        syncContext(true).catch(() => {});
+        statusItem.text = '$(shield) Vault';
         vscode.window.showInformationMessage(`Vault created: ${file}. The master password is in VS Code secret storage; "VAMP Vault: Lock" forgets it.`, 'Ok');
       });
     } catch (error) {
@@ -317,7 +523,266 @@ function activate(context) {
   context.subscriptions.push(vscode.commands.registerCommand('vampVault.lock', async () => {
     await context.secrets.delete(SECRET_KEY);
     statusItem.text = '$(lock) Vault';
+    resetVault();
+    credentialView.refresh();
+    statusView.refresh();
+    await syncContext(false);
     vscode.window.showInformationMessage('VAMP Vault locked: the master password is no longer stored. The next read asks for it again.');
+  }));
+
+  // ---------------------------------------------------- sidebar command support
+
+  /**
+   * Resolve everything a sidebar command needs: a CLI, a database and its
+   * master password. Missing pieces are offered as the same actions the view
+   * shows, so a click on a row always ends in a step the user can take. A
+   * password typed here is verified before it reaches secret storage.
+   */
+  async function openVault() {
+    const db = kdbxPath();
+    const report = await cliReport();
+    if (!report.keepassxc.available) {
+      const choice = await vscode.window.showErrorMessage('VAMP Vault: keepassxc-cli is not available yet, so the database cannot be read.', 'Set Up CLI');
+      if (choice === 'Set Up CLI') await vscode.commands.executeCommand('vampVault.setupCli');
+      return null;
+    }
+    if (!fs.existsSync(db)) {
+      const choice = await vscode.window.showWarningMessage(`VAMP Vault: no database at ${db} yet.`, { modal: true }, 'Create Vault');
+      if (choice === 'Create Vault') await vscode.commands.executeCommand('vampVault.createVault');
+      return null;
+    }
+    const { VaultCli } = await loadModule(context, 'dist/runtime/src/vault_cli.mjs');
+    let password = (await readSecretMap(context))[db];
+    const typed = !password;
+    if (!password) password = await askSecret(`Master password for ${path.basename(db)} (stored in VS Code secret storage)`);
+    if (!password) return null;
+    const cli = new VaultCli({ keepassxcCli: report.keepassxc.path, kdbxPath: db, volumePath: volumePath(), mountPoint: mountPoint(), platform: process.platform });
+    if (typed) {
+      try {
+        await cli.listEntries({ file: db, databasePassword: password });
+      } catch (error) {
+        if (error.code === 'vault_unlock_failed') vscode.window.showErrorMessage('VAMP Vault: that master password was rejected, so nothing was stored.');
+        else vscode.window.showErrorMessage(`VAMP Vault: ${error.message}`);
+        return null;
+      }
+      const map = await readSecretMap(context);
+      map[db] = password;
+      await writeSecretMap(context, map);
+      output.appendLine(`Unlocked ${db} from a typed password; it is held in secret storage until "VAMP Vault: Lock".`);
+      statusItem.text = '$(shield) Vault';
+      resetVault();
+      credentialView.refresh();
+      statusView.refresh();
+      await syncContext(true);
+    }
+    return { db, cli, password, report };
+  }
+
+  async function handleVaultError(error, db) {
+    output.appendLine(`[${new Date().toISOString()}] ${error?.code ?? 'error'}: ${error?.message ?? error}`);
+    if (error?.code === 'vault_unlock_failed') {
+      const map = await readSecretMap(context);
+      if (db && map[db]) {
+        delete map[db];
+        await writeSecretMap(context, map);
+        statusItem.text = '$(lock) Vault';
+      }
+      resetVault();
+      credentialView.refresh();
+      statusView.refresh();
+      await syncContext(false);
+      const choice = await vscode.window.showErrorMessage(`VAMP Vault: the stored master password was rejected for ${path.basename(db ?? kdbxPath())}. It was forgotten; unlock again.`, 'Unlock');
+      if (choice === 'Unlock') await vscode.commands.executeCommand('vampVault.unlock');
+      return;
+    }
+    if (error?.code === 'entry_not_found') {
+      vscode.window.showWarningMessage(`VAMP Vault: ${error.message} Refresh the view to see the current entries.`);
+      resetVault();
+      credentialView.refresh();
+      return;
+    }
+    const choice = await vscode.window.showErrorMessage(`VAMP Vault: ${error?.message ?? error}`, 'Show Log');
+    if (choice === 'Show Log') output.show();
+  }
+
+  async function pickEntryPath(opened, title) {
+    let listing;
+    try {
+      listing = await opened.cli.listEntries({ file: opened.db, databasePassword: opened.password });
+    } catch (error) {
+      await handleVaultError(error, opened.db);
+      return null;
+    }
+    if (!listing.entries.length) {
+      vscode.window.showInformationMessage('VAMP Vault: the vault has no entries yet.');
+      return null;
+    }
+    const picked = await vscode.window.showQuickPick(
+      listing.entries.map(entry => ({
+        label: entry.title,
+        description: entry.group === '/' ? 'top level' : entry.group,
+        detail: entry.path,
+        entryPath: entry.path,
+      })),
+      { title, placeHolder: 'Type to filter entries', matchOnDetail: true },
+    );
+    return picked?.entryPath ?? null;
+  }
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.refreshTree', async () => {
+    resetVault();
+    credentialView.refresh();
+    statusView.refresh();
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.unlock', async () => {
+    const opened = await openVault();
+    if (!opened) return;
+    statusItem.text = '$(shield) Vault';
+    resetVault();
+    credentialView.refresh();
+    statusView.refresh();
+    await syncContext(true);
+    vscode.window.setStatusBarMessage(`VAMP Vault unlocked: ${path.basename(opened.db)}`, 5000);
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.revealKdbx', async () => {
+    const db = kdbxPath();
+    if (!fs.existsSync(db)) {
+      const choice = await vscode.window.showWarningMessage(`VAMP Vault: there is no database file at ${db} yet.`, { modal: true }, 'Create Vault');
+      if (choice === 'Create Vault') await vscode.commands.executeCommand('vampVault.createVault');
+      return;
+    }
+    try {
+      await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(db));
+    } catch (error) {
+      vscode.window.showErrorMessage(`VAMP Vault: the file manager could not show ${db} (${error.message}). The path is above; copy it by hand if needed.`);
+      output.appendLine(`revealFileInOS failed for ${db}: ${error.message}`);
+    }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.exportKdbx', async () => {
+    const db = kdbxPath();
+    if (!fs.existsSync(db)) {
+      const choice = await vscode.window.showWarningMessage(`VAMP Vault: there is no database file at ${db} yet, so there is nothing to export.`, { modal: true }, 'Create Vault');
+      if (choice === 'Create Vault') await vscode.commands.executeCommand('vampVault.createVault');
+      return;
+    }
+    const target = await vscode.window.showSaveDialog({
+      title: 'Export a copy of the KeePassXC database',
+      saveLabel: 'Export Copy',
+      defaultUri: vscode.Uri.file(path.join(os.homedir(), path.basename(db))),
+      filters: { 'KeePassXC database': ['kdbx'], 'All files': ['*'] },
+    });
+    if (!target) return;
+    if (path.resolve(target.fsPath) === path.resolve(db)) {
+      vscode.window.showWarningMessage('VAMP Vault: that is the database itself, not a copy. Pick another folder or name.');
+      return;
+    }
+    try {
+      fs.mkdirSync(path.dirname(target.fsPath), { recursive: true });
+      fs.copyFileSync(db, target.fsPath);
+      output.appendLine(`Exported a copy of ${db} to ${target.fsPath}`);
+      const choice = await vscode.window.showInformationMessage(
+        `Exported a copy to ${target.fsPath}. It is encrypted with the same master password, so keep it somewhere you would keep the vault and delete it when the copy is no longer needed.`,
+        'Reveal Copy',
+      );
+      if (choice === 'Reveal Copy') await vscode.commands.executeCommand('revealFileInOS', target);
+    } catch (error) {
+      vscode.window.showErrorMessage(`VAMP Vault: the copy could not be written (${error.message}).`);
+      output.appendLine(`export failed: ${error.message}`);
+    }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.searchCredentials', async () => {
+    const opened = await openVault();
+    if (!opened) return;
+    const entryPath = await pickEntryPath(opened, 'VAMP Vault — search credentials');
+    if (!entryPath) return;
+    const action = await vscode.window.showQuickPick([
+      { label: '$(person) Copy username', id: 'username' },
+      { label: '$(key) Copy password', description: 'asks for approval first', id: 'password' },
+      { label: '$(list-unordered) Show details', id: 'details' },
+    ], { title: entryPath, placeHolder: 'What should happen with this entry?' });
+    if (!action) return;
+    const node = { type: 'entry', path: entryPath };
+    if (action.id === 'username') await vscode.commands.executeCommand('vampVault.copyUsername', node);
+    if (action.id === 'password') await vscode.commands.executeCommand('vampVault.copyPassword', node);
+    if (action.id === 'details') await vscode.commands.executeCommand('vampVault.showEntry', node);
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.copyUsername', async arg => {
+    const node = treeNode(arg);
+    const opened = await openVault();
+    if (!opened) return;
+    const entryPath = node?.type === 'entry' ? node.path : await pickEntryPath(opened, 'VAMP Vault: copy an entry\'s username');
+    if (!entryPath) return;
+    try {
+      const record = await opened.cli.showEntry({ file: opened.db, entry: entryPath, databasePassword: opened.password, showProtected: false });
+      if (!record.username) {
+        vscode.window.showWarningMessage(`VAMP Vault: ${entryPath} has no username stored.`);
+        return;
+      }
+      await vscode.env.clipboard.writeText(record.username);
+      output.appendLine(`Copied the username for ${entryPath} to the clipboard.`);
+      vscode.window.setStatusBarMessage(`VAMP Vault: username for ${entryPath} copied.`, 5000);
+    } catch (error) {
+      await handleVaultError(error, opened.db);
+    }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.copyPassword', async arg => {
+    const node = treeNode(arg);
+    const opened = await openVault();
+    if (!opened) return;
+    const entryPath = node?.type === 'entry' ? node.path : await pickEntryPath(opened, 'VAMP Vault: copy an entry\'s password');
+    if (!entryPath) return;
+    const choice = await vscode.window.showWarningMessage(
+      `Copy the password for "${entryPath}" to the clipboard?`,
+      { modal: true, detail: 'Anything running as you can read the clipboard. VAMP Vault clears it 30 seconds later if it still holds the same value.' },
+      'Copy Password',
+    );
+    if (choice !== 'Copy Password') return;
+    try {
+      const record = await opened.cli.showEntry({ file: opened.db, entry: entryPath, databasePassword: opened.password, showProtected: true });
+      if (!record.password) {
+        vscode.window.showWarningMessage(`VAMP Vault: ${entryPath} has no password stored.`);
+        return;
+      }
+      await vscode.env.clipboard.writeText(record.password);
+      scheduleClipboardClear(record.password);
+      output.appendLine(`Approved and copied the password for ${entryPath}.`);
+      vscode.window.setStatusBarMessage('VAMP Vault: password copied; cleared in 30 s if the clipboard still holds it.', 7000);
+    } catch (error) {
+      await handleVaultError(error, opened.db);
+    }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.showEntry', async arg => {
+    const node = treeNode(arg);
+    const opened = await openVault();
+    if (!opened) return;
+    const entryPath = node?.type === 'entry' ? node.path : await pickEntryPath(opened, 'VAMP Vault: show an entry');
+    if (!entryPath) return;
+    try {
+      // No -s: the password stays in the CLI as PROTECTED and never reaches this string.
+      const record = await opened.cli.showEntry({ file: opened.db, entry: entryPath, databasePassword: opened.password, showProtected: false });
+      const notes = (record.notes ?? '').trim();
+      const lines = [
+        `Path: ${entryPath}`,
+        record.username ? `Username: ${record.username}` : 'Username: (none)',
+        record.url ? `URL: ${record.url}` : null,
+        record.tags?.length ? `Tags: ${record.tags.join(', ')}` : null,
+        notes ? `Notes: ${notes.length > 300 ? `${notes.slice(0, 300)}…` : notes}` : null,
+        'Password: hidden — copying it asks for approval',
+      ].filter(Boolean).join('\n');
+      const buttons = [record.username ? 'Copy Username' : null, 'Copy Password', 'Close'].filter(Boolean);
+      const choice = await vscode.window.showInformationMessage(lines, { modal: true }, ...buttons);
+      if (choice === 'Copy Username') await vscode.commands.executeCommand('vampVault.copyUsername', { type: 'entry', path: entryPath });
+      if (choice === 'Copy Password') await vscode.commands.executeCommand('vampVault.copyPassword', { type: 'entry', path: entryPath });
+    } catch (error) {
+      await handleVaultError(error, opened.db);
+    }
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('vampVault.openGuide', () =>

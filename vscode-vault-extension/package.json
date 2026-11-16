@@ -2,7 +2,7 @@
   "name": "vamp-vault",
   "displayName": "VAMP Vault — Credential & Certificate Isolation for AI Agents",
   "description": "Local KeePassXC & VeraCrypt MCP vault for AI agents, providing isolated credential injection and virtual USB certificate mounting.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -34,7 +34,9 @@
   "main": "./extension.js",
   "icon": "icon.png",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onView:vampVault.views.credentials",
+    "onView:vampVault.views.status"
   ],
   "capabilities": {
     "untrustedWorkspaces": {
@@ -45,6 +47,29 @@
     "wayfarer6.vamp-mcp"
   ],
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "vamp-vault",
+          "title": "VAMP Vault",
+          "icon": "icon.png"
+        }
+      ]
+    },
+    "views": {
+      "vamp-vault": [
+        {
+          "id": "vampVault.views.status",
+          "name": "Vault Status",
+          "contextualTitle": "VAMP Vault"
+        },
+        {
+          "id": "vampVault.views.credentials",
+          "name": "Credentials",
+          "contextualTitle": "VAMP Vault"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "vampVault.setupCli",
@@ -65,8 +90,118 @@
       {
         "command": "vampVault.lock",
         "title": "VAMP Vault: Lock (Forget Master Password)"
+      },
+      {
+        "command": "vampVault.unlock",
+        "title": "VAMP Vault: Unlock"
+      },
+      {
+        "command": "vampVault.refreshTree",
+        "title": "VAMP Vault: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vampVault.revealKdbx",
+        "title": "VAMP Vault: Reveal .kdbx File in OS File Explorer",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "vampVault.exportKdbx",
+        "title": "VAMP Vault: Export .kdbx Copy to...",
+        "icon": "$(cloud-download)"
+      },
+      {
+        "command": "vampVault.searchCredentials",
+        "title": "VAMP Vault: Search Credentials",
+        "icon": "$(search)"
+      },
+      {
+        "command": "vampVault.copyUsername",
+        "title": "VAMP Vault: Copy Username",
+        "icon": "$(person)"
+      },
+      {
+        "command": "vampVault.copyPassword",
+        "title": "VAMP Vault: Copy Password (Approval Required)",
+        "icon": "$(key)"
+      },
+      {
+        "command": "vampVault.showEntry",
+        "title": "VAMP Vault: Show Entry Details",
+        "icon": "$(list-unordered)"
       }
     ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "vampVault.refreshTree",
+          "when": "view == vampVault.views.credentials",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vampVault.searchCredentials",
+          "when": "view == vampVault.views.credentials",
+          "group": "navigation@2"
+        },
+        {
+          "command": "vampVault.lock",
+          "when": "view == vampVault.views.credentials && vampVault.unlocked",
+          "group": "navigation@3"
+        },
+        {
+          "command": "vampVault.unlock",
+          "when": "view == vampVault.views.credentials && !vampVault.unlocked",
+          "group": "navigation@3"
+        },
+        {
+          "command": "vampVault.revealKdbx",
+          "when": "view == vampVault.views.credentials",
+          "group": "1_vault@1"
+        },
+        {
+          "command": "vampVault.exportKdbx",
+          "when": "view == vampVault.views.credentials",
+          "group": "1_vault@2"
+        },
+        {
+          "command": "vampVault.refreshTree",
+          "when": "view == vampVault.views.status",
+          "group": "navigation@1"
+        },
+        {
+          "command": "vampVault.revealKdbx",
+          "when": "view == vampVault.views.status",
+          "group": "1_vault@1"
+        },
+        {
+          "command": "vampVault.exportKdbx",
+          "when": "view == vampVault.views.status",
+          "group": "1_vault@2"
+        },
+        {
+          "command": "vampVault.setupCli",
+          "when": "view == vampVault.views.status",
+          "group": "2_setup@1"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vampVault.copyUsername",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.credential",
+          "group": "1_copy@1"
+        },
+        {
+          "command": "vampVault.copyPassword",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.credential",
+          "group": "1_copy@2"
+        },
+        {
+          "command": "vampVault.showEntry",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.credential",
+          "group": "2_details@1"
+        }
+      ]
+    },
     "mcpServerDefinitionProviders": [
       {
         "id": "vamp.vault",
@@ -128,8 +263,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out vamp-vault-0.1.0.vsix",
-    "test": "node test/smoke.mjs",
+    "package": "npm run build && vsce package --out vamp-vault-0.1.1.vsix",
+    "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {

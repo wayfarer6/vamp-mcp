@@ -19,6 +19,21 @@ It is the companion to [VAMP](https://marketplace.visualstudio.com/items?itemNam
 
 The master password is asked once and stays in secret storage until you run **VAMP Vault: Lock**. Every secret read is approved in a VS Code dialog, or once per entry per session if you choose that setting.
 
+## Sidebar
+
+The VAMP Vault icon in the activity bar opens two views.
+
+**Vault Status** reads only files and CLI paths: lock state, database and volume presence, mounted volumes, resolved KeePassXC/VeraCrypt versions and the approval mode. Nothing secret is touched, and each row is clickable — a missing binary offers setup, a missing database offers creation, an existing one opens the folder that holds it.
+
+**Credentials** is the database itself, as a tree:
+
+- Locked or without a CLI, it shows the one action that fixes that — *Set up KeePassXC CLI*, *Create vault* or *Unlock vault* — instead of an empty pane.
+- Unlocked, it mirrors the KeePassXC groups and entries. An entry row shows its title, and its username once it has been read (the group path before that); titles are `$(key)` and groups `$(folder)`, with the recycle bin as `$(trash)`.
+- Right-click an entry for **Copy Username**, **Copy Password (Approval Required)** and **Show Entry Details**. The password copy asks in a modal dialog first, then clears the clipboard 30 seconds later if it still holds that value. Details show path, username, URL, tags and notes — never the password.
+- The view title carries Refresh, Search, Lock/Unlock and a `…` menu with *Reveal .kdbx File in OS File Explorer* and *Export .kdbx Copy to…*. Search is a QuickPick over every entry path.
+
+Reading a username costs one `keepassxc-cli show` call per entry, so usernames fill in for the first 200 entries in the background; a password is never read on this path (`show` without `-s` reports `PROTECTED`).
+
 ## Architecture
 
 ```
@@ -26,7 +41,7 @@ VS Code extension host                        MCP server process (Node, stdio)
 ┌───────────────────────────────┐            ┌──────────────────────────────────┐
 │ vamp.vault provider           │            │ backends/vault/server.mjs        │
 │  · MCP definition + env       │  spawns →  │  9 tools, session cache,         │
-│  · commands, status bar       │            │  approval gate                   │
+│  · commands, sidebar, status  │            │  approval gate                   │
 │  · approval bridge (socket)   │◄──────────►│  src/bridge_client.mjs           │
 │      ├─ secret storage        │  approval/ │  src/vault_cli.mjs               │
 │      └─ modal dialogs         │  password  │      ├─ keepassxc-cli  (stdin)   │
@@ -82,6 +97,7 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 - **What is stored where:** the `.kdbx` and the VeraCrypt volume are ordinary files, encrypted with their own keys. The master password lives in VS Code secret storage (Keychain, DPAPI or libsecret) and is forgotten by **VAMP Vault: Lock**.
 - **What the agent cannot do:** list a password, use a password as a shell argument, read the master password, or mount a volume without approval. It also cannot see an entry path you never gave it.
 - **Chat transcripts:** a value returned by `vault_get_credential` is in the agent's context and may be summarised by the model. Ask for one field at a time, and prefer `vault_mount_volume` plus a guest-side password manager for repeated logins.
+- **The clipboard is not a vault:** copying a password from the sidebar is for moving it into one login form. The copy asks for approval first and clears the clipboard 30 seconds later if it still holds that value; anything that could read the clipboard in that window already could read it before.
 - **Backups:** the recycle bin is inside the `.kdbx`. Copy the file while the vault is closed, and back up the key file separately if you use one.
 - **What this is not:** not a hardware token, not a password-less design, and not protection against malware running as your user. It is isolation from the agent, and a record of what the agent was given.
 
@@ -106,6 +122,13 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 | **VAMP Vault: Create Vault** | Ask for a path and master password, create the `.kdbx`, store the password in secret storage. |
 | **VAMP Vault: Show Status** | Database, volume, mount point, lock state, CLI versions, mounted volumes. |
 | **VAMP Vault: Lock (Forget Master Password)** | Delete the master password from secret storage. |
+| **VAMP Vault: Unlock** | Ask for the master password, verify it against the database, and keep it in secret storage. |
+| **VAMP Vault: Refresh** | Re-read the status and credentials views. |
+| **VAMP Vault: Search Credentials** | QuickPick over every entry; copy the username, copy the password after approval, or show details. |
+| **VAMP Vault: Reveal .kdbx File in OS File Explorer** | Open the file manager at the database. |
+| **VAMP Vault: Export .kdbx Copy to...** | Save an encrypted copy of the database wherever you choose. |
+| **VAMP Vault: Copy Username / Copy Password** | Copy one value from an entry; the password asks for approval first. |
+| **VAMP Vault: Show Entry Details** | Read an entry's fields with the password hidden. |
 | **VAMP Vault: Open Guide** | This document. |
 
 ## Development
@@ -113,14 +136,16 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 ```bash
 npm install
 npm run build                    # bundle backends/vault/server.mjs into dist/
-npm run package                  # build + vsce package → vamp-vault-0.1.0.vsix
-npm test                         # MCP smoke test against a throw-away database
+npm run package                  # build + vsce package → vamp-vault-0.1.1.vsix
+npm test                         # build, MCP smoke test, sidebar checks (stand-in VS Code host)
 VAULT_TEST_KEEPASSXC=/path/to/keepassxc-cli npm test
 node test/downloader.mjs         # opt-in: really download and verify both CLIs (~70 MB)
 ```
 
-`npm test` starts the real server over stdio with the official MCP client and exercises all nine
-tools, the session cache, the approval fallback and a stand-in extension bridge. It needs
+`npm test` builds the extension, then starts the real server over stdio with the official MCP client and exercises all nine
+tools, the session cache, the approval fallback and a stand-in extension bridge. It also loads `extension.js`
+against a stand-in `vscode` module and drives the sidebar: both views, the tree, tree items, copy with and
+without approval, details, reveal, export, search, lock and unlock. It needs
 `keepassxc-cli` on `PATH` or in `VAULT_TEST_KEEPASSXC`; `VAULT_TEST_VERACRYPT` enables the volume
 checks. Nothing it does touches the user's configured vault.
 

@@ -31,7 +31,7 @@ const built = await build({
 });
 
 // The extension host loads these two as modules for its own commands.
-for (const name of ['downloader.mjs', 'vault_cli.mjs', 'bridge_client.mjs']) {
+for (const name of ['downloader.mjs', 'vault_cli.mjs', 'bridge_client.mjs', 'tree.mjs']) {
   await copyFile(path.join(here, 'src', name), path.join(runtime, 'src', name));
 }
 

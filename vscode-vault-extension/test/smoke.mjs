@@ -18,9 +18,10 @@ import path from 'node:path';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { parseEntryList, parseMountList, parseShowAll } from '../src/vault_cli.mjs';
+import { parseEntryList, parseMountList, parseShowAll, VaultCli } from '../src/vault_cli.mjs';
 import { BridgeClient } from '../src/bridge_client.mjs';
 import { detectPlatform, findOnPath } from '../src/downloader.mjs';
+import { buildCredentialTree, buildStatusTree, findNode, flattenTree } from '../src/tree.mjs';
 
 const server = process.env.VAULT_TEST_SERVER ?? path.join(import.meta.dirname, '..', 'backends/vault/server.mjs');
 const masterPassword = 'smoke-test-master-1234';
@@ -158,6 +159,139 @@ await check('findOnPath finds a binary this test can see', async () => {
   if (expected) assert.ok(expected);
 });
 
+console.log('\nSidebar tree model');
+await check('a missing CLI shows the setup action', () => {
+  const nodes = buildCredentialTree({ cliAvailable: false, databaseExists: false, locked: true, kdbxPath: '/x/vault.kdbx' });
+  assert.equal(nodes[0].type, 'action');
+  assert.equal(nodes[0].command, 'vampVault.setupCli');
+  assert.equal(nodes[0].icon, 'tools');
+  assert.equal(findNode(nodes, 'setupCli').label, 'Set up KeePassXC CLI');
+});
+await check('a missing database shows the create action', () => {
+  const nodes = buildCredentialTree({ cliAvailable: true, databaseExists: false, locked: true, kdbxPath: '/x/vault.kdbx' });
+  assert.equal(nodes[0].command, 'vampVault.createVault');
+  assert.match(nodes[0].description, /vault\.kdbx/);
+});
+await check('a locked vault offers unlock and lists no entries', () => {
+  const nodes = buildCredentialTree({
+    cliAvailable: true, databaseExists: true, locked: true, kdbxPath: '/x/vault.kdbx',
+    listing: { groups: ['Mail'], entries: [{ path: 'Mail/Example', group: 'Mail', title: 'Example' }] },
+  });
+  assert.equal(nodes[0].command, 'vampVault.unlock');
+  assert.equal(nodes[0].icon, 'unlock');
+  assert.equal(findNode(nodes, 'Mail/Example'), null);
+});
+await check('an unlocked vault builds a nested group and entry tree', () => {
+  const nodes = buildCredentialTree({
+    cliAvailable: true, databaseExists: true, locked: false, kdbxPath: '/x/vault.kdbx',
+    listing: {
+      groups: ['Mail', 'Mail/Work', 'Recycle Bin', 'Bank'],
+      entries: [
+        { path: 'Mail/Example', group: 'Mail', title: 'Example' },
+        { path: 'Mail/Work/Corp', group: 'Mail/Work', title: 'Corp' },
+        { path: 'Bank/Main', group: 'Bank', title: 'Main' },
+        { path: 'TopLevel', group: '/', title: 'TopLevel' },
+        { path: 'Recycle Bin/Old', group: 'Recycle Bin', title: 'Old' },
+      ],
+    },
+    meta: { 'Mail/Example': { username: 'alice' } },
+  });
+  const mail = findNode(nodes, 'Mail');
+  assert.equal(mail.type, 'group');
+  assert.equal(mail.label, 'Mail');
+  assert.equal(mail.icon, 'folder');
+  assert.deepEqual(mail.children.map(node => node.label), ['Work', 'Example'], 'groups sort before entries');
+  assert.equal(mail.children[1].description, 'alice', 'an entry shows its username');
+  assert.equal(mail.children[1].icon, 'key');
+  assert.equal(findNode(nodes, 'Mail/Work/Corp').description, 'Mail/Work', 'no username yet: the group path is shown');
+  assert.equal(findNode(nodes, 'TopLevel').description, 'top level');
+  assert.equal(findNode(nodes, 'Recycle Bin').icon, 'trash');
+  assert.equal(findNode(nodes, 'Recycle Bin').children[0].path, 'Recycle Bin/Old');
+  assert.deepEqual(nodes.filter(node => node.type === 'group').map(node => node.label), ['Bank', 'Mail', 'Recycle Bin']);
+  assert.equal(nodes[nodes.length - 1].label, 'TopLevel', 'entries follow groups at the root');
+});
+await check('flattenTree walks every level', () => {
+  const nodes = [{ label: 'a', children: [{ label: 'b', children: [{ label: 'c' }] }] }];
+  assert.deepEqual(flattenTree(nodes).map(node => node.label), ['a', 'b', 'c']);
+});
+await check('an unreadable vault shows the error and an unlock action', () => {
+  const nodes = buildCredentialTree({
+    cliAvailable: true, databaseExists: true, locked: false, kdbxPath: '/x/vault.kdbx',
+    error: 'the stored master password was rejected — unlock again',
+  });
+  assert.equal(nodes[0].icon, 'warning');
+  assert.equal(nodes[1].command, 'vampVault.unlock');
+});
+await check('an empty unlocked vault says so instead of showing nothing', () => {
+  const nodes = buildCredentialTree({ cliAvailable: true, databaseExists: true, locked: false, kdbxPath: '/x/vault.kdbx', listing: { groups: [], entries: [] } });
+  assert.equal(nodes.length, 1);
+  assert.equal(nodes[0].label, 'No entries yet');
+});
+await check('the status tree reports lock, database, CLIs and approval', () => {
+  const nodes = buildStatusTree({
+    databaseExists: true, kdbxPath: '/v/vault.kdbx', volumeExists: false, volumePath: '/v/vault.hc',
+    mounted: [{ mount_point: '/home/u/VAMP-Vault' }], unlocked: true,
+    keepassxcAvailable: true, keepassxcVersion: '2.7.9', keepassxcPath: '/usr/bin/keepassxc-cli',
+    veracryptAvailable: false, approvalMode: 'each-read', cacheMinutes: 0,
+  });
+  assert.equal(findNode(nodes, 'lock').label, 'Unlocked');
+  assert.equal(findNode(nodes, 'lock').icon, 'unlock');
+  assert.equal(findNode(nodes, 'database').description, 'vault.kdbx');
+  assert.equal(findNode(nodes, 'database').command, 'vampVault.revealKdbx');
+  assert.match(findNode(nodes, 'volume').description, /mounted at \/home\/u\/VAMP-Vault/);
+  assert.equal(findNode(nodes, 'keepassxc').description, '2.7.9');
+  assert.equal(findNode(nodes, 'veracrypt').command, 'vampVault.setupCli');
+  assert.equal(findNode(nodes, 'approval').description, 'each-read, cache 0 min');
+  assert.equal(findNode(nodes, 'guide').command, 'vampVault.openGuide');
+});
+await check('a locked status tree offers unlock and marks a missing database', () => {
+  const nodes = buildStatusTree({ databaseExists: false, kdbxPath: '/v/vault.kdbx', unlocked: false, keepassxcAvailable: false });
+  assert.equal(findNode(nodes, 'lock').command, 'vampVault.unlock');
+  assert.equal(findNode(nodes, 'database').icon, 'warning');
+  assert.equal(findNode(nodes, 'database').command, 'vampVault.createVault');
+  assert.equal(findNode(nodes, 'keepassxc').icon, 'error');
+});
+
+console.log('\nExtension manifest');
+const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
+await check('the manifest declares the activity bar container and both views', () => {
+  assert.equal(manifest.version, '0.1.1');
+  const container = manifest.contributes.viewsContainers.activitybar.find(item => item.id === 'vamp-vault');
+  assert.equal(container.title, 'VAMP Vault');
+  assert.equal(container.icon, manifest.icon);
+  const views = manifest.contributes.views['vamp-vault'];
+  assert.deepEqual(views.map(view => view.id), ['vampVault.views.status', 'vampVault.views.credentials']);
+  assert.equal(views[0].name, 'Vault Status');
+  assert.equal(views[1].name, 'Credentials');
+});
+await check('every menu entry points at a declared command and a declared view', () => {
+  const commands = new Set(manifest.contributes.commands.map(item => item.command));
+  const views = new Set(manifest.contributes.views['vamp-vault'].map(view => view.id));
+  for (const [menu, entries] of Object.entries(manifest.contributes.menus)) {
+    for (const entry of entries) {
+      assert.ok(commands.has(entry.command), `${menu}: ${entry.command} is not a declared command`);
+      const match = /view == ([\w.]+)/.exec(entry.when ?? '');
+      if (match) assert.ok(views.has(match[1]), `${menu}: ${match[1]} is not a declared view`);
+    }
+  }
+});
+await check('the tree only references commands the manifest declares', () => {
+  const commands = new Set(manifest.contributes.commands.map(item => item.command));
+  const nodes = [
+    ...buildCredentialTree({ cliAvailable: false }),
+    ...buildCredentialTree({ cliAvailable: true, databaseExists: false }),
+    ...buildCredentialTree({ cliAvailable: true, databaseExists: true, locked: true, kdbxPath: '/a/vault.kdbx' }),
+    ...buildStatusTree({ databaseExists: false }),
+  ];
+  for (const node of flattenTree(nodes)) {
+    if (node.command) assert.ok(commands.has(node.command), `${node.command} is not declared`);
+  }
+});
+await check('the build ships the tree module the sidebar loads', async () => {
+  const build = await readFile(new URL('../build.mjs', import.meta.url), 'utf8');
+  assert.match(build, /tree\.mjs/);
+});
+
 console.log('\nBridge client');
 const fakeHost = await startFakeHost();
 await check('bridge returns the stored password for unlock', async () => {
@@ -229,6 +363,32 @@ if (!status.cli.keepassxc.available) {
     assert.equal(listed.status, 'ok');
     assert.ok(listed.entries.some(item => item.path === 'Mail/Example'));
     assert.ok(!JSON.stringify(listed).includes(entryPassword), 'listing leaked the password');
+  });
+
+  await check('showEntry without -s returns the username and no password', async () => {
+    const cli = new VaultCli({ keepassxcCli: status.cli.keepassxc.path, kdbxPath: kdbx });
+    const record = await cli.showEntry({ file: kdbx, entry: 'Mail/Example', databasePassword: masterPassword, showProtected: false });
+    assert.equal(record.username, 'alice');
+    assert.equal(record.password, null, 'the sidebar path must not carry a password');
+  });
+
+  await check('the sidebar tree mirrors a real database read', async () => {
+    const cli = new VaultCli({ keepassxcCli: status.cli.keepassxc.path, kdbxPath: kdbx });
+    const treeListing = await cli.listEntries({ file: kdbx, databasePassword: masterPassword });
+    const nodes = buildCredentialTree({
+      cliAvailable: true, databaseExists: true, locked: false, kdbxPath: kdbx,
+      listing: treeListing,
+      meta: { 'Mail/Example': { username: 'alice' } },
+    });
+    const group = findNode(nodes, 'Mail');
+    assert.ok(group, 'Mail group missing from the tree');
+    assert.equal(group.type, 'group');
+    const entry = findNode(nodes, 'Mail/Example');
+    assert.equal(entry.type, 'entry');
+    assert.equal(entry.label, 'Example');
+    assert.equal(entry.description, 'alice');
+    assert.equal(entry.icon, 'key');
+    assert.ok(!JSON.stringify(nodes).includes(entryPassword), 'the tree leaked the password');
   });
 
   await check('vault_get_credential asks for approval when no dialog exists', async () => {
