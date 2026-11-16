@@ -27,7 +27,7 @@ import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { VaultCli } from '../../src/vault_cli.mjs';
 
-const VERSION = '0.1.4';
+const VERSION = '0.1.5';
 
 const USAGE = [
   'usage: server.mjs [ --version | --list-tools | --env-check',

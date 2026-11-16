@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5
+
+- Restore the VAMP bat holding a monitor, with the safe inside its screen, for the Marketplace icon and matching monochrome activity-bar icon.
+- Refresh the VSIX branding; vault behavior is unchanged from 0.1.4.
+
 ## 0.1.4
 
 Remote vaults over SSH, each host with its own database.

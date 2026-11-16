@@ -196,7 +196,7 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 ```bash
 npm install
 npm run build                    # bundle backends/vault/server.mjs into dist/
-npm run package                  # build + vsce package → vamp-vault-0.1.4.vsix
+npm run package                  # build + vsce package → vamp-vault-0.1.5.vsix
 npm test                         # build, MCP smoke test, sidebar checks (stand-in VS Code host), remote SSH checks
 VAULT_TEST_KEEPASSXC=/path/to/keepassxc-cli npm test
 node test/downloader.mjs         # opt-in: really download and verify both CLIs (~70 MB)
@@ -245,3 +245,7 @@ KeePassXC 2.8 already stores passkeys and exposes them through the KeePassXC-Bro
 Linux checks passed with the real KeePassXC and VeraCrypt CLIs: MCP smoke 42, extension-host stand-in 21, remote SSH stand-in 30, browser 2 and live approval-policy 7 checks. The packaged MCP server also passed 15 native Windows checks in the nested Windows lab, using a temporary encrypted database: credential CRUD, independent deletion approval, read approval, cache invalidation and encrypted storage. [Validation receipt](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/media/vault-014-validation.json).
 
 The remote suite models separate hosts with a stand-in SSH transport. Physical Windows hardware and native Windows VeraCrypt mounting were not retested for this release. The master password is transmitted to the selected remote host through encrypted SSH stdin; approval dialogs and stored passwords remain under this computer's control.
+
+## Version 0.1.5 icon update
+
+[Download Vault 0.1.5](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.5) · [Combined VAMP release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8). The Marketplace icon and activity-bar icon show the VAMP bat holding a monitor with the safe inside the screen. Vault functionality remains the same as 0.1.4.

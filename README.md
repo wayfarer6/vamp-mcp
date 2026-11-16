@@ -13,7 +13,7 @@ Start in VS Code’s **VAMP** sidebar: **RPA Library** to create/find/export wor
 
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
-[VAMP 0.1.8](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8) · [Vault 0.1.4](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.4) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
+[VAMP 0.1.8](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8) · [Vault 0.1.5](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.5) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
 
 ## 만든 이유
 
