@@ -13,7 +13,7 @@ Start in VS Code’s **VAMP** sidebar: **RPA Library** to create/find/export wor
 
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
-[다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/)
+[다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
 
 ## 만든 이유
 
@@ -127,6 +127,7 @@ KVM VM의 화면은 스크린샷을 반복 조회하는 대신 **VNC(RFB) → �
 | 실행 결과·로그·영상·스크린샷 | [실행 이력](docs/EXECUTION_HISTORY.md) |
 | 설치와 백엔드 구성 | [문서 목차](docs/README.md) · [아키텍처](docs/MCP_ARCHITECTURE.md) |
 | 시험한 기능과 남은 문제 | [검증 기록](docs/VALIDATION.md) |
+| 원격 하이퍼바이저·클라우드 에이전트 연동 로드맵 | [아키텍처 로드맵](docs/ROADMAP.md) |
 
 KVM MCP의 VM 생성·화면 제어·RPA 실행은 [`vm_mcp_server.py`](vm_mcp_server.py)에서 제공하며, 프로필로 VNC와 SPICE 연결을 구분합니다.
 
