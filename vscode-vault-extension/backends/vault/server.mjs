@@ -22,36 +22,116 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { access } from 'node:fs/promises';
+import { sep } from 'node:path';
 import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { VaultCli } from '../../src/vault_cli.mjs';
 
+const VERSION = '0.1.4';
+
+const USAGE = [
+  'usage: server.mjs [ --version | --list-tools | --env-check',
+  '                  | --call TOOL [--args JSON] [--stdin-password] ]',
+  '                  [--kdbx PATH] [--volume PATH] [--mount-point PATH]',
+  '                  [--keepassxc-cli PATH] [--veracrypt-cli PATH] [--bin-dir PATH]',
+  '                  [--approval-mode each-read|per-session|off] [--session-ttl-minutes N]',
+  '                  [--remote-host HOST]',
+  '',
+  'With no mode flag it speaks MCP over stdio (how VS Code starts it).',
+  '--call runs exactly one tool and prints its JSON result: the mode the VAMP Vault',
+  'extension uses for a vault that lives on another machine, reached over SSH.',
+].join('\n');
+
+/**
+ * Command line for the modes used over SSH. Nothing here changes the stdio
+ * MCP behaviour: without a mode flag this file behaves exactly as before.
+ */
+function parseArgv(argv) {
+  const parsed = { mode: 'stdio', tool: '', args: '', stdinPassword: false, flags: {} };
+  const value = (index, name) => {
+    const next = argv[index + 1];
+    if (next === undefined) throw new Error(`${name} needs a value`);
+    return next;
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    switch (arg) {
+      case '--version': parsed.mode = 'version'; break;
+      case '--list-tools': parsed.mode = 'list-tools'; break;
+      case '--env-check': parsed.mode = 'env-check'; break;
+      case '--call': parsed.mode = 'call'; parsed.tool = value(index, arg); index += 1; break;
+      case '--args': parsed.args = value(index, arg); index += 1; break;
+      case '--stdin-password': parsed.stdinPassword = true; break;
+      case '--kdbx': parsed.flags.kdbx = value(index, arg); index += 1; break;
+      case '--volume': parsed.flags.volume = value(index, arg); index += 1; break;
+      case '--mount-point': parsed.flags.mountPoint = value(index, arg); index += 1; break;
+      case '--keepassxc-cli': parsed.flags.keepassxc = value(index, arg); index += 1; break;
+      case '--veracrypt-cli': parsed.flags.veracrypt = value(index, arg); index += 1; break;
+      case '--bin-dir': parsed.flags.binDir = value(index, arg); index += 1; break;
+      case '--approval-mode': parsed.flags.approvalMode = value(index, arg); index += 1; break;
+      case '--session-ttl-minutes': parsed.flags.ttlMinutes = value(index, arg); index += 1; break;
+      case '--remote-host': parsed.flags.remoteHost = value(index, arg); index += 1; break;
+      case '-h': case '--help': parsed.mode = 'help'; break;
+      default: throw new Error(`unknown option: ${arg}`);
+    }
+  }
+  return parsed;
+}
+
+let cli;
+try {
+  cli = parseArgv(process.argv.slice(2));
+} catch (error) {
+  process.stderr.write(`${error.message}\n${USAGE}\n`);
+  process.exit(2);
+}
+
 const env = process.env;
+const ttlMinutes = Number(cli.flags.ttlMinutes);
 const settings = {
-  keepassxc: env.VAULT_KEEPASSXC_CLI?.trim() || '',
-  veracrypt: env.VAULT_VERACRYPT_CLI?.trim() || '',
-  kdbx: env.VAULT_KDBX?.trim() || '',
-  volume: env.VAULT_VOLUME?.trim() || '',
-  mountPoint: env.VAULT_MOUNT_POINT?.trim() || '',
-  binDir: env.VAULT_BIN_DIR?.trim() || '',
-  ttlMs: Number(env.VAULT_SESSION_TTL_MS ?? 300000),
-  approvalMode: ['each-read', 'per-session', 'off'].includes(env.VAULT_APPROVAL_MODE) ? env.VAULT_APPROVAL_MODE : 'per-session',
+  keepassxc: cli.flags.keepassxc?.trim() || env.VAULT_KEEPASSXC_CLI?.trim() || '',
+  veracrypt: cli.flags.veracrypt?.trim() || env.VAULT_VERACRYPT_CLI?.trim() || '',
+  kdbx: cli.flags.kdbx?.trim() || env.VAULT_KDBX?.trim() || '',
+  volume: cli.flags.volume?.trim() || env.VAULT_VOLUME?.trim() || '',
+  mountPoint: cli.flags.mountPoint?.trim() || env.VAULT_MOUNT_POINT?.trim() || '',
+  binDir: cli.flags.binDir?.trim() || env.VAULT_BIN_DIR?.trim() || '',
+  ttlMs: Number.isFinite(ttlMinutes) ? Math.max(0, ttlMinutes) * 60000 : Number(env.VAULT_SESSION_TTL_MS ?? 300000),
+  approvalMode: ['each-read', 'per-session', 'off'].includes(cli.flags.approvalMode)
+    ? cli.flags.approvalMode
+    : ['each-read', 'per-session', 'off'].includes(env.VAULT_APPROVAL_MODE) ? env.VAULT_APPROVAL_MODE : 'per-session',
   bridgeSocket: env.VAULT_BRIDGE_SOCKET?.trim() || '',
   bridgeToken: env.VAULT_BRIDGE_TOKEN?.trim() || '',
   fallbackPassword: env.VAULT_MASTER_PASSWORD ?? '',
+  remoteHost: cli.flags.remoteHost?.trim() || '',
 };
 
-const VERSION = '0.1.0';
-const server = new McpServer({ name: 'VAMP Vault', version: VERSION }, {
-  instructions: [
-    'VAMP Vault holds the user\'s credentials and the encrypted volume that carries their certificates.',
-    'Read a secret only when the current step of the task needs it, one entry at a time, and never repeat a secret in a summary, log or file.',
-    'The user sees and approves each read in VS Code (or must pass confirm:true where no dialog is available).',
-    'Prefer vault_list_credentials to find an entry before asking the user which one to use.',
-    'Never put a password into a shell command, a URL, a commit or a chat message; type it into the target page or application directly.',
-    'Mount a volume only when a certificate or signing step actually requires it, and unmount it when that step is finished.',
-  ].join(' '),
+const instructionLines = [
+  'VAMP Vault holds the user\'s credentials and the encrypted volume that carries their certificates.',
+  'Read a secret only when the current step of the task needs it, one entry at a time, and never repeat a secret in a summary, log or file.',
+];
+if (settings.remoteHost) {
+  instructionLines.push(
+    `This vault belongs to the remote host "${settings.remoteHost}" and is separate from the vault on the user\'s own computer: entries here exist only on that host, and nothing is copied or synced between them.`,
+    'The user approves each read on their own computer before the request reaches this host.',
+  );
+} else {
+  instructionLines.push('The user sees and approves each read in VS Code (or must pass confirm:true where no dialog is available).');
+}
+instructionLines.push(
+  'Prefer vault_list_credentials to find an entry before asking the user which one to use.',
+  'Never put a password into a shell command, a URL, a commit or a chat message; type it into the target page or application directly.',
+  'Mount a volume only when a certificate or signing step actually requires it, and unmount it when that step is finished.',
+);
+
+const server = new McpServer({ name: settings.remoteHost ? `VAMP Vault (Remote) · ${settings.remoteHost}` : 'VAMP Vault', version: VERSION }, {
+  instructions: instructionLines.join(' '),
 });
+
+/** Tool table: registered on the MCP server and runnable one at a time by --call. */
+const tools = [];
+function tool(name, definition, handler) {
+  tools.push({ name, title: definition.title, description: definition.description, inputSchema: definition.inputSchema, handler });
+}
 
 const scope = {
   cli: null,
@@ -220,7 +300,7 @@ const approvalNotice = (entry, detail) => text({
 
 // --------------------------------------------------------------------- tools
 
-server.registerTool('vault_create', {
+tool('vault_create', {
   title: 'Create vault',
   description: 'Create a new KeePassXC .kdbx database and, optionally, an encrypted VeraCrypt volume beside it. Never overwrites an existing file unless overwrite:true. The master password comes from the user in VS Code, or from master_password when no dialog is available.',
   inputSchema: {
@@ -274,7 +354,7 @@ server.registerTool('vault_create', {
   }
 });
 
-server.registerTool('vault_get_credential', {
+tool('vault_get_credential', {
   title: 'Read one credential',
   description: 'Return the username, password, TOTP code and custom attributes (for example PIM) of a single entry after the user approves the read. Values are cached only for the configured session window. Never echo the result into a chat message, log or file.',
   inputSchema: {
@@ -331,7 +411,7 @@ server.registerTool('vault_get_credential', {
   }
 });
 
-server.registerTool('vault_set_credential', {
+tool('vault_set_credential', {
   title: 'Add credential',
   description: 'Add a new entry (username, password, URL, notes) to the database, creating its group when needed. Does not overwrite an existing entry; use vault_update_credential for that. TOTP seeds are added in the KeePassXC application, not here.',
   inputSchema: {
@@ -367,7 +447,7 @@ server.registerTool('vault_set_credential', {
   }
 });
 
-server.registerTool('vault_update_credential', {
+tool('vault_update_credential', {
   title: 'Update credential',
   description: 'Change the username, password, URL or notes of an existing entry. Omitted fields are left untouched.',
   inputSchema: {
@@ -394,7 +474,7 @@ server.registerTool('vault_update_credential', {
   }
 });
 
-server.registerTool('vault_delete_credential', {
+tool('vault_delete_credential', {
   title: 'Delete credential',
   description: 'Remove an entry. KeePassXC moves it to the recycle bin, so the user can still restore it from the application. Requires the user to approve the deletion.',
   inputSchema: {
@@ -418,7 +498,7 @@ server.registerTool('vault_delete_credential', {
   }
 });
 
-server.registerTool('vault_list_credentials', {
+tool('vault_list_credentials', {
   title: 'List credentials',
   description: 'List entry and group paths without any password. Use this to find the exact entry path before reading a secret.',
   inputSchema: {
@@ -446,7 +526,7 @@ server.registerTool('vault_list_credentials', {
   }
 });
 
-server.registerTool('vault_mount_volume', {
+tool('vault_mount_volume', {
   title: 'Mount encrypted volume',
   description: 'Mount a VeraCrypt volume so its certificates and credentials appear as a normal folder or virtual USB drive. Mounting needs the VeraCrypt driver on Windows/macOS or FUSE on Linux, and the user must approve the mount.',
   inputSchema: {
@@ -484,7 +564,7 @@ server.registerTool('vault_mount_volume', {
   }
 });
 
-server.registerTool('vault_unmount_volume', {
+tool('vault_unmount_volume', {
   title: 'Unmount encrypted volume',
   description: 'Safely unmount a VeraCrypt volume (or all of them) and make sure buffered writes are flushed.',
   inputSchema: {
@@ -502,7 +582,7 @@ server.registerTool('vault_unmount_volume', {
   }
 });
 
-server.registerTool('vault_status', {
+tool('vault_status', {
   title: 'Vault status',
   description: 'Report CLI availability and paths, whether a database exists and whether the vault is unlocked, which volumes are mounted, the session cache window and platform hints. Reads nothing secret.',
   inputSchema: {
@@ -567,5 +647,164 @@ server.registerTool('vault_status', {
   }
 });
 
-await server.connect(new StdioServerTransport());
-console.error('VAMP Vault stdio server ready');
+for (const entry of tools) {
+  server.registerTool(entry.name, {
+    title: entry.title,
+    description: entry.description,
+    inputSchema: entry.inputSchema,
+  }, entry.handler);
+}
+
+// -------------------------------------------------------------------- modes
+
+function emit(value) {
+  return new Promise(resolve => {
+    process.stdout.write(`${JSON.stringify(value)}\n`, () => resolve());
+  });
+}
+
+/** First line of stdin, used to carry a master password without putting it on a command line. */
+async function readStdinLine(limit = 4096) {
+  return await new Promise(resolve => {
+    let data = '';
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      process.stdin.pause();
+      resolve(data.split('\n')[0].replace(/\r$/, ''));
+    };
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', chunk => {
+      data += chunk;
+      if (data.includes('\n') || data.length >= limit) finish();
+    });
+    process.stdin.on('end', finish);
+    process.stdin.on('error', finish);
+    process.stdin.resume();
+  });
+}
+
+/**
+ * JSON Schema for one tool's input. Zod 4 can do this itself; on Zod 3 the
+ * converter next to it does, so the server reports a usable tool list either way.
+ */
+async function jsonSchemaFor(shape) {
+  const object = z.object(shape);
+  let schema;
+  if (typeof z.toJSONSchema === 'function') {
+    schema = z.toJSONSchema(object, { io: 'input' });
+  } else {
+    const { default: zodToJsonSchema } = await import('zod-to-json-schema');
+    schema = zodToJsonSchema(object, { target: 'jsonSchema7', $refStrategy: 'none' });
+  }
+  delete schema.$schema;
+  return schema;
+}
+
+async function toolManifest() {
+  const manifest = [];
+  for (const entry of tools) {
+    let schema;
+    try {
+      schema = await jsonSchemaFor(entry.inputSchema);
+    } catch {
+      schema = { type: 'object' };
+    }
+    manifest.push({ name: entry.name, title: entry.title, description: entry.description, inputSchema: schema });
+  }
+  return manifest;
+}
+
+async function envCheck() {
+  const report = {
+    status: 'ok',
+    version: VERSION,
+    node: process.versions.node,
+    platform: `${process.platform}/${process.arch}`,
+    home: process.env.HOME || process.env.USERPROFILE || '',
+    remote_host: settings.remoteHost || null,
+    kdbx: { path: settings.kdbx || null, exists: await fileExists(settings.kdbx) },
+    volume: { path: settings.volume || null, exists: await fileExists(settings.volume) },
+    mount_point: settings.mountPoint || null,
+  };
+  try {
+    const cli = await getCli();
+    report.cli = await cliStatus({ binDir: settings.binDir || undefined, overrides: { keepassxc: settings.keepassxc || undefined, veracrypt: settings.veracrypt || undefined } });
+    report.mounted = cli.hasVeracrypt ? (await cli.listVolumes()).mounted : [];
+  } catch (error) {
+    report.status = 'incomplete';
+    report.error = error?.message ?? String(error);
+  }
+  const dir = settings.kdbx && settings.kdbx.includes(sep) ? settings.kdbx.slice(0, settings.kdbx.lastIndexOf(sep)) : '';
+  if (dir) {
+    try {
+      const { stat } = await import('node:fs/promises');
+      const info = await stat(dir);
+      report.directory = { path: dir, mode: (info.mode & 0o777).toString(8), owner_only: (info.mode & 0o077) === 0 };
+    } catch {
+      report.directory = { path: dir, exists: false };
+    }
+  }
+  return report;
+}
+
+async function runCall() {
+  const entry = tools.find(item => item.name === cli.tool);
+  if (!entry) {
+    await emit({ status: 'error', error: `unknown tool: ${cli.tool || '(none)'}`, available: tools.map(item => item.name) });
+    process.exitCode = 2;
+    return;
+  }
+  let args;
+  try {
+    args = z.object(entry.inputSchema).parse(cli.args ? JSON.parse(cli.args) : {});
+  } catch (error) {
+    await emit({ status: 'error', error: `invalid arguments: ${error.message}`, tool: entry.name });
+    process.exitCode = 2;
+    return;
+  }
+  let result;
+  try {
+    result = await entry.handler(args);
+  } catch (error) {
+    await emit({ status: 'error', error: error?.message ?? String(error), code: error?.code ?? null, tool: entry.name });
+    process.exitCode = 1;
+    return;
+  }
+  let payload;
+  try {
+    payload = JSON.parse(result?.content?.[0]?.text ?? '{}');
+  } catch {
+    payload = { status: 'error', error: 'the tool returned an unreadable result', tool: entry.name };
+  }
+  await emit(payload);
+}
+
+const main = async () => {
+  if (cli.mode === 'help') {
+    await emit({ status: 'ok', usage: USAGE });
+    return;
+  }
+  if (cli.mode === 'version') {
+    await emit({ status: 'ok', version: VERSION, node: process.versions.node, remote_host: settings.remoteHost || null });
+    return;
+  }
+  if (cli.stdinPassword) settings.fallbackPassword = await readStdinLine();
+  if (cli.mode === 'list-tools') {
+    await emit({ status: 'ok', version: VERSION, tools: await toolManifest() });
+    return;
+  }
+  if (cli.mode === 'env-check') {
+    await emit(await envCheck());
+    return;
+  }
+  if (cli.mode === 'call') {
+    await runCall();
+    return;
+  }
+  await server.connect(new StdioServerTransport());
+  console.error(`VAMP Vault stdio server ready${settings.remoteHost ? ` (remote host ${settings.remoteHost})` : ''}`);
+};
+
+await main();

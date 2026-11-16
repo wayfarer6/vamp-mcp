@@ -344,6 +344,49 @@ if (!keepassCli) {
   });
 }
 
+console.log('\nRemote vault commands');
+
+await check('the remote vault commands are registered', () => {
+  for (const id of ['vampVault.setupRemote', 'vampVault.verifyRemote', 'vampVault.createRemoteVault', 'vampVault.unlockRemote', 'vampVault.lockRemote']) {
+    assert.ok(commandHandlers.has(id), `${id} is not registered`);
+  }
+});
+
+await check('a remote host adds its own section beside the local vault', async () => {
+  configValues['remote.enabled'] = true;
+  configValues['remote.useVampRemoteSettings'] = false;
+  configValues['remote.host'] = '127.0.0.1';
+  configValues['remote.port'] = 1;
+  configValues['remote.kdbxPath'] = '~/.vamp/vault/vault.kdbx';
+  configValues['remote.approvalMode'] = 'per-session';
+  await commandHandlers.get('vampVault.refreshTree')();
+  const nodes = await statusView.getChildren();
+  assert.deepEqual(nodes.filter(node => node.type === 'section').map(node => node.label), ['📦 Local Vault', '🌐 Remote Vault · 127.0.0.1']);
+  const remoteRows = nodes.find(node => node.type === 'section' && node.id === 'remote').children.map(node => node.id);
+  assert.ok(remoteRows.includes('remoteConnection'));
+  assert.ok(remoteRows.includes('remoteLock'));
+  const credentialNodes = await credentials.getChildren();
+  assert.ok(credentialNodes.some(node => node.label === '🌐 Remote Vault · 127.0.0.1'));
+  delete configValues['remote.enabled'];
+  delete configValues['remote.host'];
+  await commandHandlers.get('vampVault.refreshTree')();
+});
+
+await check('locking a remote vault leaves the local password alone', async () => {
+  const localMap = { [kdbx]: masterPassword, 'remote-ssh://me@127.0.0.1:1/~/.vamp/vault/vault.kdbx': 'remote-password-1234' };
+  secrets.set('vampVault.masterPasswords', JSON.stringify(localMap));
+  configValues['remote.host'] = '127.0.0.1';
+  configValues['remote.port'] = 1;
+  configValues['remote.username'] = 'me';
+  configValues['remote.kdbxPath'] = '~/.vamp/vault/vault.kdbx';
+  configValues['remote.useVampRemoteSettings'] = false;
+  await commandHandlers.get('vampVault.lockRemote')();
+  const stored = JSON.parse(secrets.get('vampVault.masterPasswords'));
+  assert.equal(stored[kdbx], masterPassword, 'the local password must survive locking a remote vault');
+  assert.equal(stored['remote-ssh://me@127.0.0.1:1/~/.vamp/vault/vault.kdbx'], undefined);
+  delete configValues['remote.host'];
+});
+
 for (const disposable of context.subscriptions) {
   try { disposable?.dispose?.(); } catch {}
 }

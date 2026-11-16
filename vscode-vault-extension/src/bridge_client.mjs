@@ -102,8 +102,8 @@ export class BridgeClient {
     return { approved: Boolean(result.approved), remember: Boolean(result.remember) };
   }
 
-  async newPassword({ purpose, label }) {
-    const result = await this.request('new-password', { purpose, label }, { timeout: 180000 });
+  async newPassword({ purpose, label, kdbx }) {
+    const result = await this.request('new-password', { purpose, label, ...(kdbx ? { kdbx } : {}) }, { timeout: 180000 });
     return { password: result.password ?? null, cancelled: Boolean(result.cancelled) };
   }
 

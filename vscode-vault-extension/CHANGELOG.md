@@ -1,5 +1,33 @@
 # Changelog
 
+## 0.1.4
+
+Remote vaults over SSH, each host with its own database.
+
+- New **VAMP Vault (Remote) · user@host** MCP server, defined by `vamp.vault.remote`. The agent can call the local
+  vault and a host's vault separately; the two never answer for each other.
+- Strict isolation: every host keeps its own `~/.vamp/vault/vault.kdbx`, its own master password entry in VS Code
+  secret storage (`remote-ssh://user@host:port/<path>`) and its own session cache. No code path copies, uploads or
+  syncs a database between the local vault or between hosts.
+- `scripts/remote_vault_setup.sh` prepares a host: private vault directory (700), Node.js 20+ check, `keepassxc-cli`
+  (and optional `veracrypt`) through apt/dnf/yum/zypper/pacman/apk or a manual instruction, JSON step report,
+  idempotent, never deleting a database.
+- `src/remote_vault_client.mjs` runs one tool per SSH command with host/user/port/path validation and shell quoting;
+  the master password is written to the remote process's standard input, never to its arguments.
+- `src/remote_vault_proxy.mjs` keeps approvals and the master password on this computer: it asks the extension host
+  before a read leaves, then forwards the approved call over SSH. A host is headless and cannot reach your dialogs.
+- The vault server gained a headless CLI (`--call`, `--list-tools`, `--env-check`, `--version`, `--stdin-password`)
+  used by the remote path; standard MCP stdio behaviour is unchanged.
+- Sidebar: both views split into **📦 Local Vault** and **🌐 Remote Vault · host** once a remote vault is on, and
+  remote entry rows keep the same actions (copy username, copy password, details).
+- New commands: **Set Up Remote Vault (SSH)**, **Verify Remote Vault**, **Create Remote Vault**, **Unlock Remote
+  Vault**, **Lock Remote Vault** (which forgets only that host's password).
+- New settings: `vampVault.remote.enabled`, `.useVampRemoteSettings`, `.host`, `.port`, `.username`,
+  `.privateKeyPath`, `.kdbxPath`, `.volumePath`, `.mountPoint`, `.remoteNodePath`, `.approvalMode`.
+- Tests: `test/remote.mjs` (30 checks) covers injection-proof command building, settings reuse that never borrows a
+  vault path, the setup script, two independent hosts over a stand-in SSH with their own `HOME`, the password never
+  appearing in an argument, and the proxy's approval, per-session approval and denial paths.
+
 ## 0.1.3
 
 - Add a searchable credential browser with explicit reveal/copy controls and encrypted export.

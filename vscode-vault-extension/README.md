@@ -27,6 +27,37 @@ Use **VAMP Vault: Browse Credentials**, or **VAMP → Browse Credentials**. **Op
 
 The full [user guide](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/USER_GUIDE.md) is bundled in this VSIX under **VAMP Vault: Open Guide**. The companion VAMP **RPA Library** supports manual Create, AI-guided questions, keyword search and ZIP export.
 
+## Remote vaults (SSH)
+
+A second machine can own a second vault. Turn on **VAMP Vault: Remote Enabled**, run **VAMP Vault: Set Up Remote Vault (SSH)**, and that host gets its own KeePassXC database at `~/.vamp/vault/vault.kdbx`, its own master password and its own session cache.
+
+The isolation rule is the whole point: **a remote vault is never the local vault, and two hosts never share one.**
+
+- The local vault stays on this computer. A remote host's database lives on that host's filesystem and is never downloaded, uploaded or synced.
+- Host A and host B each get their own file, their own master password and their own approvals. Copying `~/.vamp/vault/vault.kdbx` between hosts is something you would have to do by hand — VAMP Vault has no code path that does it.
+- Passwords are kept per host in VS Code secret storage under a key that names the host (`remote-ssh://user@host:port/~/.vamp/vault/vault.kdbx`). **Lock Remote Vault** forgets that one password and leaves the local vault untouched.
+- A password travels to the host on the SSH command's standard input, never in an argument, so it is absent from `ps`, shell history and any file on either machine. Nothing is written to the remote disk.
+
+**How it works.** The extension uploads a standalone `server.mjs` into `~/.vamp/vault` on the host (mode 600) and runs `remote_vault_setup.sh` there: it creates the vault directory as 700, checks Node.js 20+, and installs or reports `keepassxc-cli` (and optionally `veracrypt`) for apt, dnf, yum, zypper, pacman or apk. The setup script is idempotent and never deletes a database.
+
+**What the agent sees.** A second MCP server named **VAMP Vault (Remote) · user@host** appears beside **VAMP Vault**. Its tools are the same nine, but each call runs on the host. The server on this side holds the bridge: it asks *you* for approval and for that host's master password, then sends the approved call over SSH. The host itself is headless and cannot reach your dialogs.
+
+**In the sidebar.** With a remote host configured, both views split into **📦 Local Vault** and **🌐 Remote Vault · host**. Entry rows under the remote section read that host's database only — the same entry path can exist in both vaults and the two rows stay separate. Remote rows offer the same Copy Username / Copy Password / Show Details actions.
+
+Remote settings:
+
+| Setting | Purpose |
+| --- | --- |
+| `vampVault.remote.enabled` | Turn the remote vault on (off by default). |
+| `vampVault.remote.useVampRemoteSettings` | Reuse host, port, username, key and node path from VAMP's `vamp.remote.*`. Vault paths are never taken from there. |
+| `vampVault.remote.host` / `.port` / `.username` / `.privateKeyPath` | SSH connection to the host. |
+| `vampVault.remote.kdbxPath` | That host's database, default `~/.vamp/vault/vault.kdbx`. `~` is the remote account's home. |
+| `vampVault.remote.volumePath` / `.mountPoint` | That host's VeraCrypt volume and mount point. |
+| `vampVault.remote.remoteNodePath` | Node.js on the host, default `node`. |
+| `vampVault.remote.approvalMode` | `each-read`, `per-session` or `off` for agent reads of that host, separate from the local mode. |
+
+Remote hosts need an OpenSSH client here, `BatchMode=yes` SSH access (a key or agent, no password prompt), and Node.js 20+ plus KeePassXC on the host.
+
 ## Agent approval levels
 
 Click **Approval** in the credential browser or its status-bar indicator: **1 · Ask every time**, **2 · Ask per entry** (default), or **3 · No prompts**. Disabling prompts requires explicit confirmation. The running MCP server refreshes policy through the bridge before returning secrets; locking or changing policy invalidates cached approvals. Direct reveal/copy controls still require user action.
@@ -63,6 +94,17 @@ VS Code extension host                        MCP server process (Node, stdio)
 ```
 
 Three boundaries matter. **stderr, never argv** — the database and volume passwords reach the CLIs on standard input, so they do not appear in a process list. **The extension host owns the secrets** — the MCP server never reads a settings file; it asks the bridge, which reads VS Code secret storage. **The agent sees one value** — `vault_get_credential` returns the requested fields of one entry, and `vault_list_credentials` never returns a password.
+
+A remote host adds one more boundary: **approval and the master password never cross the wire as data.** The local proxy asks this extension host, then runs one SSH command for the call; the password rides that command's standard input.
+
+```
+VS Code extension host            remote proxy (Node, stdio)        SSH        remote host
+┌──────────────────────┐          ┌───────────────────────┐        ┌───┐      ┌────────────────────┐
+│ vamp.vault.remote    │  MCP  →  │ remote/vault_proxy.mjs│ ──────→│ → │ ────→│ ~/.vamp/vault/      │
+│  · approval dialog   │ ←──────  │  · approval mode      │        └───┘      │   server.mjs        │
+│  · secret storage    │          │  · password on stdin  │                 │   vault.kdbx (own)  │
+└──────────────────────┘          └───────────────────────┘                 └────────────────────┘
+```
 
 ## MCP tools
 
@@ -125,6 +167,7 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 | `vampVault.sessionCacheMinutes` | Credential cache window in the MCP server. |
 | `vampVault.autoDownloadCli` | Allow the one-time official binary download. |
 | `vampVault.approvalMode` | `each-read`, `per-session` or `off`. |
+| `vampVault.remote.*` | The SSH host, its own database/volume paths and its own approval mode — see *Remote vaults (SSH)* above. |
 
 ## Commands
 
@@ -142,14 +185,19 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 | **VAMP Vault: Copy Username / Copy Password** | Copy one value from an entry; the password asks for approval first. |
 | **VAMP Vault: Show Entry Details** | Read an entry's fields with the password hidden. |
 | **VAMP Vault: Open Guide** | This document. |
+| **VAMP Vault: Set Up Remote Vault (SSH)** | Ask for the host, upload the vault server, prepare the vault directory and KeePassXC on that host. |
+| **VAMP Vault: Verify Remote Vault** | Check SSH, Node.js, KeePassXC, the database and the lock state on that host. |
+| **VAMP Vault: Create Remote Vault** | Create this host's own `.kdbx` with a master password asked here and kept for this host only. |
+| **VAMP Vault: Unlock Remote Vault** | Ask for that host's master password, verify it against its database, keep it in secret storage. |
+| **VAMP Vault: Lock Remote Vault** | Forget that host's master password. The local vault keeps its own. |
 
 ## Development
 
 ```bash
 npm install
 npm run build                    # bundle backends/vault/server.mjs into dist/
-npm run package                  # build + vsce package → vamp-vault-0.1.1.vsix
-npm test                         # build, MCP smoke test, sidebar checks (stand-in VS Code host)
+npm run package                  # build + vsce package → vamp-vault-0.1.4.vsix
+npm test                         # build, MCP smoke test, sidebar checks (stand-in VS Code host), remote SSH checks
 VAULT_TEST_KEEPASSXC=/path/to/keepassxc-cli npm test
 node test/downloader.mjs         # opt-in: really download and verify both CLIs (~70 MB)
 ```
@@ -157,7 +205,9 @@ node test/downloader.mjs         # opt-in: really download and verify both CLIs 
 `npm test` builds the extension, then starts the real server over stdio with the official MCP client and exercises all nine
 tools, the session cache, the approval fallback and a stand-in extension bridge. It also loads `extension.js`
 against a stand-in `vscode` module and drives the sidebar: both views, the tree, tree items, copy with and
-without approval, details, reveal, export, search, lock and unlock. It needs
+without approval, details, reveal, export, search, lock and unlock. `test/remote.mjs` covers the SSH path with a
+stand-in `ssh` that runs each command in a shell with its own `HOME`: upload, setup, two independent hosts, the
+password never appearing in an argument, and the proxy's approval and denial. It needs
 `keepassxc-cli` on `PATH` or in `VAULT_TEST_KEEPASSXC`; `VAULT_TEST_VERACRYPT` enables the volume
 checks. Nothing it does touches the user's configured vault.
 

@@ -118,6 +118,8 @@ KVM VM의 화면은 스크린샷을 반복 조회하는 대신 **VNC(RFB) → �
 
 이 모드의 화면은 **스크린샷**입니다. 요청할 때마다 PNG 한 장을 받아 보여 주고, 실시간 스트리밍은 하지 않습니다. VM 기동·정지, 목록·상태 조회, 키 입력, KVM 절대 좌표 클릭, 검토한 RPA 재생까지 원격에서 동작합니다.
 
+Vault도 같은 방식의 원격 기능을 가집니다. **VAMP Vault: Set Up Remote Vault (SSH)** 로 원격 호스트에 볼트 서버를 올리면 그 호스트는 `~/.vamp/vault/vault.kdbx` 라는 **자기 볼트**를 따로 가집니다. 로컬 볼트와 원격 볼트는 서버·마스터 암호·세션 캐시를 공유하지 않고, 원격 서버 A와 B도 서로 공유하지 않습니다. 에이전트에게는 **VAMP Vault (Remote) · user@host** 라는 별도 MCP 서버로 보이며, 읽기 승인과 마스터 암호는 이 컴퓨터에 남고 명령은 SSH 표준 입력으로만 전달됩니다. [원격 볼트 안내](vscode-vault-extension/README.md#remote-vaults-ssh)
+
 1. 확장 설정에서 `vamp.remote.enabled`를 켜고 `vamp.remote.host`, `vamp.remote.username`을 지정합니다. 키는 SSH 에이전트나 `~/.ssh/config`를 그대로 씁니다.
 2. **VAMP: Remote · Prepare Environment on the Remote Host** 를 실행합니다. 서버 업로드, Python venv, libvirt/QEMU 설치(비밀번호 없는 sudo가 가능할 때), `libvirtd` 기동, `libvirt` 그룹 추가를 순서대로 시도하고 안 되는 항목은 실행할 명령을 알려 줍니다.
 3. VM Manager의 **Remote server · SSH** 화면에서 데스크톱을 조회·기동하고 스크린샷을 엽니다.

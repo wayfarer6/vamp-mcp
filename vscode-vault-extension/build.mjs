@@ -1,5 +1,6 @@
 import { build } from 'esbuild';
-import { cp, copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { chmod, cp, copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -31,9 +32,39 @@ const built = await build({
 });
 
 // The extension host loads these two as modules for its own commands.
-for (const name of ['downloader.mjs', 'vault_cli.mjs', 'bridge_client.mjs', 'tree.mjs']) {
+for (const name of ['downloader.mjs', 'vault_cli.mjs', 'bridge_client.mjs', 'tree.mjs', 'remote_vault_client.mjs']) {
   await copyFile(path.join(here, 'src', name), path.join(runtime, 'src', name));
 }
+
+// ---------------------------------------------------------------- remote (SSH)
+// A vault that lives on another machine needs two more bundles: the server that
+// is uploaded to that host, and the small proxy this extension starts so that
+// approvals and the master password stay on this computer.
+const remoteDir = path.join(runtime, 'remote');
+await mkdir(remoteDir, { recursive: true });
+await copyFile(path.join(runtime, 'backends/vault/server.mjs'), path.join(remoteDir, 'server.mjs'));
+await copyFile(path.join(here, '..', 'scripts/remote_vault_setup.sh'), path.join(remoteDir, 'remote_vault_setup.sh'));
+await chmod(path.join(remoteDir, 'remote_vault_setup.sh'), 0o755);
+
+const proxy = await build({
+  metafile: true,
+  entryPoints: [path.join(here, 'src/remote_vault_proxy.mjs')],
+  outfile: path.join(remoteDir, 'vault_proxy.mjs'),
+  bundle: true,
+  platform: 'node',
+  format: 'esm',
+  target: 'node20',
+  legalComments: 'none',
+  banner: { js: "import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);" },
+});
+
+// The tool list the remote proxy advertises, taken from the same server build so
+// the two can never disagree about what a vault offers.
+const manifestText = execFileSync(process.execPath, [path.join(remoteDir, 'server.mjs'), '--list-tools'], { encoding: 'utf8' });
+const manifestLine = manifestText.split(/\r?\n/).filter(line => line.trim().startsWith('{')).pop();
+const parsed = JSON.parse(manifestLine);
+if (!Array.isArray(parsed.tools) || !parsed.tools.length) throw new Error('The vault server did not report its tools.');
+await writeFile(path.join(remoteDir, 'vault_tools.json'), `${JSON.stringify({ version: parsed.version, tools: parsed.tools }, null, 2)}\n`);
 
 await mkdir(path.join(dist, 'notices'), { recursive: true });
 for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'README.md']) {
@@ -42,7 +73,7 @@ for (const name of ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'CHANGELOG.md', 'README
 
 // Preserve the licenses of every package the bundler inlined.
 const packages = new Map();
-for (const input of Object.keys(built.metafile.inputs)) {
+for (const input of [...Object.keys(built.metafile.inputs), ...Object.keys(proxy.metafile.inputs)]) {
   let directory = path.dirname(path.resolve(input));
   while (directory !== path.dirname(directory)) {
     try {
@@ -68,4 +99,5 @@ for (const [directory, pkg] of packages) {
 await writeFile(path.join(dist, 'notices', 'DEPENDENCIES.json'), `${JSON.stringify(notices, null, 2)}\n`);
 
 const bundle = await stat(path.join(runtime, 'backends/vault/server.mjs'));
-console.log(`bundled backends/vault/server.mjs (${(bundle.size / 1024).toFixed(0)} KB) with ${notices.length} bundled package(s)`);
+const remoteBundle = await stat(path.join(remoteDir, 'vault_proxy.mjs'));
+console.log(`bundled backends/vault/server.mjs (${(bundle.size / 1024).toFixed(0)} KB) and remote proxy (${(remoteBundle.size / 1024).toFixed(0)} KB) with ${notices.length} bundled package(s)`);

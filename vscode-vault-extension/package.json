@@ -2,7 +2,7 @@
   "name": "vamp-vault",
   "displayName": "VAMP Vault \u2014 Credential & Certificate Isolation for AI Agents",
   "description": "VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -144,6 +144,31 @@
         "command": "vampVault.changeApproval",
         "title": "VAMP Vault: Change Agent Approval Level",
         "icon": "$(shield)"
+      },
+      {
+        "command": "vampVault.setupRemote",
+        "title": "VAMP Vault: Set Up Remote Vault (SSH)",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "vampVault.verifyRemote",
+        "title": "VAMP Vault: Verify Remote Vault",
+        "icon": "$(check)"
+      },
+      {
+        "command": "vampVault.createRemoteVault",
+        "title": "VAMP Vault: Create Remote Vault (on the host)",
+        "icon": "$(add)"
+      },
+      {
+        "command": "vampVault.unlockRemote",
+        "title": "VAMP Vault: Unlock Remote Vault",
+        "icon": "$(unlock)"
+      },
+      {
+        "command": "vampVault.lockRemote",
+        "title": "VAMP Vault: Lock Remote Vault",
+        "icon": "$(lock)"
       }
     ],
     "menus": {
@@ -207,6 +232,36 @@
           "command": "vampVault.setupCli",
           "when": "view == vampVault.views.status",
           "group": "2_setup@1"
+        },
+        {
+          "command": "vampVault.setupRemote",
+          "when": "view == vampVault.views.status",
+          "group": "2_setup@2"
+        },
+        {
+          "command": "vampVault.verifyRemote",
+          "when": "view == vampVault.views.status",
+          "group": "navigation@4"
+        },
+        {
+          "command": "vampVault.unlockRemote",
+          "when": "view == vampVault.views.status",
+          "group": "navigation@5"
+        },
+        {
+          "command": "vampVault.lockRemote",
+          "when": "view == vampVault.views.status",
+          "group": "navigation@5"
+        },
+        {
+          "command": "vampVault.setupRemote",
+          "when": "view == vampVault.views.credentials",
+          "group": "1_vault@3"
+        },
+        {
+          "command": "vampVault.createRemoteVault",
+          "when": "view == vampVault.views.credentials",
+          "group": "1_vault@4"
         }
       ],
       "view/item/context": [
@@ -231,6 +286,10 @@
       {
         "id": "vamp.vault",
         "label": "VAMP Vault"
+      },
+      {
+        "id": "vamp.vault.remote",
+        "label": "VAMP Vault (Remote)"
       }
     ],
     "configuration": {
@@ -282,19 +341,80 @@
           ],
           "default": "per-session",
           "description": "When to ask you before a secret leaves the vault: on every read, once per entry per session, or never (off is not recommended)."
+        },
+        "vampVault.remote.enabled": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Keep a second, independent vault on a remote host, reached over SSH. Each host keeps its own database, master password and session cache; nothing is synced with the local vault or with another host."
+        },
+        "vampVault.remote.useVampRemoteSettings": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reuse the SSH connection details (host, port, username, private key, node path) from the VAMP extension's vamp.remote.* settings. The vault paths are never taken from there: which database a host owns is decided only by this extension."
+        },
+        "vampVault.remote.host": {
+          "type": "string",
+          "default": "",
+          "description": "SSH host of the remote vault. Leave empty to reuse vamp.remote.host when vampVault.remote.useVampRemoteSettings is on."
+        },
+        "vampVault.remote.port": {
+          "type": "number",
+          "default": 22,
+          "description": "SSH port of the remote host."
+        },
+        "vampVault.remote.username": {
+          "type": "string",
+          "default": "",
+          "description": "SSH account on the remote host. Empty means the account in ~/.ssh/config."
+        },
+        "vampVault.remote.privateKeyPath": {
+          "type": "string",
+          "default": "",
+          "description": "Private key used for SSH. Empty means your SSH agent or the default key."
+        },
+        "vampVault.remote.kdbxPath": {
+          "type": "string",
+          "default": "~/.vamp/vault/vault.kdbx",
+          "description": "This host's own KeePassXC database, on that host's filesystem. A leading ~ is the remote account's home directory."
+        },
+        "vampVault.remote.volumePath": {
+          "type": "string",
+          "default": "~/.vamp/vault/vault.hc",
+          "description": "This host's own VeraCrypt volume, on that host's filesystem."
+        },
+        "vampVault.remote.mountPoint": {
+          "type": "string",
+          "default": "~/.vamp/vault/mnt",
+          "description": "Where the remote volume is mounted on that host."
+        },
+        "vampVault.remote.remoteNodePath": {
+          "type": "string",
+          "default": "node",
+          "description": "Node.js binary on the remote host that runs the vault server."
+        },
+        "vampVault.remote.approvalMode": {
+          "type": "string",
+          "enum": [
+            "each-read",
+            "per-session",
+            "off"
+          ],
+          "default": "per-session",
+          "description": "When the agent must be approved on this computer before a read reaches the remote host. Kept separate from the local vault's approval mode."
         }
       }
     }
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out vamp-vault-0.1.3.vsix",
-    "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs && node --test test/browser.cjs",
+    "package": "npm run build && vsce package --out vamp-vault-0.1.4.vsix",
+    "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs && node test/remote.mjs && node --test test/browser.cjs",
     "vscode:prepublish": "npm run build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.32.2",
-    "zod": "^4.6.7"
+    "zod": "^4.6.7",
+    "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
     "@vscode/vsce": "^4.1.1",

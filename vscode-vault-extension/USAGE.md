@@ -131,6 +131,19 @@ Policy changes are read through the live VS Code bridge before a secret is retur
 
 Usernames fill in for the first 200 entries in the background. Search titles/groups while large databases are loading. The UI checks are not a full screen-reader or accessibility certification.
 
+## 8. Remote vault on another machine (SSH)
+
+Each remote host keeps its **own** vault. The local vault and a host's vault never share entries, a master password or a cache, and host A and host B never share one either.
+
+1. Turn on **VAMP Vault: Remote Enabled** (or run **Set Up Remote Vault (SSH)** and let it turn on).
+2. Run **VAMP Vault: Set Up Remote Vault (SSH)** and enter the SSH host (`user@host` comes from `vampVault.remote.username` or VAMP's `vamp.remote.*` when reuse is on). The extension uploads `server.mjs` into `~/.vamp/vault` on that host, then runs the setup script: vault directory 700, Node.js 20+ check, `keepassxc-cli` install or install instruction.
+3. Run **VAMP Vault: Create Remote Vault** and type a master password. It is stored for that host only.
+4. Run **VAMP Vault: Unlock Remote Vault** to open it, and **Lock Remote Vault** to forget that host's password while the local vault keeps its own.
+5. The sidebar now splits into **📦 Local Vault** and **🌐 Remote Vault · host**; entry rows under the remote section read that host only. The same entry path can exist in both and stays two separate rows.
+
+The agent sees a second MCP server, **VAMP Vault (Remote) · user@host**, with the same nine tools. Each read is approved here first, and that host's master password travels on the SSH command's standard input — never in an argument, never written to the remote disk.
+
+Requirements: an OpenSSH client here, key-based SSH that works without a prompt (`BatchMode=yes`), Node.js 20+ and KeePassXC on the host. A vault server left from another version is replaced on the next setup; databases are never touched.
 
 ## Troubleshooting
 
@@ -144,6 +157,8 @@ Usernames fill in for the first 200 entries in the background. Search titles/gro
 | Source/actions changed | Recreate and review the definition after source changes. |
 | completed_unverified | Verify the expected application result. |
 | Vault appears empty | Check the active database, lock state, search and group filter. |
+| Remote vault says “not reachable” | Run **Verify Remote Vault**: check the host name, the SSH key, Node.js 20+ and KeePassXC on that host. |
+| “No approval dialog is reachable” | Open VS Code with VAMP Vault running; a remote read is never sent without approval here. |
 | Hyper-V has no viewer | Embedded display is unsupported. Open VMConnect. |
 
 Screenshots use example workflow metadata and a sample credential. The guest shown is a Debian installer, not proof of a completed OS installation. See [validation](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/VALIDATION.md) and the [UI audit](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/UI_AUDIT.md) for exact coverage.
@@ -258,6 +273,20 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 
 사용자명은 처음 200개 항목을 백그라운드에서 읽습니다. 큰 금고에서는 제목·그룹으로 먼저 찾고 사용자명이 채워질 때까지 기다리세요. 키보드·스크린리더 전체 호환성을 보증하는 접근성 인증을 수행한 것은 아닙니다.
 
+## 8. 원격 서버의 볼트 (SSH)
+
+원격 서버마다 **자기 볼트**를 가집니다. 로컬 볼트와 원격 볼트는 항목·마스터 암호·캐시를 공유하지 않고, 원격 서버 A와 B도 서로 공유하지 않습니다.
+
+1. **VAMP Vault: Remote Enabled**를 켭니다. **Set Up Remote Vault (SSH)**를 실행하면 자동으로 켜집니다.
+2. **VAMP Vault: Set Up Remote Vault (SSH)**에서 SSH 호스트를 입력합니다(계정은 `vampVault.remote.username` 또는 재사용이 켜져 있으면 VAMP의 `vamp.remote.*`를 따릅니다). 확장이 그 서버의 `~/.vamp/vault`에 `server.mjs`를 올리고 준비 스크립트를 실행합니다: 볼트 폴더 권한 700, Node.js 20 이상 확인, `keepassxc-cli` 설치 또는 설치 안내.
+3. **VAMP Vault: Create Remote Vault**에서 새 마스터 암호를 입력합니다. 그 서버 전용으로만 저장됩니다.
+4. **VAMP Vault: Unlock Remote Vault**로 열고, **Lock Remote Vault**는 그 서버의 암호만 잊습니다. 로컬 볼트의 암호는 그대로입니다.
+5. 사이드바가 **📦 Local Vault**와 **🌐 Remote Vault · 호스트**로 나뉩니다. 원격 항목은 그 서버의 데이터베이스만 읽고, 같은 경로의 항목이 양쪽에 있어도 서로 다른 행으로 남습니다.
+
+에이전트에게는 **VAMP Vault (Remote) · user@host**라는 두 번째 MCP 서버가 보이며 도구 9개는 같습니다. 읽기는 먼저 이 컴퓨터에서 승인되고, 그 서버의 마스터 암호는 SSH 명령의 표준 입력으로만 전달됩니다. 명령 인자에 남지 않고 원격 디스크에도 기록되지 않습니다.
+
+필요 조건: 이 컴퓨터의 OpenSSH 클라이언트, 암호 입력 없이 동작하는 키 기반 SSH(`BatchMode=yes`), 서버의 Node.js 20 이상과 KeePassXC. 준비 스크립트를 다시 실행하면 서버 파일만 교체되고 데이터베이스는 건드리지 않습니다.
+
 ## 문제 해결
 
 | 증상 | 다음 조치 |
@@ -270,6 +299,8 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 | source/actions changed | 파일이 바뀌었습니다. 다시 생성·검토한 뒤 사용합니다. |
 | completed_unverified | 재생은 끝났습니다. Expected result를 확인합니다. |
 | Vault에 항목이 없음 | 활성 .kdbx 경로와 잠금 상태를 확인하고 검색·그룹 필터를 비웁니다. |
+| 원격 볼트가 “not reachable” | **Verify Remote Vault**를 실행해 호스트 이름·SSH 키·Node.js 20 이상·KeePassXC를 확인합니다. |
+| “No approval dialog is reachable” | VAMP Vault가 실행 중인 VS Code를 엽니다. 승인 없이 원격으로 비밀을 보내지 않습니다. |
 | Hyper-V 화면 버튼이 없음 | 내장 화면 미지원입니다. VMConnect를 엽니다. |
 
 검증 범위는 [VALIDATION](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/VALIDATION.md), 실제 UI 점검 결과는 [UI audit](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/UI_AUDIT.md)에 기록합니다.
