@@ -794,7 +794,16 @@ function activate(context) {
     password = await askSecret(`Master password for ${opened.settings.kdbxPath} on ${opened.target} (kept in VS Code secret storage)`);
     if (!password) return null;
     try {
-      await opened.client.listEntries({ password });
+      const check = await opened.client.listEntries({ password });
+      if (check.status === 'no_database') {
+        const choice = await vscode.window.showWarningMessage(
+          `VAMP Vault: ${opened.target} has no database at ${opened.settings.kdbxPath} yet. Nothing was stored.`,
+          { modal: true },
+          'Create Remote Vault',
+        );
+        if (choice === 'Create Remote Vault') await vscode.commands.executeCommand('vampVault.createRemoteVault');
+        return null;
+      }
     } catch (error) {
       output.appendLine(`Remote unlock failed for ${opened.target}: ${error.message}`);
       vscode.window.showErrorMessage(`VAMP Vault: the vault on ${opened.target} could not be opened with that password. Nothing was stored. ${error.message}`);
