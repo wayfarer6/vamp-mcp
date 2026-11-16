@@ -49,6 +49,14 @@
     return obj[state.lang] || obj.en || "";
   }
 
+  function mdInline(value) {
+    return esc(value).replace(/`([^`]+)`/g, "<code>$1</code>");
+  }
+
+  function resolutionLabel(value) {
+    return String(value || "").replace(/\s*[x×]\s*/i, "×");
+  }
+
   function readLang() {
     try {
       const stored = localStorage.getItem(STORE_KEY);
@@ -313,7 +321,7 @@
     const badges = []
       .concat((script.hypervisors || []).map((id) => hyperLabel(id)))
       .concat((script.os || []).map((id) => osLabel(id)))
-      .concat(script.resolution ? [script.resolution.replace("x", "×")] : [])
+      .concat(script.resolution ? [resolutionLabel(script.resolution)] : [])
       .map((label) => '<span class="badge">' + esc(label) + "</span>")
       .join("");
     const inputCount = (script.inputs || []).length;
@@ -384,13 +392,13 @@
         '<td class="input-type">' + esc(input.type || "string") + "</td>" +
         '<td class="' + (input.required ? "req-yes" : "req-no") + '">' + esc(input.required ? t("detail.required") : t("detail.optional")) + "</td>" +
         "<td><code>" + esc(input.example || "—") + "</code></td>" +
-        '<td class="input-desc">' + esc(pick(input.desc)) + "</td>" +
+        '<td class="input-desc">' + mdInline(pick(input.desc)) + "</td>" +
       "</tr>"
     )).join("");
 
     const verification = (pick(script.verification) || []);
     const verifyList = verification.map((item) =>
-      '<li><svg class="icon"><use href="#i-check"/></svg><span>' + esc(item) + "</span></li>"
+      '<li><svg class="icon"><use href="#i-check"/></svg><span>' + mdInline(item) + "</span></li>"
     ).join("");
 
     const deps = (script.dependencies || []);
@@ -419,14 +427,14 @@
       '<div class="detail-meta">' +
         (script.verified ? '<span class="verified-badge"><svg class="icon"><use href="#i-check"/></svg>' + esc(t("detail.verifiedTag")) + "</span>" : "") +
         metaBadges(script) +
-        '<span class="badge">' + esc(script.resolution || "1920×1080") + "</span>" +
+        '<span class="badge">' + esc(resolutionLabel(script.resolution || "1920x1080")) + "</span>" +
         '<span class="badge">v' + esc(script.version || "1.0.0") + "</span>" +
       "</div>" +
-      '<p class="detail-summary">' + esc(pick(script.summary)) + "</p>" +
+      '<p class="detail-summary">' + mdInline(pick(script.summary)) + "</p>" +
       '<div class="panel-grid">' +
-        '<div class="panel"><h4>' + esc(t("detail.when")) + "</h4><p>" + esc(pick(script.when_to_use)) + "</p></div>" +
-        '<div class="panel"><h4>' + esc(t("detail.expected")) + "</h4><p>" + esc(pick(script.expected_result)) + "</p></div>" +
-        '<div class="panel wide"><h4>' + esc(t("detail.overview")) + "</h4><p>" + esc(pick(script.description)) + "</p></div>" +
+        '<div class="panel"><h4>' + esc(t("detail.when")) + "</h4><p>" + mdInline(pick(script.when_to_use)) + "</p></div>" +
+        '<div class="panel"><h4>' + esc(t("detail.expected")) + "</h4><p>" + mdInline(pick(script.expected_result)) + "</p></div>" +
+        '<div class="panel wide"><h4>' + esc(t("detail.overview")) + "</h4><p>" + mdInline(pick(script.description)) + "</p></div>" +
       "</div>" +
 
       '<div class="block">' +
@@ -465,9 +473,9 @@
       "</div>" +
 
       '<div class="panel-grid">' +
-        '<div class="panel"><h4>' + esc(t("detail.data")) + "</h4><p>" + esc(pick(script.data_handling)) + "</p></div>" +
+        '<div class="panel"><h4>' + esc(t("detail.data")) + "</h4><p>" + mdInline(pick(script.data_handling)) + "</p></div>" +
         '<div class="panel"><h4>' + esc(t("detail.deps")) + "</h4><p>" + depsHtml + "</p></div>" +
-        '<div class="panel wide"><h4>' + esc(t("detail.notes")) + "</h4><p>" + esc(pick(script.notes)) + "</p></div>" +
+        '<div class="panel wide"><h4>' + esc(t("detail.notes")) + "</h4><p>" + mdInline(pick(script.notes)) + "</p></div>" +
       "</div>" +
 
       '<div class="detail-foot">' +
@@ -553,7 +561,7 @@
   function generatorHtml() {
     const gen = state.generation;
     const draft = gen ? gen.manifest : null;
-    const form = gen ? gen.form : null;
+    const form = gen ? gen.form : (state.formDraft || null);
     const preview = gen ? gen.previewTab || "manifest" : null;
 
     const resolutionOptions = ["1920x1080", "1600x900", "2560x1440", "1366x768"].map((value) => ({ value: value, label: value.replace("x", " × ") }));
@@ -834,7 +842,10 @@
         { level: "warn", text: t("gen.msg.draft") }
       ]
     };
+    state.formDraft = form;
     renderSubmit("gen");
+    const preview = document.querySelector("[data-preview-block]");
+    if (preview && preview.scrollIntoView) preview.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
   function issueUrl() {
@@ -882,6 +893,7 @@
   function openModal(kind, payload) {
     lastFocus = document.activeElement;
     state.modal = { kind: kind, id: payload && payload.id, tab: (payload && payload.tab) || "guide" };
+    if (kind === "submit") state.formDraft = null;
     layer.hidden = false;
     document.body.classList.add("modal-open");
 
@@ -932,6 +944,15 @@
   function setLang(lang, animate) {
     if (lang !== "en" && lang !== "ko") return;
     const apply = () => {
+      if (state.modal) {
+        const panel = document.querySelector('[data-panel="gen"]');
+        if (panel) {
+          const live = readForm();
+          const touched = live.id || live.name || live.description || live.when ||
+            live.expected || live.tags.length || live.inputs.length || live.code !== DEFAULT_CODE;
+          if (touched) state.formDraft = live;
+        }
+      }
       state.lang = lang;
       writeLang(lang);
       renderAll();
@@ -1090,18 +1111,28 @@
       if (event.target.closest("#gen-issue")) { openIssue(); return; }
       if (event.target.closest("#gen-reset")) {
         state.generation = null;
+        state.formDraft = null;
         renderSubmit("gen");
         return;
       }
     });
 
-    // live placeholder feedback while typing the code field
+    // live placeholder feedback while typing inputs or the code field
     $("#modal-body").addEventListener("input", (event) => {
-      if (event.target && event.target.id === "gen-code") {
-        const form = readForm();
-        form.inputs.forEach((name) => {
-          if (form.code.indexOf("${" + name + "}") === -1) setError("gen-inputs", t("gen.msg.placeholder", { input: name }));
-        });
+      const target = event.target;
+      if (!target || (target.id !== "gen-code" && target.id !== "gen-inputs")) return;
+      const form = readForm();
+      let missing = null;
+      form.inputs.forEach((name) => {
+        if (!missing && form.code.indexOf("${" + name + "}") === -1) missing = name;
+      });
+      const field = document.querySelector('[data-field="gen-inputs"]');
+      const err = $("#err-gen-inputs");
+      if (missing) {
+        setError("gen-inputs", t("gen.msg.placeholder", { input: missing }));
+      } else if (err) {
+        err.textContent = "";
+        if (field) field.classList.remove("invalid");
       }
     });
   }
