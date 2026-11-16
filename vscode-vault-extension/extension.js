@@ -169,9 +169,17 @@ function activate(context) {
   statusItem.show();
   context.subscriptions.push(output, changes, statusItem);
 
+  readSecretMap(context).then(map => { statusItem.text = map[kdbxPath()] ? '$(shield) Vault' : '$(lock) Vault'; }).catch(() => {});
+
   let bridge = { socketPath: '', token: '' };
   startBridge(context, state, output)
-    .then(value => { bridge = value; output.appendLine(`Approval bridge listening on ${value.socketPath}`); })
+    .then(value => {
+      bridge = value;
+      output.appendLine(`Approval bridge listening on ${value.socketPath}`);
+      // Re-announce the server so a definition created before the socket was
+      // listening is replaced by one that carries the bridge token.
+      changes.fire();
+    })
     .catch(error => { output.appendLine(`Approval bridge unavailable: ${error.message}`); vscode.window.showErrorMessage(`VAMP Vault: approval bridge failed (${error.message}). Credentials can only be released with an explicit confirm:true.`); });
 
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(event => {
