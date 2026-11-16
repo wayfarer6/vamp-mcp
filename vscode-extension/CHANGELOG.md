@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4
+
+- Generalize extension metadata from VirtualBox-only to local hypervisors (VirtualBox, KVM, Hyper-V).
+- Document responsible use, human-in-the-loop guidelines, and liability disclaimer.
+- Link companion VAMP Vault extension and unified VHD / guest setup guides.
+
 ## 0.1.3
 
 - Refresh Marketplace documentation, quick start and links for `wayfarer6/vamp-mcp`.

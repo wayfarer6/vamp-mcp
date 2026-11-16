@@ -2,7 +2,7 @@
   "name": "vamp-mcp",
   "displayName": "VAMP \u2014 Virtual Agent Machine Platform",
   "description": "Local hypervisor MCP tools for AI agents and RPA (VirtualBox, KVM, Hyper-V), with detachable observation and unattended VM provisioning.",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -83,7 +83,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.3.vsix",
+    "package": "npm run build && vsce package --out ../artifacts/vamp-mcp-0.1.4.vsix",
     "vscode:prepublish": "npm run build"
   },
   "devDependencies": {
