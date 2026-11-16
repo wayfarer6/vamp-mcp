@@ -18,7 +18,7 @@
 
 데모 시작 전 호스트 환경에서 다음이 준비되어 있어야 합니다:
 
-- [ ] **VS Code 확장**: `wayfarer6.vamp-mcp` (v0.1.3+) 및 `wayfarer6.vamp-vault` (v0.1.1+) 설치 완료
+- [ ] **VS Code 확장**: `wayfarer6.vamp-mcp-tools` (v0.1.3+) 및 `wayfarer6.vamp-vault` (v0.1.1+) 설치 완료
 - [ ] **MCP 서버 활성화**:
   - `VAMP VirtualBox` (또는 KVM SPICE)
   - `VAMP Vault`

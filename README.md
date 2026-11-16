@@ -13,7 +13,7 @@ Start in VS Code’s **VAMP** sidebar: **RPA Library** to create/find/export wor
 
 GUI 작업을 한 번 기록해 두고, 다음에는 AI가 필요한 RPA를 골라 실행하도록 만드는 프로젝트입니다.
 
-[VAMP 0.1.8](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8) · [Vault 0.1.5](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.5) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
+[VAMP 0.1.9](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.9) · [Vault 0.1.6](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.9) · [다운로드](https://github.com/wayfarer6/vamp-mcp/releases) · [VS Code 확장](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools) · [문서](docs/README.md) · [실행 영상](docs/DEMOS.md) · [Script Hub](https://wayfarer6.github.io/vamp-script-hub/) · [로드맵](docs/ROADMAP.md)
 
 ## 만든 이유
 
@@ -73,7 +73,17 @@ OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualB
 
 멀티모달 CUA는 같은 로그인 화면이나 목록 화면을 실행할 때마다 다시 읽고 판단합니다. 허브의 스크립트는 그 판단을 이미 기록으로 남긴 것이라, 에이전트는 `rpa_search`로 맞는 항목을 찾고 `rpa_run_saved`에 입력값만 넘겨 재생하면 됩니다. 화면 인식과 코드 생성에 쓰던 토큰을 아끼는 것이 목적이며, 절감량을 비교 측정한 수치는 아직 없습니다.
 
-### 스크립트 공유와 연동
+### Before sharing an RPA / RPA 업로드 전 주의
+
+> **Warning:** Before uploading an RPA script or exported ZIP, **you must personally inspect every file** for IDs, passwords, tokens, certificates, private URLs, comments, metadata, filenames and image assets. Replace private recorded values with declared inputs such as `${username}` and `${password}`. Do not upload real credentials. AI review can miss secrets and does not guarantee that an archive is safe to publish.
+>
+> **경고:** RPA 스크립트나 ZIP을 업로드하기 전에 **사용자가 모든 파일을 직접 확인해야 합니다.** ID·비밀번호·토큰·인증서·개인 URL·주석·메타데이터·파일명·이미지에 민감정보가 없는지 확인하세요. 실제 값은 `${username}`, `${password}` 같은 입력 매개변수로 바꾸세요. AI 검토는 누락 가능성이 있으며 개인정보가 없다는 보증이 아닙니다.
+
+VAMP Export ZIP requires local screening, an AI review of a structural report, an AI warning, and explicit user confirmation. Detected private values block export; original source, keystrokes, filenames and metadata values are not sent to AI. If AI review is unavailable or files change after review, export is blocked. Creating a ZIP does not upload it anywhere. Direct GitHub/Script Hub uploads must also be reviewed by the user before publication.
+
+VAMP의 Export ZIP은 로컬 검사 → 원본을 제외한 구조 요약의 AI 검토 → AI 경고 → 사용자 확인을 거칩니다. 민감정보가 발견되거나 AI 검토가 불가능하면 내보내기를 중단하며, 검토 후 파일이 바뀌면 다시 검토해야 합니다. ZIP 생성은 자동 업로드가 아닙니다. GitHub·Script Hub에 직접 올릴 때도 사용자가 업로드 전에 확인해야 합니다.
+
+## 스크립트 공유와 연동
 
 1. 게스트에서 작업 하나를 기록하고, 비밀번호·PIN·토큰 입력 전에 멈춥니다.
 2. VS Code **RPA Library → Create**에서 이름, 설명, 사용 조건, 입력 이름, 기대 결과를 채우고 검토한 뒤 **Export ZIP**을 누릅니다. ZIP에는 파일별 SHA-256 체크섬이 담긴 `VAMP_EXPORT.json`이 들어 있으며 `.git` 이력은 포함되지 않습니다.
@@ -93,56 +103,64 @@ Use the MCP servers directly from VS Code, Codex, or another stdio MCP client wi
 - [`vamp-mcp`](https://www.npmjs.com/package/vamp-mcp): VirtualBox and KVM/libvirt control, plus the reviewed RPA library.
 - [`vamp-mcp-vault`](https://www.npmjs.com/package/vamp-mcp-vault): KeePassXC credentials and optional VeraCrypt volumes.
 
-> The npm publish requests have been accepted. The public registry currently exposes only a temporary `0.0.0-stage` placeholder; installation of the real releases is being verified. The placeholder is not an executable MCP server.
+> VAMP 0.1.8 and Vault 0.1.6 are public on npm. The VAMP 0.1.9 commands below target the creation/startup fixes and will be available after release verification.
 
 Once the real releases are available, install both packages:
 
 ```bash
-npm install -g vamp-mcp@0.1.8 vamp-mcp-vault@0.1.6
+npm install -g vamp-mcp@0.1.9 vamp-mcp-vault@0.1.6
 ```
 
 Register them with Codex:
 
 ```bash
-codex mcp add vamp -- npx -y vamp-mcp@0.1.8 virtualbox
+codex mcp add vamp -- npx -y vamp-mcp@0.1.9 virtualbox
 codex mcp add vamp-vault -- npx -y vamp-mcp-vault@0.1.6
 ```
 
 For KVM, replace `virtualbox` with `kvm`. For the reviewed RPA library, use `library` and set `VAMP_RPA_REGISTRY` to your catalog directory. In VS Code, use **MCP: Add Server → Command (stdio)** with the matching `npx` command, or copy the configuration examples below.
 
-npm installation does not automatically register every client, install a hypervisor/Python/KeePassXC/VeraCrypt, create a VM, or unlock a vault. Prepare those dependencies separately. Hyper-V is excluded from this npm release. The npm packages do not include the graphical VM manager or live VS Code viewer.
+npm installation does not automatically register every client, install a hypervisor/Python/KeePassXC/VeraCrypt, create a VM, or unlock a vault. Prepare those dependencies separately. Hyper-V is excluded from this npm release. The npm packages do not include the graphical VM manager or live VS Code viewer. VirtualBox VM creation uses the same provisioner as the extension; unattended OS installation requires a compatible ISO. The npm KVM server exposes `remote_vm_create`, using the same lifecycle code as the VS Code manager. Debian amd64 automatic installation needs Python and xorriso; Ubuntu/Windows remain manual. Recorder installation media can be built separately; building media does not install it inside a guest.
 
 [VS Code and Codex configuration](npm-package/README.md) · [Vault configuration, unlock and approval](npm-packages/vault/README.md)
 
 ## npm으로 MCP 서버 설치
 
-> npm 게시 요청이 접수되었습니다. 현재 npm 공개 조회에는 임시 버전(`0.0.0-stage`)만 표시되어 실제 배포 버전의 설치 가능 여부를 확인 중입니다. 임시 버전은 실행 가능한 MCP 서버가 아닙니다.
+> VAMP 0.1.8과 Vault 0.1.6은 npm에 공개됐습니다. 아래의 VAMP 0.1.9 설치 안내는 생성·기동 수정 버전의 게시 검증 후 사용할 수 있습니다.
 
 VS Code 확장 없이 MCP 서버만 사용하려면 npm으로 설치할 수 있습니다. Node.js 22 이상이 필요합니다. 패키지는 **VAMP와 Vault 두 개**이며, VirtualBox와 KVM은 VAMP 안에서 선택합니다.
 
 ```bash
-npm install -g vamp-mcp@0.1.8 vamp-mcp-vault@0.1.6
+npm install -g vamp-mcp@0.1.9 vamp-mcp-vault@0.1.6
 ```
 
 전역 설치 없이 실행할 수도 있습니다. 아래 명령은 MCP 클라이언트에 등록해서 사용하며, 단독 실행하면 표준 입력에서 MCP 요청을 기다립니다.
 
 ```bash
-npx -y vamp-mcp@0.1.8 virtualbox
-npx -y vamp-mcp@0.1.8 kvm
-npx -y vamp-mcp@0.1.8 library
+npx -y vamp-mcp@0.1.9 virtualbox
+npx -y vamp-mcp@0.1.9 kvm
+npx -y vamp-mcp@0.1.9 library
 npx -y vamp-mcp-vault@0.1.6
 ```
 
 Codex CLI 등록 예시:
 
 ```bash
-codex mcp add vamp -- npx -y vamp-mcp@0.1.8 virtualbox
+codex mcp add vamp -- npx -y vamp-mcp@0.1.9 virtualbox
 codex mcp add vamp-vault -- npx -y vamp-mcp-vault@0.1.6
 ```
 
-KVM은 첫 명령의 `virtualbox`를 `kvm`으로 바꿉니다. npm 설치가 모든 클라이언트에 자동 등록해 주지는 않습니다. VirtualBox·KVM/libvirt·Python·KeePassXC·VeraCrypt와 사용할 VM은 별도로 준비해야 합니다. Vault는 DB 경로와 로컬 잠금 해제 수단을 설정해야 하며, npm 설치만으로 VS Code의 승인창이나 비밀 저장소에 자동 연결되지 않습니다. Hyper-V는 이번 npm 배포에서 제외합니다.
+KVM은 첫 명령의 `virtualbox`를 `kvm`으로 바꿉니다. npm 설치가 모든 클라이언트에 자동 등록해 주지는 않습니다. VirtualBox·KVM/libvirt·Python·KeePassXC·VeraCrypt와 사용할 VM은 별도로 준비해야 합니다. Vault는 DB 경로와 로컬 잠금 해제 수단을 설정해야 하며, npm 설치만으로 VS Code의 승인창이나 비밀 저장소에 자동 연결되지 않습니다. Hyper-V는 이번 npm 배포에서 제외합니다. VirtualBox VM 생성은 확장과 같은 설치기를 사용하며 호환 ISO만 무인 설치합니다. npm KVM 서버의 `remote_vm_create`는 확장과 같은 생성 코드를 사용합니다. Debian amd64 자동 설치는 Python과 xorriso가 필요하며 Ubuntu·Windows는 수동 설치입니다. 녹화기 설치 미디어 생성은 게스트 내부 설치 완료를 뜻하지 않습니다.
 
 [VS Code·Codex 설정과 Python 준비](npm-package/README.md) · [Vault 설정·잠금 해제·승인 방식](npm-packages/vault/README.md)
+
+## Automatic installation / 자동 설치 범위
+
+| Backend | OS installation / OS 설치 | Guest tools / 게스트 도구 |
+| --- | --- | --- |
+| KVM | Debian amd64: automatic in 0.1.9; Ubuntu/Windows: manual / Debian 자동, 나머지 수동 | Recorder/Vault setup is separate / 녹화기·Vault 별도 |
+| VirtualBox | Supported ISOs: native unattended; Debian fallback: preseed / 호환 ISO 무인 설치·Debian 대체 설치기 | Native unattended hooks and prepared recorder media differ; verify completion / 설치 경로별 후처리·완료 확인 필요 |
+| Hyper-V | VM/ISO preparation; manual OS installation in VMConnect / VM 생성·ISO 연결 후 OS 수동 설치 | Separate scripts / 별도 스크립트 |
 
 ## 시작하기
 
@@ -233,3 +251,5 @@ KVM MCP의 VM 생성·화면 제어·RPA 실행은 [`vm_mcp_server.py`](vm_mcp_s
 VAMP 및 VAMP Vault는 사용자의 로컬 환경에서 자원을 절감하고 안전한 자동화를 연구하기 위한 범용 가상화 인프라 오픈소스입니다. 완전 자율 금전 거래(송금, 결제, 금융 자산 이동 등)에 사용하는 것을 권장하지 않으며, 민감한 작업은 반드시 사용자의 직접 검토와 승인(Human-in-the-loop)을 거쳐야 합니다. 본 소프트웨어를 활용하여 수행한 모든 자동화 작업, 외부 서비스 이용, 자격증명 승인 및 그에 따른 결과와 손해에 대한 최종 책임은 전적으로 사용자 본인에게 있으며, 개발자는 어떠한 금전적·법적 손실에 대해서도 책임을 지지 않습니다.
 
 직접 작성한 코드와 문서는 [MIT](LICENSE)입니다. 게스트 레코더의 GPL-3.0 등 외부 라이선스는 [별도 고지](THIRD_PARTY_NOTICES.md)를 확인하세요.
+
+Linux VM startup: KVM and VirtualBox may compete for hardware virtualization. Shut down one before starting the other. 자동 설치의 공개 테스트 계정은 `vboxuser` / `password123!`이며, VM 기동·OS 설치·게스트 녹화기/Vault 설정 완료는 서로 다른 단계입니다.

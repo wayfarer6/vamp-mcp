@@ -6,7 +6,7 @@ Independent stdio MCP servers for VM-isolated GUI automation. Run with an MCP cl
 
 - Node.js 22+.
 - Local VirtualBox tools need VirtualBox 7.x. Python helper tools need Python 3.11+; set `RPA_HOST_PYTHON` to your Python executable. Install Robot Framework, pycdlib, asyncvnc or the matching VirtualBox Python SDK when the chosen operation requires them.
-- The `remote` server runs on the host owning KVM/libvirt or VirtualBox. To operate a different machine, start it there over SSH. Linux KVM requires access to `virsh` and the selected libvirt URI.
+- The `remote` server runs on the host owning KVM/libvirt or VirtualBox. To operate a different machine, start it there over SSH. Linux KVM requires access to `virsh` and the selected libvirt URI. VM creation also needs `virt-install` and `qemu-img`; Debian automatic installation needs Python 3.11+ and `xorriso`.
 - Provide your own VMs, guest operating systems, licenses and Guest Additions when needed. Package installation does not create VMs or install system dependencies.
 - VAMP Vault MCP is a separate npm package, `vamp-mcp-vault`. The live viewer and graphical manager require the VS Code extensions; npm does not install them. Hyper-V is not included in this npm release.
 - Full SPICE/OCR/YOLO workflows still require the source repository and their documented environments.
@@ -21,10 +21,10 @@ vamp-mcp --help
 Or run without a global install:
 
 ```sh
-npx -y vamp-mcp@0.1.8 virtualbox
-npx -y vamp-mcp@0.1.8 kvm
-npx -y vamp-mcp@0.1.8 library
-npx -y vamp-mcp@0.1.8 remote --backend kvm
+npx -y vamp-mcp@0.1.9 virtualbox
+npx -y vamp-mcp@0.1.9 kvm
+npx -y vamp-mcp@0.1.9 library
+npx -y vamp-mcp@0.1.9 remote --backend kvm
 ```
 
 Servers communicate over standard input/output and wait for an MCP client. Use separate MCP registrations for each server. Installation alone does not register them with every client.
@@ -39,7 +39,7 @@ Add a server to `.vscode/mcp.json` (on Windows use `npx.cmd` if your client requ
     "vamp": {
       "type": "stdio",
       "command": "npx",
-      "args": ["-y", "vamp-mcp@0.1.8", "virtualbox"],
+      "args": ["-y", "vamp-mcp@0.1.9", "virtualbox"],
       "env": {"RPA_HOST_PYTHON": "/absolute/path/to/python"}
     }
   }
@@ -55,13 +55,13 @@ In `~/.codex/config.toml`:
 ```toml
 [mcp_servers.vamp]
 command = "npx"
-args = ["-y", "vamp-mcp@0.1.8", "virtualbox"]
+args = ["-y", "vamp-mcp@0.1.9", "virtualbox"]
 
 [mcp_servers.vamp.env]
 RPA_HOST_PYTHON = "/absolute/path/to/python"
 ```
 
-For KVM, change the final argument from `virtualbox` to `kvm`. This uses the existing host controller: inventory, start/stop, screenshots, keyboard/mouse and saved RPA replay. It does not provide the full source-repository SPICE/OCR environment or a live viewer.
+For KVM, change the final argument from `virtualbox` to `kvm`. This uses the existing host controller: inventory, VM creation, start/stop, screenshots, keyboard/mouse and saved RPA replay. It does not provide the full source-repository SPICE/OCR environment or a live viewer.
 
 For the RPA library, register `library` instead and set `VAMP_RPA_REGISTRY` to your saved VAMP catalog directory. Its default is `~/.vamp/rpa-catalog`; an existing VS Code catalog must be selected explicitly. The library searches and replays reviewed definitions; it does not provide the extension's authoring UI. Replay needs its Python dependencies and a reviewed, compatible RPA. Actions completing does not prove application success; verify the expected outcome.
 
@@ -85,9 +85,23 @@ npm run build --prefix third_party/mcp-virtualbox
 npm ci --prefix vscode-extension --ignore-scripts
 npm run build --prefix npm-package
 npm pack ./npm-package --pack-destination /tmp
-VAMP_TEST_TARBALL=/tmp/vamp-mcp-0.1.8.tgz npm test --prefix npm-package
+VAMP_TEST_TARBALL=/tmp/vamp-mcp-0.1.9.tgz npm test --prefix npm-package
 ```
 
 The build reuses the VSIX runtime bundling and dependency license notices. The published package has no install scripts and no npm runtime dependencies; JavaScript dependencies are bundled. See the repository for backend-specific setup and validation limits.
 
 [Source and documentation](https://github.com/wayfarer6/vamp-mcp)
+
+## VM creation and installation
+
+For KVM, call `remote_vm_create` with `name`, an absolute host `iso_path`, `guest_os:"debian"`, and `confirmed:true` after user authorization. Debian amd64 installer ISOs default to unattended installation; use `installation_mode:"manual"` to opt out. Ubuntu/Windows installation is manual; Windows additionally requires `windows_confirmed:true` and your own valid license.
+
+For VirtualBox, use `vm_create`. Compatible ISOs use VirtualBox unattended installation; Debian detection failures can use a prepared preseed installer. It needs `xorriso` and requires `guest_os:"debian"`. Use `installation_mode:"manual"` to install manually.
+
+Automatic Debian installation uses the **public sandbox account `vboxuser` / `password123!`**. Change it before using the VM for private work. The source ISO and existing VMs are never overwritten. Installation media is built into a new per-VM directory. Unsupported installer layouts fail with an error; they do not silently count as successful installation.
+
+`startup_verified:true` confirms Running state only. Verify OS installation and the guest desktop separately. Recorder/Vault guest setup is not automatically completed by this Debian path. The full repository's richer lab installers remain separate workflows.
+
+On Linux, stop active VirtualBox VMs before starting KVM and vice versa. Concurrent use can crash VirtualBox with `VERR_SVM_IN_USE`; creation/start paths check for the other hypervisor.
+
+한국어: `vamp-mcp` 하나에서 VirtualBox와 KVM을 선택합니다. KVM의 `remote_vm_create`는 명시적 확인 후 VM을 생성·기동하며, Debian amd64 설치 ISO는 기본으로 자동 설치합니다. Python·xorriso·virt-install·qemu-img를 호스트에 준비하세요. 공개 테스트 계정은 `vboxuser` / `password123!`입니다. VM 기동 성공과 OS·게스트 도구 설치 완료는 별도로 검증해야 합니다. Linux에서는 KVM과 VirtualBox VM을 동시에 실행하지 마세요.

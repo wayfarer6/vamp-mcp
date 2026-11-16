@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,execFileSync} from 'node:child_process';
-import {mkdtemp,rm} from 'node:fs/promises';
+import {mkdtemp,rm,writeFile,access} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
@@ -16,8 +16,23 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   t.after(()=>rm(temporary,{recursive:true,force:true}));
   execFileSync(process.platform==='win32'?'npm.cmd':'npm',['install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
   const cli=path.join(temporary,'node_modules',packageName,'bin',packageName+'.mjs');
-  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.1.8');
+  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.1.9');
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
+  if(!vault) {
+    await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async()=>{
+      const source=path.join(temporary,'installer.iso');await writeFile(source,'test');
+      const args={name:'Blocked-Test',iso_path:source,confirmed:false};
+      const pending=JSON.parse(execFileSync(process.execPath,[cli,'kvm','--call','remote_vm_create','--args',JSON.stringify(args)],{encoding:'utf8'}));
+      assert.equal(pending.status,'needs_confirmation');
+      if(process.platform==='win32')return;
+      const fake=path.join(temporary,'busy-vbox');await writeFile(fake,'#!/bin/sh\necho busy-vm\n',{mode:0o700});
+      const work=path.join(temporary,'uncreated-work');
+      assert.throws(()=>execFileSync(process.execPath,[cli,'kvm','--workdir',work,'--call','remote_vm_create','--args',JSON.stringify({...args,confirmed:true})],{encoding:'utf8',env:{...process.env,VBOXMANAGE_PATH:fake}}),error=>{
+        assert.match(JSON.parse(error.stdout).message,/VirtualBox VM is active/);return true;
+      });
+      await assert.rejects(access(work));
+    });
+  }
   for (const [command,expected] of (vault?[[null,'vault_status']]:[['virtualbox','vamp_setup'],['kvm','remote_vm_list'],['library','rpa_search'],['remote','remote_vm_list']])) {
     await t.test(`${command}: initialize and discover real MCP tools`,{timeout:12000},async()=>{
       const child=spawn(process.execPath,[cli,...(command?[command]:[])],{cwd:temporary,env:{...process.env,VAMP_RPA_REGISTRY:path.join(temporary,'catalog')}});
@@ -45,6 +60,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
           child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'vamp-package-test',version:'1.0.0'}}})+'\n');
         });
         assert.ok(result.result?.tools.some(tool=>tool.name===expected),JSON.stringify(result));
+        if(command==='kvm'||command==='remote')assert.ok(result.result.tools.some(tool=>tool.name==='remote_vm_create'));
       } finally {child.kill();}
     });
   }

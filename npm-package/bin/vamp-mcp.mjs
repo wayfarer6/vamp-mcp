@@ -12,7 +12,7 @@ if (command==='--version' || command==='-v') {
   console.log(`VAMP MCP — independent stdio servers
 Usage: vamp-mcp [virtualbox|kvm|library|remote] [remote options]
   virtualbox   Local VirtualBox MCP (default); needs VirtualBox and Python 3.11+
-  kvm          Local KVM/libvirt MCP (same host controller as remote --backend kvm)
+  kvm          KVM/libvirt inventory, creation and control (Debian automatic install)
   library      Reviewed RPA search/replay; VAMP_RPA_REGISTRY selects saved RPAs
   remote       KVM/VirtualBox host MCP; pass --backend kvm or --backend virtualbox
   --version    Package version

@@ -17,14 +17,15 @@ class ProvisioningTests(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name);self.iso=self.root/'installer.iso';self.iso.write_bytes(b'test')
         env=patch.dict(os.environ,{'VAMP_DATA_DIR':str(self.root/'vamp-data')});env.start();self.addCleanup(env.stop)
-        self.calls=[];self.os_type='Debian_64';self.listed='';self.supported=True
+        self.calls=[];self.os_type='Debian_64';self.listed='';self.supported=True;self.started=False
     def command(self,args,**kwargs):
         self.calls.append(list(map(str,args[1:])))
         output=''
         if args[1:3]==['list','vms']:output=self.listed
         if args[1:3]==['unattended','detect']:
             output=f'detectedOSTypeId="{self.os_type}"\nisInstallSupported="{str(self.supported).lower()}"\n'
-        if args[1]=='showvminfo':output=f'ostype="{self.os_type}"\nstoragecontrollername0="SATA"\nVMState="poweroff"\n'
+        if args[1]=='startvm':self.started=True
+        if args[1]=='showvminfo':output=f'ostype="{self.os_type}"\nstoragecontrollername0="SATA"\nVMState="{"running" if self.started else "poweroff"}"\n'
         if '--help' in args:output='--user-password'
         return subprocess.CompletedProcess(args,0,output,'')
     def create(self):
@@ -35,7 +36,9 @@ class ProvisioningTests(unittest.TestCase):
         self.assertEqual(result['status'],'installation_started')
         self.assertFalse(result['installation_verified'])
         install=next(args for args in self.calls if args[:2]==['unattended','install'] and '--help' not in args)
-        self.assertEqual(install[install.index('--start-vm')+1],'separate')
+        self.assertNotIn('--start-vm',install)
+        self.assertIn(['startvm','test-vm','--type','headless'],self.calls)
+        self.assertTrue(result['startup_verified'])
         self.assertEqual(install[install.index('--user')+1],'vboxuser')
         self.assertEqual(install[install.index('--user-password')+1],'password123!')
         import pycdlib
@@ -76,7 +79,7 @@ class ProvisioningTests(unittest.TestCase):
     def test_manual_fallback_starts_iso_without_unattended_or_public_credentials(self):
         self.supported=False
         with patch.object(provision.subprocess,'run',self.command):
-            result=provision.create(iso_path=str(self.iso),name='manual',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True)
+            result=provision.create(iso_path=str(self.iso),name='manual',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,installation_mode='manual')
         self.assertEqual(result['installation_mode'],'manual')
         self.assertFalse(result['credentials']['public_sandbox_credentials'])
         self.assertFalse(result['installation_verified'])
@@ -90,5 +93,41 @@ class ProvisioningTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args,1,'','NS_ERROR_NOT_IMPLEMENTED')
             return self.command(args,**kwargs)
         with patch.object(provision.subprocess,'run',command):
-            result=provision.create(iso_path=str(self.iso),name='fallback',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True)
+            result=provision.create(iso_path=str(self.iso),name='fallback',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,installation_mode='manual')
         self.assertEqual(result['installation_mode'],'manual')
+
+    def test_successful_cli_without_running_vm_is_not_reported_as_started(self):
+        def command(args,**kwargs):
+            result=self.command(args,**kwargs)
+            if args[1]=='showvminfo':result.stdout=result.stdout.replace('VMState="running"','VMState="poweroff"')
+            return result
+        with patch.object(provision.subprocess,'run',command):
+            with self.assertRaisesRegex(RuntimeError,'startup was not verified'):
+                provision.create(iso_path=str(self.iso),name='not-started',basedir=str(self.root/'vms'))
+        journal=json.loads((self.root/'vms/not-started/vamp-install.json').read_text())
+        self.assertEqual(journal['status'],'failed')
+        self.assertTrue(journal['partial_vm_preserved'])
+
+    def test_debian_detection_fallback_uses_preseed_installer_and_verified_start(self):
+        self.supported=False
+        prepared=self.root/'prepared.iso';prepared.write_bytes(b'prepared')
+        with patch.object(provision.subprocess,'run',self.command),patch.object(provision,'build_debian_installer',return_value={'iso':str(prepared)}) as builder:
+            result=provision.create(iso_path=str(self.iso),name='auto-debian',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True)
+        builder.assert_called_once()
+        self.assertEqual(result['installation_mode'],'unattended')
+        self.assertTrue(result['startup_verified'])
+        self.assertTrue(result['credentials']['public_sandbox_credentials'])
+        self.assertFalse(result['recorder_media_attached'])
+        attachments=[call for call in self.calls if call[0]=='storageattach' and 'dvddrive' in call]
+        self.assertEqual(len(attachments),1)
+        self.assertIn(str(prepared),attachments[0])
+        self.assertTrue(any(str(prepared) in call for call in self.calls))
+
+    def test_active_kvm_blocks_virtualbox_before_creating_any_vm_files(self):
+        def command(args,**kwargs):
+            if args[0]=='virsh':return subprocess.CompletedProcess(args,0,'active-kvm\n','')
+            return self.command(args,**kwargs)
+        with patch.object(provision.subprocess,'run',command):
+            with self.assertRaisesRegex(RuntimeError,'KVM VM is active'):
+                provision.create(iso_path=str(self.iso),name='blocked',basedir=str(self.root/'vms'))
+        self.assertFalse((self.root/'vms/blocked').exists())

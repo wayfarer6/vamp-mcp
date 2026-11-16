@@ -7,6 +7,8 @@ const {ZipFile}=require('yazl');
 const {execFile}=require('node:child_process');
 const {promisify}=require('node:util');
 const git=promisify(execFile);
+const privacy=require('../rpa-privacy.js');
+const snapshots=new WeakMap();
 const extensions=new Set(['.py','.robot','.resource','.md','.json','.png','.jpg','.jpeg','.txt','.yaml','.yml','.toml']);
 const skipped=new Set(['node_modules','__pycache__','.git','.venv','logs','screenshots','recordings']);
 const idFor=value=>crypto.createHash('sha256').update(value).digest('hex').slice(0,24);
@@ -60,28 +62,44 @@ async function preview(item,relative){
  if(!['.py','.robot','.json','.resource','.md','.txt','.yaml','.yml','.toml'].includes(path.extname(relative).toLowerCase()))return 'Binary asset · included in the export.';
  const bytes=await checkedBuffer(item,file);const text=bytes.toString('utf8');return text.length>64000?text.slice(0,64000)+'\n… preview truncated; export retains the complete file.':text;
 }
-async function exportItem(item,destination){
+async function collectExport(item){
  let commit;let revisionFiles;
  if(item.kind==='saved'){
   commit=(await git('git',['-C',item.path,'rev-parse','HEAD'],{timeout:15000})).stdout.trim();
   revisionFiles=[];
   for(const name of ['rpa.json','actions.json','source.py','README.md']){const result=await git('git',['-C',item.path,'show',commit+':'+name],{timeout:15000,encoding:'buffer',maxBuffer:5*1024**2});revisionFiles.push({relative:name,buffer:result.stdout});}
  }
- if(item.files.some(f=>path.resolve(f.file)===path.resolve(destination)))throw Error('Choose an export path that does not replace an RPA source file.');
- if(item.files.reduce((sum,f)=>sum+f.bytes,0)>50*1024**2)throw Error('This RPA is larger than the 50 MB export limit.');
- const zip=new ZipFile();const checksums=[];let total=0;
+ const files=[];let total=0;
  for(const file of revisionFiles||item.files){
   if(file.relative.split('/').includes('..')||path.isAbsolute(file.relative))throw Error('Invalid export path.');
-  const bytes=file.buffer||await checkedBuffer(item,file);total+=bytes.length;if(total>50*1024**2)throw Error('The RPA changed and exceeds the export limit. Refresh the library.');
-  zip.addBuffer(bytes,file.relative,{mode:0o100600});checksums.push({path:file.relative,sha256:crypto.createHash('sha256').update(bytes).digest('hex'),bytes:bytes.length});
+  const bytes=Buffer.from(file.buffer||await checkedBuffer(item,file));total+=bytes.length;if(total>50*1024**2)throw Error('The RPA exceeds the export limit.');
+  files.push({relative:file.relative,bytes});
  }
- zip.addBuffer(Buffer.from(JSON.stringify({format:'vamp-rpa-source-export',version:1,name:item.name,kind:item.kind,rpa_version:revisionFiles?JSON.parse(revisionFiles[0].buffer).version:item.version,commit,latest_committed_only:!!commit,requires_matching_vamp_runtime:item.kind==='package'||item.kind==='saved',source_executed:false,files:checksums},null,2)+'\n'),'VAMP_EXPORT.json');
+ return {files,commit,name:item.name,kind:item.kind,version:revisionFiles?JSON.parse(revisionFiles[0].buffer).version:item.version};
+}
+async function prepareExport(item){
+ const data=await collectExport(item);const summary=privacy.summarize([...data.files,{relative:'VAMP_EXPORT.json',bytes:Buffer.from(JSON.stringify({name:data.name,paths:data.files.map(f=>f.relative)}))}]);
+ const snapshot=Object.freeze({digest:privacy.digest(data.files,JSON.stringify([data.commit,data.name,data.kind,data.version])),summary});
+ snapshots.set(snapshot,{...data,item,approved:false,findingsCount:summary.findings.length});return snapshot;
+}
+function approveExport(snapshot,{aiReviewed,userConfirmed}={}){
+ const data=snapshots.get(snapshot);if(!data||aiReviewed!==true||userConfirmed!==true||data.findingsCount)throw Error('AI privacy review and manual user review are required before export.');
+ data.approved=true;
+}
+async function exportItem(item,destination,{snapshot}={}){
+ const data=snapshots.get(snapshot);if(!data||data.item!==item||!data.approved)throw Error('AI privacy review and manual user review are required before export.');
+ if(item.files.some(f=>path.resolve(f.file)===path.resolve(destination)))throw Error('Choose an export path that does not replace an RPA source file.');
+ const current=await collectExport(item);if(privacy.digest(current.files,JSON.stringify([current.commit,current.name,current.kind,current.version]))!==snapshot.digest)throw Error('RPA files changed after privacy review. Review the updated files again.');
+ const {commit,version}=data;const zip=new ZipFile();const checksums=[];
+ for(const file of data.files){zip.addBuffer(file.bytes,file.relative,{mode:0o100600});checksums.push({path:file.relative,sha256:crypto.createHash('sha256').update(file.bytes).digest('hex'),bytes:file.bytes.length});}
+ zip.addBuffer(Buffer.from(JSON.stringify({format:'vamp-rpa-source-export',version:1,name:data.name,kind:data.kind,rpa_version:version,privacy_review:{scope:'structural-report-only',not_a_privacy_guarantee:true,ai_reviewed:true,user_confirmed:true,snapshot_sha256:snapshot.digest,ai_received_source:false},commit,latest_committed_only:!!commit,requires_matching_vamp_runtime:item.kind==='package'||item.kind==='saved',source_executed:false,files:checksums},null,2)+'\n'),'VAMP_EXPORT.json');
  const temporary=destination+'.'+crypto.randomBytes(8).toString('hex')+'.part';
  try{
   const writing=pipeline(zip.outputStream,createWriteStream(temporary,{flags:'wx',mode:0o600}));
   zip.on('error',error=>zip.outputStream.destroy(error));zip.end();await writing;await fs.rename(temporary,destination);
  }catch(error){await fs.rm(temporary,{force:true});throw error;}
+ snapshots.delete(snapshot);
  return {path:destination,files:checksums.length,sha256:crypto.createHash('sha256').update(await fs.readFile(destination)).digest('hex')};
 }
 async function sourceText(item){const file=item.files.find(f=>/\.(py|robot)$|\.handoff\.json$/i.test(f.file));if(!file)throw Error('Select a Python, Robot or handoff recording.');const text=(await checkedBuffer(item,file)).toString('utf8');if(text.length>64000)throw Error('This recording is too long for one AI request. Split it into a smaller task.');return text;}
-module.exports={catalog,preview,exportItem,safeFiles,sourceText};
+module.exports={catalog,preview,prepareExport,approveExport,exportItem,safeFiles,sourceText};

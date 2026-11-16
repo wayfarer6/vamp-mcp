@@ -11,10 +11,12 @@ if ((await stat(path.join(here,manifest.icon))).size>1024*1024) {
 const runtime=path.join(here,'dist/runtime');
 await rm(path.join(here,'dist'),{recursive:true,force:true});
 await mkdir(path.join(runtime,'backends/virtualbox'),{recursive:true});
+await mkdir(path.join(here,'dist'),{recursive:true});
+await build({entryPoints:[path.join(root,'backends/common/host-backends.cjs')],outfile:path.join(here,'dist/host_backends.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
 const built=await build({metafile:true,entryPoints:[path.join(root,'backends/virtualbox/server.mjs')],
   outfile:path.join(runtime,'backends/virtualbox/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',
   banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
-for(const name of ['scripts/build_recorder_media.py','rpas','backends/common/Test-Environment.ps1','recording_converter.py','guest_keys.py','backends/library/registry.py','backends/library/replay.py','guest_setup/recorder','third_party/pyautogui-recorder','backends/virtualbox/setup_windows_sdk.py','backends/hyperv/scripts/Manage-Desktop.ps1',
+for(const name of ['scripts/build_debian_installer.py','backends/kvm/debian-preseed.cfg','scripts/build_recorder_media.py','rpas','backends/common/Test-Environment.ps1','recording_converter.py','guest_keys.py','backends/library/registry.py','backends/library/replay.py','guest_setup/recorder','third_party/pyautogui-recorder','backends/virtualbox/setup_windows_sdk.py','backends/hyperv/scripts/Manage-Desktop.ps1',
   'scripts/remote_host_setup.sh','third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/rpas','backends/virtualbox/history.py','backends/virtualbox/recording_listener.py','backends/virtualbox/mouse_click.py','backends/virtualbox/mouse_move.py','backends/virtualbox/shares.py','backends/virtualbox/transfers.py','backends/virtualbox/vnc.py','backends/virtualbox/recordings.py','backends/virtualbox/snapshots.py','backends/virtualbox/profiles.json','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
   const destination=path.join(runtime,name);
   await mkdir(path.dirname(destination),{recursive:true});

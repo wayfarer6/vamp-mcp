@@ -26,17 +26,19 @@ import sys,os,json,base64
 from pathlib import Path
 args=sys.argv[1:]
 with open(os.environ['VBOX_TEST_LOG'],'a') as f: f.write(json.dumps(args)+'\\n')
-if args[0]=='showvminfo': print('VMState="'+os.environ.get('VBOX_TEST_STATE','poweroff')+'"')
+if args[0]=='showvminfo': print('VMState="'+('running' if Path(os.environ['VBOX_TEST_LOG']+'.started').exists() else os.environ.get('VBOX_TEST_STATE','poweroff'))+'"')
 elif args[:2]==['list','vms']: print('"test-vm" {12345678-1234-1234-1234-123456789012}')
 elif args[0]=='controlvm' and args[2]=='screenshotpng':
  Path(args[3]).write_bytes(base64.b64decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='))
-elif args[0] in ('startvm','setextradata','sharedfolder'): pass
+elif args[0]=='startvm': Path(os.environ['VBOX_TEST_LOG']+'.started').touch()
+elif args[0] in ('setextradata','sharedfolder'): pass
 else: sys.exit(2)
 ''')
         fake.chmod(0o700)
+        fake_virsh=self.folder/'virsh';fake_virsh.write_text('#!/bin/sh\nexit 0\n');fake_virsh.chmod(0o700)
         self.log = self.folder/'calls.jsonl'
         self.env = patch.dict(os.environ,{'VBOXMANAGE_PATH':str(fake),'VBOX_TEST_LOG':str(self.log),
-                                          'VBOX_TEST_STATE':'poweroff','VAMP_DATA_DIR':str(self.folder/'vamp-data')})
+                                          'VBOX_TEST_STATE':'poweroff','PATH':str(self.folder)+os.pathsep+os.environ['PATH'],'VAMP_DATA_DIR':str(self.folder/'vamp-data')})
         self.env.start()
         self.addCleanup(self.env.stop)
 

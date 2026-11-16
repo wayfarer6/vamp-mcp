@@ -7,6 +7,10 @@ const run = promisify(execFile);
 const version = require('./package.json').version;
 
 function activate(context) {
+  if(vscode.extensions?.getExtension('wayfarer6.vamp-mcp')) {
+    vscode.window.showWarningMessage('VAMP: the legacy wayfarer6.vamp-mcp extension conflicts with VAMP MCP Tools. Update VAMP Vault, uninstall the legacy extension, then reload VS Code.','Show legacy extension').then(choice=>{if(choice==='Show legacy extension')vscode.commands.executeCommand('workbench.extensions.search','@id:wayfarer6.vamp-mcp');});
+    return;
+  }
   const changes = new vscode.EventEmitter();
   const config = () => vscode.workspace.getConfiguration('vamp');
   const pythonPath = () => path.join(context.globalStorageUri.fsPath,'python',
@@ -30,11 +34,12 @@ function activate(context) {
   context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.kvm', {
     onDidChangeMcpServerDefinitions: changes.event,
     provideMcpServerDefinitions() {
+      const definitions = process.platform==='linux' ? [new vscode.McpStdioServerDefinition('VAMP KVM Host',process.execPath,[path.join(runtime,'backends/remote_ssh/server.mjs'),'--backend','kvm'],{ELECTRON_RUN_AS_NODE:'1',VAMP_REMOTE_REPO:runtime,VAMP_REMOTE_WORKDIR:context.globalStorageUri.fsPath,VAMP_REMOTE_PYTHON:config().get('kvmPythonExecutable')||config().get('pythonExecutable')||'python3',VAMP_LIBVIRT_URI:config().get('libvirtUri')||'qemu:///session'},version)] : [];
       const repository = config().get('kvmRepositoryPath');
-      if (!repository || !fs.existsSync(path.join(repository, 'vm_mcp_server.py'))) return [];
+      if (!repository || !fs.existsSync(path.join(repository, 'vm_mcp_server.py'))) return definitions;
       const python = config().get('kvmPythonExecutable') || path.join(repository, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
       const profile = config().get('kvmConfigPath') || path.join(repository, 'config/vm-mcp.json');
-      return [new vscode.McpStdioServerDefinition('VAMP KVM (VNC)', python,
+      return [...definitions,new vscode.McpStdioServerDefinition('VAMP KVM (VNC)', python,
         [path.join(repository, 'vm_mcp_server.py')], {VM_MCP_CONFIG: profile}, version)];
     }
   }));

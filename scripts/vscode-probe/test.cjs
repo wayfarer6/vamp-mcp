@@ -14,7 +14,7 @@ exports.run = async function () {
       await config.update(key, value, vscode.ConfigurationTarget.Global);
     }
     await vscode.workspace.getConfiguration('vamp').update('pythonExecutable', 'C:\\ProgramData\\VAMP\\Python312\\python.exe', vscode.ConfigurationTarget.Global);
-    for (const id of ['wayfarer6.vamp-mcp', 'wayfarer6.vamp-vault']) {
+    for (const id of ['wayfarer6.vamp-mcp-tools', 'wayfarer6.vamp-vault']) {
       const extension = vscode.extensions.getExtension(id);
       assert.ok(extension, `${id} installed`);
       await extension.activate();
@@ -32,7 +32,7 @@ exports.run = async function () {
     await vscode.commands.executeCommand('vampVault.lock');
     report.checks.push('Vault lock command completes');
     await vscode.commands.executeCommand('vamp.setupPython');
-    const managed=path.join(root,'vscode-profile','User','globalStorage','wayfarer6.vamp-mcp','python','Scripts','python.exe');
+    const managed=path.join(root,'vscode-profile','User','globalStorage','wayfarer6.vamp-mcp-tools','python','Scripts','python.exe');
     assert.ok(fs.existsSync(managed),'managed Python created by the actual setup command');
     const sdk=await promisify(execFile)(managed,['-c','from vboxapi import VirtualBoxManager; m=VirtualBoxManager(None,None); print(m.getVirtualBox().version)'],{timeout:30000});
     assert.match(sdk.stdout,/7\.2\.22/);

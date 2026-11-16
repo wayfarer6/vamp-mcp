@@ -20,6 +20,7 @@ function fakeHost() {
   const work = path.join(dir, 'work');
   fs.mkdirSync(bin, { recursive: true });
   fs.mkdirSync(work, { recursive: true });
+  fs.writeFileSync(path.join(bin,'VBoxManage'),'#!/bin/sh\nexit 0\n',{mode:0o700});
   const log = path.join(dir, 'virsh.log');
   fs.writeFileSync(log, '');
   const script = `#!/usr/bin/env bash

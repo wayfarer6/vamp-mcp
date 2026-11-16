@@ -13,4 +13,3 @@ for(const name of ['runtime','notices']) {
  await cp(path.join(root,source,'dist',name),path.join(destination,name),{recursive:true});
 }
 for(const name of ['LICENSE','THIRD_PARTY_NOTICES.md'])await copyFile(path.join(root,source,name),path.join(destination,name));
-

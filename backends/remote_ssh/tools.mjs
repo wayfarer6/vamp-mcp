@@ -10,7 +10,7 @@ import { parseMachineReadable, parseVmList, vboxStatus, vboxVm } from './virtual
 import { keyEvents, chordKeys, SCANCODES } from './input.mjs';
 import { toPng } from './png.mjs';
 
-export const VERSION = '0.1.8';
+export const VERSION = '0.1.9';
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_SCREENSHOT_BYTES = 12 * 1024 * 1024;
 
@@ -145,6 +145,10 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
 
   async function start({ vm }) {
     const target = assertVm(vm);
+    if(config.platform==='linux'){
+      if(config.backend==='kvm'){const active=await vbox(['list','runningvms']);if(active.ok&&active.stdout.trim())throw new Error('A VirtualBox VM is active. Shut it down before starting KVM (VERR_SVM_IN_USE).');}
+      else for(const uri of ['qemu:///session','qemu:///system']){const active=await exec('virsh',['-c',uri,'list','--name']);if(active.ok&&active.stdout.trim())throw new Error('A KVM VM is active. Shut it down before starting VirtualBox (VERR_SVM_IN_USE).');}
+    }
     const result = config.backend === 'kvm'
       ? await virsh(['start', target], { timeoutMs: 60000 })
       : await vbox(['startvm', target, '--type', 'headless'], { timeoutMs: 90000 });
@@ -161,6 +165,10 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
 
   async function stop({ vm, force = false }) {
     const target = assertVm(vm);
+    if(config.platform==='linux'){
+      if(config.backend==='kvm'){const active=await vbox(['list','runningvms']);if(active.ok&&active.stdout.trim())throw new Error('A VirtualBox VM is active. Shut it down before starting KVM (VERR_SVM_IN_USE).');}
+      else for(const uri of ['qemu:///session','qemu:///system']){const active=await exec('virsh',['-c',uri,'list','--name']);if(active.ok&&active.stdout.trim())throw new Error('A KVM VM is active. Shut it down before starting VirtualBox (VERR_SVM_IN_USE).');}
+    }
     const result = config.backend === 'kvm'
       ? await virsh([force ? 'destroy' : 'shutdown', target], { timeoutMs: 90000 })
       : await vbox(['controlvm', target, force ? 'poweroff' : 'acpipowerbutton'], { timeoutMs: 60000 });
@@ -557,6 +565,29 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     };
   }
 
+  async function createVm(args = {}) {
+    if (config.backend !== 'kvm') throw new Error('VM creation through this host server is KVM-only. Use the VirtualBox vm_create tool for VirtualBox.');
+    if (config.platform !== 'linux') throw new Error('KVM creation requires a Linux host.');
+    if (args.confirmed !== true) return {status:'needs_confirmation',vm_created:false,message:'Authorize creation and startup, then pass confirmed:true with a host ISO path.'};
+    const guest_os=args.guest_os ?? 'debian';
+    if (!['debian','ubuntu','windows11'].includes(guest_os)) throw new Error('Unsupported guest_os');
+    if (guest_os==='windows11' && args.windows_confirmed!==true) return {status:'needs_windows_confirmation',vm_created:false,message:'Windows requires your own valid license and explicit windows_confirmed:true.'};
+    if (typeof args.name!=='string' || !/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test(args.name)) throw new Error('Invalid VM name');
+    if (typeof args.iso_path!=='string' || !path.isAbsolute(args.iso_path)) throw new Error('Choose an absolute host ISO path');
+    const values={memory_mb:args.memory_mb ?? (guest_os==='windows11'?4096:2048),cpus:args.cpus ?? 2,disk_mb:args.disk_mb ?? 256000};
+    for (const [key,min,max] of [['memory_mb',guest_os==='windows11'?4096:2048,131072],['cpus',1,64],['disk_mb',32768,2097152]]) {
+      if (!Number.isInteger(values[key]) || values[key]<min || values[key]>max) throw new Error(`Invalid ${key}: expected integer ${min}..${max}`);
+    }
+    const lifecycle=(await import('../common/host-backends.cjs')).default;
+    const adapter=lifecycle.hostBackends({globalStorageUri:{fsPath:config.workdir}},{
+      runtime:config.repo || config.workdir,config:()=>({get:key=>key==='libvirtUri'?config.libvirtUri:key==='kvmPythonExecutable'?config.python:undefined}),
+      execute:(exe,argv,options)=>run(exe,argv,{timeoutMs:options.timeout}),
+    });
+    const created=await adapter.create('kvm',{name:args.name,iso_path:args.iso_path,guest_os,installation_mode:args.installation_mode,...values});
+    return { ...created,backend:'kvm',guest_os,os_installation_completed:false,guest_setup_completed:false,
+      next_action:created.installation_mode==='unattended'?'Debian unattended installation started; verify the guest desktop before declaring completion. Public sandbox login: vboxuser / password123!.':'Complete the OS installer in the guest console. VM startup is not installation completion.'};
+  }
+
   const tools = [
     {
       name: 'remote_env_check',
@@ -579,6 +610,18 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
         additionalProperties: false,
       },
       handler: args => envSetup(args),
+    },
+    {
+      name: 'remote_vm_create',
+      title: 'Create a KVM VM from a host ISO',
+      description: 'KVM only: create and start a new VM using the same provisioner as the VS Code manager. Requires confirmed:true. Debian default; Windows additionally requires windows_confirmed:true and your own license. Debian amd64 installer ISOs default to automatic installation using public sandbox credentials vboxuser/password123!. Ubuntu/Windows are manual; use installation_mode:manual to opt out.',
+      inputSchema: {type:'object',properties:{
+        name:{type:'string',pattern:'^[A-Za-z][A-Za-z0-9_-]{0,62}$'},iso_path:{type:'string',description:'Absolute ISO path on the host running this server'},
+        guest_os:{type:'string',enum:['debian','ubuntu','windows11'],default:'debian'},installation_mode:{type:'string',enum:['manual','unattended']},
+        memory_mb:{type:'integer',minimum:2048,maximum:131072},cpus:{type:'integer',minimum:1,maximum:64},disk_mb:{type:'integer',minimum:32768,maximum:2097152},
+        confirmed:{type:'boolean',default:false},windows_confirmed:{type:'boolean',default:false}
+      },required:['name','iso_path'],additionalProperties:false},
+      handler: args => createVm(args),
     },
     {
       name: 'remote_vm_list',

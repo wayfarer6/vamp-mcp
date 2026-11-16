@@ -10,7 +10,7 @@ exports.run=async()=>{
   const report={checks:[]};
   async function stage(name){fs.writeFileSync(path.join(directory,name+'-ready'),'');const end=Date.now()+300000;while(!fs.existsSync(path.join(directory,name+'-captured'))&&Date.now()<end)await new Promise(r=>setTimeout(r,200));if(!fs.existsSync(path.join(directory,name+'-captured')))throw Error('Capture stage timed out: '+name);}
   try {
-    const extension=vscode.extensions.getExtension('wayfarer6.vamp-mcp');
+    const extension=vscode.extensions.getExtension('wayfarer6.vamp-mcp-tools');
     assert.ok(extension);await extension.activate();report.checks.push('actual VS Code extension activation');
     const commands=new Set(await vscode.commands.getCommands(true));
     for(const {command} of extension.packageJSON.contributes.commands)assert.ok(commands.has(command),command);

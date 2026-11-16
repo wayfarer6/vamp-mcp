@@ -145,8 +145,10 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
   async function checkOtherHypervisor() {
     if(process.platform!=='linux')return;
     if(backend==='virtualbox'){
-      let active=[];try{active=await adapters.list('kvm');}catch{}
-      if(active.some(vm=>vm.state==='running'||vm.state==='paused'))throw Error('A KVM desktop is running. Shut it down before starting VirtualBox; these hypervisors can compete for hardware virtualization on this host.');
+      for(const uri of ['qemu:///session','qemu:///system']){
+        let active='';try{active=(await run('virsh',['-c',uri,'list','--name'],{timeout:10000})).stdout;}catch{}
+        if(active.trim())throw Error('A KVM desktop is running at '+uri+'. Shut it down before starting VirtualBox; these hypervisors can compete for hardware virtualization on this host.');
+      }
     }
     if(backend==='kvm'){
       let active='';try{active=await vbox(['list','runningvms']);}catch{}
@@ -202,7 +204,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
         if(backend==='virtualbox')await vbox(['--version']);else await adapters.check(backend);
         await checkOtherHypervisor();
         const choice=await vscode.window.showInformationMessage(
-          `Create ${name}? ${resources.memory_mb/1024} GB memory, ${resources.cpus} CPUs, 64 GB expanding disk. Installation ISO: ${path.basename(selectedISO)}. ${backend==='virtualbox'?'Automatic-install login: vboxuser / password123!.':'Complete OS installation in the guest and choose your own account.'}${message.os==='windows11' ? ' Windows requires your own license.' : ''}`,
+          `Create ${name}? ${resources.memory_mb/1024} GB memory, ${resources.cpus} CPUs, 64 GB expanding disk. Installation ISO: ${path.basename(selectedISO)}. ${backend==='virtualbox'||(backend==='kvm'&&message.os==='debian')?'Automatic-install login: vboxuser / password123! (public sandbox credentials).':'Complete OS installation in the guest and choose your own account.'}${message.os==='windows11' ? ' Windows requires your own license.' : ''}`,
           {modal:true},'Create and Start');
         if(choice!=='Create and Start')return;
         let details;
@@ -245,7 +247,11 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
             if(backend==='remote')await remote.start(vm);
             else {
               await checkOtherHypervisor();
-              if(backend==='virtualbox')await vbox(['startvm',vm.id,'--type','headless']);else await adapters.start(backend,vm.id);
+              if(backend==='virtualbox'){
+                await vbox(['startvm',vm.id,'--type','headless']);
+                const started=parseInfo(await vbox(['showvminfo',vm.id,'--machinereadable']));
+                if(started.VMState!=='running')throw Error('VM did not reach Running state: '+(started.VMState||'unknown'));
+              }else await adapters.start(backend,vm.id);
             }
           }
           if(backend!=='hyperv')await openScreen(vm);else progress(vm.name+': startup requested. Embedded Hyper-V display is unsupported; use VMConnect.');
@@ -325,7 +331,7 @@ for(const id of ['remote-host','remote-port','remote-user','remote-key','remote-
 $('remote-backend').addEventListener('change',()=>{filled['remote-backend']=$('remote-backend').value;});
 $('name').addEventListener('input',controls);$('os').addEventListener('change',resources);$('connection').addEventListener('change',()=>send('connection'));$('backend').addEventListener('change',()=>send('backend'));
 window.addEventListener('message',event=>{const m=event.data;if(m.type==='busy'){busy=m.value;controls();}if(m.type==='progress'||m.type==='error'){$('notice').textContent=m.message;$('notice').className=m.type==='error'?'error':'';}
-if(m.type==='state'){state=m;busy=m.busy;$('backend').value=m.backend;$('connection-label').hidden=m.backend!=='kvm';$('connection').value=m.connection;$('host-label').textContent={virtualbox:'VirtualBox',kvm:'KVM / QEMU',hyperv:'Hyper-V',remote:'Remote host'}[m.backend];$('host').textContent=m.backend==='remote'?(m.version?'Connected over SSH · '+m.version:(m.problem||'Set the remote host, then verify.')):(m.version?'Ready · '+m.version:(m.problem||'Install the selected hypervisor, then refresh.'));$('vbox-download').hidden=m.backend!=='virtualbox';$('backend-note').textContent=m.backend==='remote'?'Desktops run on the remote host. This window takes screenshots over SSH and can start or stop them; there is no live screen stream.':m.backend==='hyperv'?'Manage Hyper-V desktops here. Embedded VM screen is unsupported; use VMConnect. Windows Hyper-V permissions are required.':m.backend==='kvm'?'Linux host: install KVM, libvirt, virt-install and qemu-img. New desktops use local VNC for the embedded live viewer.':'Start a desktop to open its screen in the editor automatically.';$('python').textContent=m.environment?.message||'Not verified';$('env-check').hidden=m.environment?.state!=='ready';$('install-note').textContent=m.backend==='virtualbox'?'Python setup runs automatically if needed. Compatible ISOs install automatically; other ISOs open an installer for you to complete.':'VAMP creates the VM and attaches your ISO. Complete the OS installer in the guest. Hyper-V uses external VMConnect; no embedded display.';$('iso').textContent=m.iso||'No ISO selected';
+if(m.type==='state'){state=m;busy=m.busy;$('backend').value=m.backend;$('connection-label').hidden=m.backend!=='kvm';$('connection').value=m.connection;$('host-label').textContent={virtualbox:'VirtualBox',kvm:'KVM / QEMU',hyperv:'Hyper-V',remote:'Remote host'}[m.backend];$('host').textContent=m.backend==='remote'?(m.version?'Connected over SSH · '+m.version:(m.problem||'Set the remote host, then verify.')):(m.version?'Ready · '+m.version:(m.problem||'Install the selected hypervisor, then refresh.'));$('vbox-download').hidden=m.backend!=='virtualbox';$('backend-note').textContent=m.backend==='remote'?'Desktops run on the remote host. This window takes screenshots over SSH and can start or stop them; there is no live screen stream.':m.backend==='hyperv'?'Manage Hyper-V desktops here. Embedded VM screen is unsupported; use VMConnect. Windows Hyper-V permissions are required.':m.backend==='kvm'?'Linux host: install KVM, libvirt, virt-install and qemu-img. New desktops use local VNC for the embedded live viewer.':'Start a desktop to open its screen in the editor automatically.';$('python').textContent=m.environment?.message||'Not verified';$('env-check').hidden=m.environment?.state!=='ready';$('install-note').textContent=m.backend==='virtualbox'?'Python setup runs automatically if needed. Compatible ISOs install automatically; other ISOs open an installer for you to complete.':m.backend==='kvm'?'Debian amd64 installer ISOs install automatically (xorriso and Python required). Public sandbox login: vboxuser / password123!. Other OS installers are manual.':'VAMP creates the VM and attaches your ISO. Complete OS installation in VMConnect.';$('iso').textContent=m.iso||'No ISO selected';
 if(m.backend==='remote'&&m.remote){setField('remote-host',m.remote.host);setField('remote-port',m.remote.port);setField('remote-user',m.remote.username);setField('remote-key',m.remote.privateKeyPath);setField('remote-backend',m.remote.backend);setField('remote-uri',m.remote.libvirtUri);$('remote-status').textContent=m.problem?m.problem:(m.remote.configured?(m.remote.report?(m.remote.report.ready?'Environment verified · ':'Needs attention · ')+m.remote.detail:'Configured · '+m.remote.detail):m.remote.detail);$('remote-status').className=m.problem||m.remote.error?'error':'';}
 resources();controls();const signature=m.backend+JSON.stringify(m.vms);if(signature===inventorySignature)return;inventorySignature=signature;$('vms').replaceChildren();
 if(!m.vms.length){const p=document.createElement('p');p.textContent=m.version?'No desktops yet. Create your first one above.':'VMs appear here after the selected hypervisor is ready.';$('vms').append(p);}

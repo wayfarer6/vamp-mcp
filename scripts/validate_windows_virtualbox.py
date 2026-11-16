@@ -14,7 +14,7 @@ from mcp.client.stdio import stdio_client
 
 async def main(args):
     root=Path(args.root)
-    extension=next((root/'extensions').glob('wayfarer6.vamp-mcp-*'))
+    extension=next((root/'extensions').glob('wayfarer6.vamp-mcp-tools-*'))
     runtime=extension/'dist/runtime'
     node=next((root/'node').rglob('node.exe'))
     env={**os.environ,'VBOXMANAGE_PATH':r'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe',

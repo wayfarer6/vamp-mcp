@@ -206,7 +206,7 @@ export class RemoteSshClient {
 
   /** Call one remote MCP tool and return its JSON result. */
   async call(tool, args = {}, { timeoutMs } = {}) {
-    const limits = { remote_env_setup: 900000, remote_rpa_run: 900000, remote_env_check: 300000, remote_vm_list: 300000 };
+    const limits = { remote_vm_create: 900000, remote_env_setup: 900000, remote_rpa_run: 900000, remote_env_check: 300000, remote_vm_list: 300000 };
     const limit = timeoutMs || limits[tool] || 180000;
     const result = await this.exec(remoteCommand(this.config, { tool, args }), { timeoutMs: limit });
     const data = parseToolOutput(result.stdout);

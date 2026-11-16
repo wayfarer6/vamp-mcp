@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.9
+
+- Require local privacy screening, AI structural-report review, an AI warning and explicit manual review before RPA ZIP export; bind approval to the exact exported bytes. Original source and recorded values are withheld from AI.
+- Keep the recorder ISO detached during Debian fallback installation to avoid multiple-media ambiguity.
+
+- Share KVM VM creation between the manager and the bundled KVM Host MCP server; add `remote_vm_create` to the standalone npm server.
+- Add a Debian amd64 preseed installer path for KVM and VirtualBox ISO-detection fallback; preserve source ISOs and existing VM disks.
+- Start VirtualBox provisioning headless and verify Running state instead of reporting command completion as successful startup.
+- Detect active KVM/VirtualBox conflicts on Linux and explain legacy extension command collisions.
+- Include the shared lifecycle bundle, Debian installer builder and preseed in both VSIX and npm artifacts.
+- Public Debian sandbox login: `vboxuser` / `password123!`. OS installation, recorder setup and Vault setup remain separate verification stages. Hyper-V OS installation remains manual.
+
+
 ## 0.1.8
 
 - Fix the actual remote stdio MCP startup path and add a process-level handshake regression test.

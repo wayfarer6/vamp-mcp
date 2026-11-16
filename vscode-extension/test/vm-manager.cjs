@@ -16,7 +16,9 @@ function harness() {
   const execFile=(exe,args,options,callback)=>{setImmediate(()=>callback(null,JSON.stringify({status:'installation_started',installation_mode:'unattended'}),''));return child;};
   execFile[promisify.custom]=async(exe,args)=>{
     calls.push(args);
+    if(exe==='virsh')return {stdout:answers.activeKvm&&args.includes(answers.activeKvm)?'active-kvm':''};
     if(args[0]==='-c') {if(answers.missingPython)throw Error('missing dependency');return {stdout:''};}
+    if(args[0]==='startvm'&&!answers.startFails)answers.state='running';
     if(args[0]==='--version')return {stdout:'7.2.6\n'};
     if(args[0]==='list')return {stdout:`"Lab <desktop>" {${id}}\n`};
     if(args[0]==='showvminfo')return {stdout:`VMState="${answers.state}"\nmemory=4096\ncpus=2\n`};
@@ -65,4 +67,21 @@ test('failed preparation never launches provisioning and returns controls to idl
     await h.send({type:'create',os:'debian',name:'My-Desktop'});
     assert.ok(!h.calls.some(c=>c[0]==='provision'));assert.match(h.messages.findLast(m=>m.type==='error').message,/Python setup failed/);assert.equal(h.messages.at(-1).busy,false);
   }finally{h.close();}
+});
+
+test('Start button verifies VM state instead of treating CLI success as a running guest',async()=>{
+ const h=harness();try {
+  await h.open();h.answers.startFails=true;
+  await h.send({type:'start',id});
+  assert.ok(h.messages.some(m=>m.type==='error'&&/did not reach Running/.test(m.message)));
+  assert.equal(h.messages.findLast(m=>m.type==='busy').value,false);
+ }finally{h.close();}
+});
+
+test('VirtualBox Start button checks system KVM guests even when manager connection is session',async()=>{
+ const h=harness();try{
+  await h.open();h.answers.activeKvm='qemu:///system';await h.send({type:'start',id});
+  assert.ok(h.messages.some(m=>m.type==='error'&&/KVM desktop is running at qemu:\/\/\/system/.test(m.message)));
+  assert.ok(!h.calls.some(call=>call[0]==='startvm'));
+ }finally{h.close();}
 });
