@@ -10,6 +10,7 @@
 | --- | --- |
 | [워크플로 재사용](WORKFLOWS.md) | 수동 조작·CUA 기록의 RPA 변환, AI 호출과 결과 확인 |
 | [VS Code 확장](../vscode-extension/README.md) | 설치, 기본 사용과 설정 |
+| [원격 데스크톱·SSH](REMOTE_SETUP.md) | 다른 컴퓨터의 VM을 SSH로 제어하기(스크린샷 전용), 원격 환경 준비와 문제 해결 |
 | [VAMP Vault 확장](../vscode-vault-extension/README.md) | 로컬 KeePassXC·VeraCrypt 격리 볼트 MCP 및 사이드바 GUI |
 | [VirtualBox MCP](../backends/virtualbox/README.md) | 호스트 의존성, 도구 목록, MCP 연결과 CLI |
 | [SPICE 설치](INSTALL.md) | 수동·AI 설치, GPU/CPU/NPU 프로필 |
@@ -34,6 +35,7 @@
 | 문서 | 내용 |
 | --- | --- |
 | [MCP 구조](MCP_ARCHITECTURE.md) | 구성 요소, 경계와 Windows 중첩 검증 |
+| [원격 서버](../backends/remote_ssh/README.md) | SSH MCP 서버의 파일 구성, 설계 메모와 테스트 |
 | [데모 시연 가이드](DEMO_SCENARIOS.md) | 다른 에이전트 연동 프롬프트, 구글 검색·볼트 시나리오와 트러블슈팅 |
 | [데모](DEMOS.md) | QHD 영상, 검증 JSON과 재현 명령 |
 | [검증 기록](VALIDATION.md) | 실제 결과와 미검증 범위 |

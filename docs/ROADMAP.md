@@ -57,19 +57,23 @@ Rather than implementing complex, proprietary remote hypervisor network protocol
 
 ## 3. Milestones & Phases
 
-### Phase 1: Native KVM over SSH (`virsh -c qemu+ssh://`)
+### Phase 1: Native KVM over SSH (`virsh -c qemu+ssh://`) — **in progress (0.1.7)**
 - **Objective:** Enable remote KVM hypervisor management across local networks and VPNs (Tailscale/WireGuard).
 - **Deliverables:**
-  - Support `qemu+ssh://` connection URIs in `backends/kvm/client.py`.
-  - Automated SSH local port forwarding (`-L 5900:localhost:5900`) for the live VNC WebSocket bridge.
-  - SSH key-pair authentication profiling and connectivity health checks.
+  - `backends/remote_ssh/` — a dependency-free MCP server that runs on the host owning the hypervisor and is reached over SSH stdio. Delivered tools: `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click`, `remote_rpa_run`.
+  - Screenshot-only display over SSH (user decision): the guest screen is returned as a PNG per request; no live stream or port forwarding is required.
+  - Remote environment bootstrap: `scripts/remote_host_setup.sh` and `remote_env_setup` (Python venv, requirements, libvirt/QEMU packages with passwordless sudo, `libvirtd`, `libvirt` group, VirtualBox check).
+  - VSIX integration: `vamp.remote.*` settings, the **VAMP Remote (SSH)** MCP server definition, remote manager view and commands (`setupEnvironment`, `verifyEnvironment`, `listVMs`, `captureScreenshot`, `openManager`).
+  - VirtualBox remote hosts through `VBoxManage`; absolute pointer clicks are KVM-only for now.
+  - Documented in [REMOTE_SETUP.md](REMOTE_SETUP.md).
+  - Still open: `qemu+ssh://` URIs in `backends/kvm/client.py`, SSH port forwarding for the live VNC bridge, and keepalive/reconnection inside the bridge client.
 
-### Phase 2: Stdio-over-SSH MCP Transport Profile
+### Phase 2: Stdio-over-SSH MCP Transport Profile — **partly delivered (0.1.7)**
 - **Objective:** Provide turn-key configuration templates and helper CLI commands for remote agent connections.
 - **Deliverables:**
-  - Create `vamp-remote-connect.json` templates for Cursor, Claude Desktop, and cloud agent clients.
-  - Implement SSH keepalive and reconnection handling in the bridge client.
-  - Document zero-trust network setups (Tailscale, Cloudflare Tunnel, OpenSSH).
+  - Done: a working `ssh` MCP server definition (`VAMP Remote (SSH)`), an inline `mcpServers` template, SSH keepalive options (`ServerAliveInterval`), `BatchMode`/`ConnectTimeout` handling and plain-language connection errors.
+  - Done: zero-trust network guidance (Tailscale, WireGuard, jump hosts) in [REMOTE_SETUP.md](REMOTE_SETUP.md).
+  - Still open: a downloadable `vamp-remote-connect.json` for Cursor/Claude Desktop, reconnection inside the live viewer bridge, and Cloudflare Tunnel notes.
 
 ### Phase 3: Out-of-Band Human-in-the-Loop (HITL) Consent
 - **Objective:** Maintain strict security boundaries when the user is away from their desktop monitor.

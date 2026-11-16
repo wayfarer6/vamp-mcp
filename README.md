@@ -60,6 +60,7 @@ flowchart LR
 | VS Code 실시간 VM 뷰어 | QEMU VNC 화면을 WebSocket으로 스트리밍하고, 보기 전용 탭과 외부 VNC 접속 정보 표 제공 |
 | KVM MCP | VM 생성·기동·전원·스냅샷 관리, 화면·입력, Robot 시나리오 실행 |
 | VirtualBox MCP | VS Code에서 VM 조회·기동, ISO 설치 시작, 해상도·공유폴더·스냅샷 도구 사용 |
+| 원격 SSH MCP | SSH로 연결한 다른 컴퓨터의 VM을 조회·기동·정지하고 화면은 스크린샷으로 확인 (실시간 화면 없음) |
 | VAMP Vault MCP | KeePassXC·VeraCrypt 기반 자격증명/인증서 격리 보관 및 사이드바 GUI |
 
 OCR·UI 인식은 저장소에서 별도로 설치합니다. VSIX에는 VirtualBox MCP와 실시간 VNC 뷰어가 들어 있습니다. KVM MCP는 로컬 저장소의 Python 환경을 연결하며, VM 디스크·ISO·YOLO·PaddleOCR 모델은 VSIX에 포함하지 않습니다. [구성도](docs/MCP_ARCHITECTURE.md) · [로그·스크린샷 조회](docs/EXECUTION_HISTORY.md)
@@ -111,6 +112,23 @@ KVM VM의 화면은 스크린샷을 반복 조회하는 대신 **VNC(RFB) → �
 
 포트는 실행 시 조회하므로 고정값을 가정하지 않습니다. VM은 한 번에 한 대씩 검증하며, 시나리오는 Robot Framework의 보고서·타임라인·MP4로 남깁니다. [KVM MCP와 재현 절차](docs/VM_MCP.md)
 
+## 원격 호스트의 VM (SSH)
+
+데스크톱이 다른 컴퓨터(홈 서버, 랩 장비, 클라우드 VM)에 있고 지금 쓰는 노트북이나 원격 에이전트에서 제어해야 할 때는 **VAMP Remote (SSH)** 를 사용합니다. VM을 소유한 호스트에서 원격 서버가 돌고, MCP 통신은 SSH 채널 안으로만 오갑니다. 하이퍼바이저 포트를 열지 않으며 게스트 디스크·자격증명·Vault는 원격 호스트를 떠나지 않습니다.
+
+이 모드의 화면은 **스크린샷**입니다. 요청할 때마다 PNG 한 장을 받아 보여 주고, 실시간 스트리밍은 하지 않습니다. VM 기동·정지, 목록·상태 조회, 키 입력, KVM 절대 좌표 클릭, 검토한 RPA 재생까지 원격에서 동작합니다.
+
+1. 확장 설정에서 `vamp.remote.enabled`를 켜고 `vamp.remote.host`, `vamp.remote.username`을 지정합니다. 키는 SSH 에이전트나 `~/.ssh/config`를 그대로 씁니다.
+2. **VAMP: Remote · Prepare Environment on the Remote Host** 를 실행합니다. 서버 업로드, Python venv, libvirt/QEMU 설치(비밀번호 없는 sudo가 가능할 때), `libvirtd` 기동, `libvirt` 그룹 추가를 순서대로 시도하고 안 되는 항목은 실행할 명령을 알려 줍니다.
+3. VM Manager의 **Remote server · SSH** 화면에서 데스크톱을 조회·기동하고 스크린샷을 엽니다.
+
+```bash
+# 원격 호스트에서 직접 준비할 때
+scripts/remote_host_setup.sh --backend kvm --repo ~/vamp-mcp --dry-run
+```
+
+[원격 설정 안내](docs/REMOTE_SETUP.md) · [원격 서버 README](backends/remote_ssh/README.md)
+
 ## 실행 영상과 문서
 
 [![키보드 입력과 OCR 시연](docs/media/keyboard-ocr.gif)](docs/media/keyboard-ocr.mp4)
@@ -127,6 +145,7 @@ KVM VM의 화면은 스크린샷을 반복 조회하는 대신 **VNC(RFB) → �
 | 실행 결과·로그·영상·스크린샷 | [실행 이력](docs/EXECUTION_HISTORY.md) |
 | 설치와 백엔드 구성 | [문서 목차](docs/README.md) · [아키텍처](docs/MCP_ARCHITECTURE.md) |
 | 시험한 기능과 남은 문제 | [검증 기록](docs/VALIDATION.md) |
+| 원격 호스트의 VM을 SSH로 제어 (스크린샷 전용) | [원격 설정 안내](docs/REMOTE_SETUP.md) |
 | 원격 하이퍼바이저·클라우드 에이전트 연동 로드맵 | [아키텍처 로드맵](docs/ROADMAP.md) |
 
 KVM MCP의 VM 생성·화면 제어·RPA 실행은 [`vm_mcp_server.py`](vm_mcp_server.py)에서 제공하며, 프로필로 VNC와 SPICE 연결을 구분합니다.
