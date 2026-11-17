@@ -73,3 +73,14 @@ Fresh, local receipts are collected with `scripts/collect_nested_evidence.py` in
 - Hyper-V OS installation remains manual. This release does not verify automatic installation of recorder/Vault guest tools through every hypervisor. Physical Windows/macOS hosts were not retested.
 
 - npm publication follow-up: `vamp-mcp@0.1.9` is public with the `latest` tag and `vamp-mcp-vault@0.1.6` is public. Both were installed directly from the registry in temporary directories and passed MCP initialization/tool discovery. The VAMP registry SHA-512 integrity matches the tested release tarball.
+
+## Keystroke bootstrap and Vault winget install — 2026-11-17
+
+- This host is Ubuntu without VirtualBox, a running guest, `keepassxc-cli`, winget or a Windows host. Nothing below was executed against a real Windows or Debian desktop, and the UAC prompt and winget install were exercised only through a stand-in command runner.
+- Upstream TypeScript adapter suite: 119 tests passed (101 existing + 18 for `vm_guest_bootstrap`), including the exact scancode/text sequence, chunking, dry-run planning, a failed focus click, a rejected keystroke and password redaction in a returned plan.
+- VS Code manager suite: 52 tests passed (47 existing + 5), including the sequence through a stand-in VBoxManage, a refused injection into a stopped desktop and the create-flow offer.
+- `node build.mjs` bundled `backends/virtualbox/server.mjs`; the bundled server started over stdio, listed 24 tools including `vm_guest_bootstrap`, and returned its plan for a `dryRun` call.
+- The focus click uses the Python `vboxapi` mouse helper: `VBoxManage controlvm` has no mouse event subcommand (checked against `VBoxManageControlVM.cpp` and the 7.x command reference). Without that helper the click is reported as a warning and the keystrokes are still sent.
+- Vault suite: smoke 34 checks, extension-host stand-in 10, remote SSH stand-in 18, credential browser 2. The winget checks assert the package ids, the English UAC notice, the `--id KeePassXCTeam.KeePassXC` invocation, a refused prompt and a missing winget; the VeraCrypt manual command is checked to contain `IDRIX.VeraCrypt` and not to run behind the user.
+- `vault_add_credential` and the `vampVault.addCredential` command are covered by the tool list, command list, manifest and entry-path checks. Database-backed creation was not run here because no KeePassXC CLI is installed; it shares `VaultCli.addEntry` with the existing `vault_set_credential` path.
+- Delivery is not execution: a guest script that ran, a winget package that installed and a UAC prompt that appeared remain unverified on real Windows hardware.

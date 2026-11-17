@@ -27,6 +27,7 @@ VirtualBox’s private Python environment is prepared when needed. Host drivers,
 In **Machines**:
 
 - **Start / View Screen** starts the VM and opens its screen, or opens a running VM’s screen.
+- **Inject Bootstrap** (VirtualBox) types the post-install script into a running Windows 11 or Debian desktop: Win+R → `cmd` → a click that pins keyboard focus → `powershell -ExecutionPolicy Bypass` → the script, each step timed and the script sent in 50-character chunks. On Debian it clicks the screen centre and types the command into the open terminal, with an optional Ctrl+Alt+T, TTY login or custom command. The guest desktop must already be ready, and delivery is not proof that the script ran, so check the screen or the guest log. The same sequence is the `vm_guest_bootstrap` MCP tool; `dryRun:true` returns the plan without typing.
 - **Open interactive VM window** in the VirtualBox viewer opens the native window for direct input. KVM’s viewer shows the localhost address for an external VNC viewer.
 - **Shut Down** requests a normal guest shutdown. State changes only after the VM stops.
 - **Delete** asks before removing a stopped VM and its virtual disks. KVM/Hyper-V deletion is restricted to desktops created here. Original installation ISOs are preserved.
@@ -113,7 +114,8 @@ VirtualBox mouse replay needs matching `vboxapi` bindings. Windows **Prepare Env
 1. Open **Browse Credentials**, or run **VAMP Vault: Browse Credentials**.
 2. Use **Open Existing Vault** for an existing `.kdbx`, or **Create New Vault**. If KeePassXC is missing, click **Prepare Vault Tools**.
 3. Click **Unlock Vault** and enter the master password in the masked VS Code password prompt.
-4. Search by title/group/username and filter by group. Select an entry for its username, website and notes.
+4. Click **+** in the Credentials view title, or run **VAMP Vault: Add Credential**. Enter the title (a `Group/Title` path creates the group), username, password, URL and notes; the password field is masked and never shown again. The agent can do the same with the `vault_add_credential` tool.
+5. Search by title/group/username and filter by group. Select an entry for its username, website and notes.
 5. **Copy Username** copies only the username. **Show for 15 Seconds** requires confirmation and briefly displays the password. Hiding or leaving the view clears the displayed secret.
 6. **Copy Password** also requires confirmation. After 30 seconds, the clipboard clears only if it still contains that password.
 7. **Lock Vault** forgets the stored master password and clears the open credential view. The MCP bridge also invalidates cached values and session approvals after a lock or policy change.
@@ -194,6 +196,7 @@ VirtualBox의 호스트 Python 환경은 필요할 때 자동 준비됩니다. �
 **Machines**에서:
 
 - **Start / View Screen**: VM을 켜고 편집기 안에서 화면을 엽니다. 이미 켜진 VM은 화면을 엽니다.
+- **Inject Bootstrap**(VirtualBox): 실행 중인 Windows 11·Debian 데스크톱에 사후 스크립트를 키 입력으로 넣습니다. Win+R → `cmd` → 포커스 클릭 → `powershell -ExecutionPolicy Bypass` → 스크립트 순서이고, 스크립트는 50자씩 나누어 보냅니다. Debian은 화면 가운데를 클릭한 뒤 열린 터미널에 명령을 입력하며, Ctrl+Alt+T·TTY 로그인·사용자 지정 명령을 선택할 수 있습니다. 게스트 데스크톱이 이미 떠 있어야 하고, **키가 전달된 것은 스크립트가 실행됐다는 증거가 아니므로** 화면이나 게스트 로그로 확인하세요. 같은 동작이 MCP 도구 `vm_guest_bootstrap`이며 `dryRun:true`는 입력 없이 계획만 돌려줍니다.
 - **Open interactive VM window**: VirtualBox 화면에서 실제 키보드·마우스 조작용 기본 VM 창을 엽니다. KVM은 표시된 VNC 주소로 외부 뷰어를 연결할 수 있습니다.
 - **Shut Down**: 게스트에 정상 종료를 요청합니다. 실제로 종료될 때까지 상태가 바뀌지 않을 수 있습니다.
 - **Delete**: 종료된 VM의 삭제를 확인합니다. KVM·Hyper-V에서는 여기서 만든 VM만 삭제할 수 있습니다. 설치 ISO 원본은 삭제 대상이 아닙니다.
@@ -265,7 +268,8 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 1. **Browse Credentials** 또는 **VAMP Vault: Browse Credentials**를 엽니다.
 2. **Open Existing Vault**로 기존 `.kdbx`를 선택하거나 **Create New Vault**로 만듭니다. KeePassXC가 없으면 **Prepare Vault Tools**를 사용합니다.
 3. **Unlock Vault**를 누르고 VS Code의 가려진 암호 입력창에 마스터 암호를 입력합니다.
-4. 제목·그룹·사용자명으로 검색하고 그룹 필터로 좁힙니다. 항목을 누르면 사용자명·웹사이트·메모를 볼 수 있습니다.
+4. Credentials 뷰 제목의 **+**를 누르거나 **VAMP Vault: Add Credential**을 실행합니다. 제목(`그룹/제목`으로 쓰면 그룹이 생성됩니다)·사용자명·비밀번호·URL·메모를 차례로 입력하고, 비밀번호 입력은 가려지며 다시 표시되지 않습니다. 에이전트는 같은 일을 `vault_add_credential` 도구로 할 수 있습니다.
+5. 제목·그룹·사용자명으로 검색하고 그룹 필터로 좁힙니다. 항목을 누르면 사용자명·웹사이트·메모를 볼 수 있습니다.
 5. **Copy Username**은 사용자명만 복사합니다. **Show for 15 Seconds**는 확인 후 비밀번호를 잠깐 표시합니다. 탭을 숨기거나 다른 곳으로 이동하면 표시를 지웁니다.
 6. **Copy Password**도 확인이 필요합니다. 30초 후 클립보드가 여전히 같은 비밀번호를 담고 있을 때만 비웁니다.
 7. **Lock Vault**는 저장된 마스터 암호를 지우고 열린 조회 화면도 비웁니다.

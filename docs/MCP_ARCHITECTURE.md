@@ -29,7 +29,7 @@ VirtualBox MCP는 `main`, SPICE MCP 래퍼는 `feat/vm-mcp-server` 브랜치에 
 
 | 구성 | 위치 | 역할 |
 | --- | --- | --- |
-| VirtualBox MCP | `backends/virtualbox/server.mjs` | 화면·입력·VM 관리·녹화 소스·실행 이력 도구 19개 |
+| VirtualBox MCP | `backends/virtualbox/server.mjs` | 화면·입력·VM 관리·녹화 소스·실행 이력·게스트 부트스트랩 도구 24개 |
 | Robot 클라이언트 | `backends/virtualbox/client.py` | Node MCP 서버 호출과 이미지 파일 저장 |
 | 작업 패키지 | `rpas/<id>/`, `backends/virtualbox/rpas/<id>/` | Robot 순서, Python 구현, manifest와 작업 설명 |
 | 화면 인식 | `vision.py`, `model_daemon.py` | 선택적으로 설치하는 YOLO·PaddleOCR 프로세스 |
@@ -46,6 +46,8 @@ VirtualBox MCP는 `main`, SPICE MCP 래퍼는 `feat/vm-mcp-server` 브랜치에 
 ## 호스트와 게스트에 필요한 것
 
 일반 화면 캡처와 키보드 입력은 호스트 VirtualBox를 사용합니다. 마우스 입력에는 VirtualBox 버전에 맞는 호스트 Python SDK가 필요하고, Windows 호스트는 COM Python 지원도 필요합니다. 공유폴더·게스트 파일 가져오기는 Guest Additions 지원을 사용합니다.
+
+게스트 사후 스크립트는 `vm_guest_bootstrap`으로 키 입력을 주입해 실행할 수 있습니다(Packer의 `boot_command` 방식). Windows는 Win+R → `cmd`+Enter → 2.5초 후 포커스 클릭 → 1초 후 `powershell -ExecutionPolicy Bypass`+Enter → 1.5초 후 스크립트를 50자씩 전송하고, Debian은 화면 가운데 클릭 후 열린 터미널에 명령을 입력합니다(Ctrl+Alt+T·TTY 로그인 선택 가능). 포커스 클릭은 `VBoxManage controlvm` 서브커맨드가 아니라 vboxapi `putMouseEventAbsolute` 헬퍼를 쓰며, SDK가 없으면 클릭만 경고로 남기고 키 입력은 계속합니다. 반환값은 전달 여부이고 `verified:false`이므로, 스크립트 실행은 게스트 화면이나 로그로 따로 확인해야 합니다.
 
 VSIX에는 VirtualBox MCP가 들어 있습니다. SPICE, YOLO와 PaddleOCR는 저장소에서 따로 설치합니다. Windows 11 게스트의 ISO와 유효한 라이선스는 사용자가 준비하고 정품 인증도 직접 진행합니다. VAMP는 Windows 이미지나 제품 키를 제공하지 않습니다.
 
