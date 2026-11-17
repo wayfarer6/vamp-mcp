@@ -11,6 +11,18 @@ def load(name):
     module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module);return module
 
 class GuestDisplayTests(unittest.TestCase):
+    def test_linux_login_hook_survives_reinstallation(self):
+        installer=load('install-display-startup.py')
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            for _ in range(2):
+                registered=installer.install(home=root,platform='linux',python='/usr/bin/python3')
+                launcher=Path(registered['launcher']).read_text()
+                self.assertIn('apply-display.py',launcher)
+                self.assertIn('X-GNOME-Autostart-enabled=true',launcher)
+                self.assertNotIn('RunOnce',launcher)
+                self.assertTrue((root/'.config/autostart/vamp-session.desktop').is_file())
+                self.assertFalse(registered['resolution_verified'])
     def test_every_login_registration_is_not_removed_on_success(self):
         install=load('install-display-startup.py')
         with tempfile.TemporaryDirectory() as directory:

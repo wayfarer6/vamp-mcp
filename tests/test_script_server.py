@@ -34,6 +34,17 @@ class ScriptServerTests(unittest.TestCase):
                 if member.isfile() and member.name.endswith('.sh'):
                     self.assertNotIn(b'\r',archive.extractfile(member).read(),member.name)
 
+    def test_new_install_extends_an_existing_server_lease(self):
+        from unittest.mock import patch
+        with patch.object(script_server.time,'time',return_value=100):
+            first=script_server.renew_lease(8421,1800,reset=True)
+        with patch.object(script_server.time,'time',return_value=500):
+            second=script_server.renew_lease(8421,1800)
+        self.assertEqual(first,1900)
+        self.assertEqual(second,2300)
+        with patch.object(script_server.time,'time',return_value=501):
+            self.assertEqual(script_server.renew_lease(8421,10),2300)
+
     def test_stage_places_bootstraps_bundles_and_manifest(self):
         files=set(self.staged['files'])
         for name in ('debian-preseed.cfg','setup.sh','setup.ps1','setup-all.ps1','setup-win.cmd','postdeb.sh','postwin.ps1',

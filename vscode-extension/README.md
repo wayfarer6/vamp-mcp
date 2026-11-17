@@ -5,7 +5,7 @@
 
 **Includes VAMP Vault:** Marketplace installation includes the Vault extension. When upgrading from `wayfarer6.vamp-mcp`, first update Vault to 0.1.6+, remove the legacy extension, and reload VS Code to avoid duplicate command registrations.
 
-**Vault 함께 설치:** 마켓에서 VAMP를 설치하면 Vault도 함께 설치됩니다. 구 확장 `wayfarer6.vamp-mcp`에서 이전할 때는 Vault를 0.1.6 이상으로 업데이트한 뒤 구 확장을 제거하고 VS Code를 다시 로드하세요.
+**Vault is installed with VAMP.** When migrating from `wayfarer6.vamp-mcp`, update Vault to 0.1.6 or later, remove the old extension and reload VS Code.
 
 
 # VAMP · Virtual Agent Machine Platform
@@ -121,7 +121,7 @@ VirtualBox provisioning starts headless and verifies Running state. KVM VM creat
 
 ### Guest setup over HTTP (port 8421)
 
-The recorder, vault helpers and setup scripts in `guest_setup/` are served by a Python standard-library HTTP server on the fixed port **8421** (not 80 or 8800). The manager starts it before **Inject Bootstrap** and offers **Start Script Server (8421)** / **Stop Script Server**; it also stops itself after 30 minutes. VirtualBox NAT and QEMU user networking reach the host at `10.0.2.2`; libvirt's default NAT network uses `192.168.122.1`.
+The recorder, vault helpers and setup scripts in `guest_setup/` are served by a Python standard-library HTTP server on the fixed port **8421** (not 80 or 8800). The manager starts it for installation/setup and offers **Start Web Server (8421)** / **Stop Web Server**, with actual running/stopped status. VM installation uses a two-hour lease that is extended by another installation. Closing an editor does not interrupt this shared server; its lease or the Stop button ends it. VirtualBox NAT and QEMU user networking reach the host at `10.0.2.2`; libvirt's default NAT network uses `192.168.122.1`.
 
 ```bash
 # guest, Debian/Ubuntu
@@ -137,14 +137,16 @@ The server exposes only the staged setup folder (no directory listings, no dotfi
 
 Linux: shut down KVM VMs before starting VirtualBox, and vice versa. The new checks explain conflicts such as `VERR_SVM_IN_USE` instead of reporting successful startup.
 
-한국어: 생성 후 실제 기동 상태를 확인합니다. Debian amd64 자동 설치는 순정 ISO에 preseed를 주입해 진행하며 xorriso가 필요 없습니다. 공개 테스트 계정은 `vboxuser` / `password123!`입니다. 게스트 설정 스크립트는 관리자가 8421 포트 HTTP 서버로 제공하고 게스트가 wget/`irm`으로 내려받습니다(기본 30분 후 자동 중지). KVM과 VirtualBox를 동시에 실행하지 마세요. OS 설치와 게스트 녹화기·Vault 설정 완료는 별도입니다.
 
-## RPA privacy before export or upload / RPA 공유 전 경고
+## RPA privacy before export or upload
 
 **Before uploading an RPA or ZIP, inspect every source file, comment, metadata field, filename, URL and image for private IDs, passwords, tokens and certificates. Replace actual values with declared inputs. AI review is not a guarantee that secrets are absent.**
 
-**RPA나 ZIP을 업로드하기 전에 사용자가 모든 소스·주석·메타데이터·파일명·URL·이미지를 직접 확인해야 합니다. 실제 ID·비밀번호·토큰·인증서는 제거하고 입력 매개변수를 사용하세요. AI 검토만으로 민감정보가 없다고 보장할 수 없습니다.**
 
 In VAMP 0.1.9, Export ZIP requires local screening, AI review of a structural report and a final personal-review confirmation. Original source, recorded values, filenames and metadata values are withheld from AI. Detected secrets block export. Missing AI review, cancellation or changes after review prevent archive creation. Image content is not inspected by AI; users must inspect it themselves. Review every archive again before submitting it to GitHub or Script Hub. VAMP does not upload it automatically.
 
-0.1.9 내보내기는 원본을 AI에 보내지 않고 구조 검사 결과만 검토받습니다. AI 경고를 읽고 전체 파일을 확인한 뒤 명시적으로 승인해야 ZIP이 생성됩니다. AI 모델이 없거나 검토를 취소하면 내보낼 수 없습니다. 이미지는 사용자가 직접 확인해야 하며, 업로드 직전에도 파일 전체를 다시 검토하세요.
+
+
+Windows unattended setup downloads and executes the post-install script at the first desktop login without AI input. The command is encoded for safe delivery through VirtualBox batch logging. A clean account without winget can install a signature-checked Python installer. The guest setup disables automatic idle sleep and screensaver locking; do not manually lock/suspend a VM while setup or automation runs. Failure is recorded rather than reported as completed.
+
+After Create, the manager shows first-login/setup instructions and a recovery command. Debian resolution is a target, not a fixed guarantee; use the displayed Xorg command if necessary. Explicitly marked development VMs are hidden from the normal inventory, and development fixtures are not shipped in the VSIX.

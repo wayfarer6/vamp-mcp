@@ -39,6 +39,7 @@ if [ ! -f "$folder/PyAutoGuiRecorder.py" ]; then
 fi
 cp "$media_dir/prepare-recording.py" "$media_dir/RECORDING-GUIDE.txt" "$media_dir/vamp-recorder.py" "$media_dir/RECORDER-LICENSE" "$folder/"
 python3 "$media_dir/install-display-startup.py"
+dbus-run-session -- python3 "$media_dir/session-policy.py"
 python3 -m venv "$folder/.venv"
 "$folder/.venv/bin/python" -m pip install -r "$media_dir/requirements-recorder.txt"
 cat > "$folder/start-recorder.sh" <<'LAUNCH'

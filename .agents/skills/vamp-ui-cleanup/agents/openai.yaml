@@ -1,0 +1,4 @@
+interface:
+  display_name: "VAMP UI Cleanup"
+  short_description: "Simplify VAMP controls and English UI copy"
+  default_prompt: "Use $vamp-ui-cleanup to simplify the VAMP webview while preserving status and recovery actions."

@@ -284,6 +284,7 @@ class ScriptRequestHandler(SimpleHTTPRequestHandler):
                 'directory': str(self.server.stage_directory),
                 'started_at': self.server.started_at,
                 'ttl_seconds': self.server.ttl,
+                'lease_supported': True,
             }).encode()
             self.send_response(200)
             self.send_header('Content-Type', 'application/json')
@@ -326,9 +327,15 @@ def serve(directory: Path, port: int, bind: str, ttl: int) -> int:
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     if ttl > 0:
-        timer = threading.Timer(ttl, stop)
-        timer.daemon = True
-        timer.start()
+        def expire_when_idle():
+            while not stopping.wait(1):
+                try:
+                    deadline=float(_lease_file(port).read_text())
+                except (OSError,ValueError):
+                    continue
+                if deadline and time.time() >= deadline:
+                    stop()
+        threading.Thread(target=expire_when_idle,daemon=True).start()
     sys.stderr.write(json.dumps({
         'status': 'serving', 'service': SERVICE, 'port': server.server_address[1],
         'bind': bind, 'directory': str(directory), 'ttl_seconds': ttl,
@@ -343,6 +350,27 @@ def serve(directory: Path, port: int, bind: str, ttl: int) -> int:
 
 def _pid_file(port: int = SCRIPT_SERVER_PORT) -> Path:
     return state_directory() / f'{port}.pid'
+
+
+def _lease_file(port: int) -> Path:
+    return state_directory() / f'{port}.lease'
+
+
+def renew_lease(port: int, ttl: int, reset: bool = False) -> float:
+    """A new installation extends a shared server instead of inheriting its age."""
+    file=_lease_file(port)
+    deadline=time.time()+ttl if ttl>0 else 0
+    if not reset and file.is_file():
+        try:
+            previous=float(file.read_text())
+            deadline=0 if previous==0 else max(previous,deadline) if deadline else 0
+        except ValueError:
+            pass
+    file.parent.mkdir(parents=True,exist_ok=True)
+    temporary=file.with_suffix('.lease.tmp')
+    temporary.write_text(str(deadline))
+    temporary.replace(file)
+    return deadline
 
 
 def _log_file(port: int = SCRIPT_SERVER_PORT) -> Path:
@@ -375,6 +403,7 @@ def status(port: int = SCRIPT_SERVER_PORT) -> dict:
                 'guest_urls': {name: f'http://{host}:{port}' for name, host in GUEST_HOSTS.items()},
                 'directory': health.get('directory'), 'started_at': health.get('started_at'),
                 'ttl_seconds': health.get('ttl_seconds'), 'pid': record.get('pid'),
+                'lease_supported': health.get('lease_supported',False),
                 'log': str(_log_file(port))}
     if health and health.get('status') == 'foreign':
         return {'status': 'port_in_use', 'port': port,
@@ -428,6 +457,8 @@ def start(source: Path | None = None, port: int = SCRIPT_SERVER_PORT, bind: str 
           ttl: int = DEFAULT_TTL) -> dict:
     current = status(port)
     if current['status'] == 'running':
+        if current.get('lease_supported'):
+            renew_lease(port,ttl)
         # Refresh upgraded/normalized payloads without deleting files currently
         # being downloaded. Publish each staged file atomically.
         if current.get('directory'):
@@ -449,6 +480,7 @@ def start(source: Path | None = None, port: int = SCRIPT_SERVER_PORT, bind: str 
     state = state_directory()
     state.mkdir(parents=True, exist_ok=True)
     directory = Path(staged['directory'])
+    renew_lease(port,ttl,reset=True)
     log_path = _log_file(port)
     detach = {'start_new_session': True} if os.name == 'posix' else {
         'creationflags': getattr(subprocess, 'DETACHED_PROCESS', 0) | getattr(subprocess, 'CREATE_NEW_PROCESS_GROUP', 0)}

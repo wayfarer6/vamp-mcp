@@ -1,4 +1,5 @@
 import importlib.util
+import base64
 import io
 import json
 import os
@@ -65,7 +66,10 @@ class ProvisioningTests(unittest.TestCase):
         self.assertIn('--tpm-type',modify)
         install=next(args for args in self.calls if args[:2]==['unattended','install'] and '--help' not in args)
         hook=install[install.index('--post-install-command')+1]
-        self.assertIn('http://10.0.2.2:8421/postwin.ps1',hook)
+        self.assertIn('-EncodedCommand',hook)
+        self.assertNotIn('"',hook)
+        decoded=base64.b64decode(hook.split()[-1]).decode('utf-16-le')
+        self.assertIn('http://10.0.2.2:8421/postwin.ps1',decoded)
         self.assertIn('--image-index',install)
         self.assertIn(['controlvm','test-vm','keyboardputscancode','1c','9c'],self.calls)
         self.assertGreater(self.calls.index(['controlvm','test-vm','keyboardputscancode','1c','9c']), self.calls.index(['startvm','test-vm','--type','headless']))

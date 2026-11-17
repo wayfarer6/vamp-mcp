@@ -1,5 +1,6 @@
 $ErrorActionPreference = 'Stop'
-# Run in the guest desktop user's session. No administrator requirement.
+# Run in the guest desktop user's session.
+& (Join-Path $PSScriptRoot 'configure-session.ps1')
 $desktop = [Environment]::GetFolderPath('Desktop')
 $folder = Join-Path $desktop 'RPA-Recorder'
 New-Item -ItemType Directory -Force -Path (Join-Path $folder 'recordings') | Out-Null
@@ -30,14 +31,22 @@ function Find-RecorderPython {
 
 $pythonPath = Find-RecorderPython
 if (-not $pythonPath) {
-    Write-Output 'No Python 3.11+ found. Installing Python 3.15 with tkinter.'
-    winget install --exact --id Python.Python.3.15 --scope user --accept-package-agreements --accept-source-agreements
-    $pythonPath = Find-RecorderPython
+    if (Get-Command winget.exe -ErrorAction SilentlyContinue) {
+        & winget.exe install --exact --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
+        $pythonPath = Find-RecorderPython
+    }
 }
 if (-not $pythonPath) {
-    Write-Output 'Python 3.15 was not installed by winget. Installing Python 3.12 instead.'
-    winget install --exact --id Python.Python.3.12 --scope user --accept-package-agreements --accept-source-agreements
-    $pythonPath = Find-RecorderPython
+    # Clean unattended accounts may not have winget registered yet.
+    $installer=Join-Path $env:TEMP 'vamp-python-3.12.10-amd64.exe'
+    Invoke-WebRequest -UseBasicParsing -Uri 'https://www.python.org/ftp/python/3.12.10/python-3.12.10-amd64.exe' -OutFile $installer -TimeoutSec 180
+    $signature=Get-AuthenticodeSignature -LiteralPath $installer
+    if($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'Python Software Foundation'){
+        throw 'Python installer signature verification failed'
+    }
+    $installed=Start-Process -FilePath $installer -ArgumentList @('/quiet','InstallAllUsers=0','Include_launcher=0','Include_test=0','Include_tcltk=1','PrependPath=0') -PassThru -Wait -WindowStyle Hidden
+    if($installed.ExitCode -notin @(0,3010)){throw "Python installer failed: $($installed.ExitCode)"}
+    $pythonPath=Find-RecorderPython
 }
 if (-not $pythonPath) {
     throw 'Python 3.11 or newer (3.11 through 3.15+) with tkinter is required. Install it from https://www.python.org/downloads/ and rerun setup.ps1.'
@@ -78,4 +87,7 @@ pause
 & $venvPython (Join-Path $PSScriptRoot 'install-display-startup.py')
 if ($LASTEXITCODE -ne 0) { throw 'Display login hook registration failed' }
 Write-Output "Recorder installed: $folder"
+@{status='installed';recording_started=$false;session_policy='awake_unlocked'} | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $folder 'installation.json')
+$legacyStartup=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\RPA-Recorder-Setup.cmd'
+if(Test-Path -LiteralPath $legacyStartup){Remove-Item -LiteralPath $legacyStartup -Force}
 Write-Output 'Run Start-Recorder.cmd. Save recordings under recordings/. Do not record passwords.'

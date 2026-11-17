@@ -3,7 +3,7 @@
  * Packer-style guest bootstrap: after a Windows or Debian VM finishes booting,
  * inject the post-install script with pointer focus plus keystrokes.
  *
- * Windows: Win+R -> "cmd" -> Enter -> focus click -> "powershell -ExecutionPolicy Bypass" -> HTTP setup.
+ * Windows: Win+R -> PowerShell -> Ctrl+Shift+Enter -> UAC Left/Enter -> HTTP setup.
  * Debian:  focus click -> optional TTY login -> HTTP setup.
  *
  * Guest setup is downloaded from the host Python HTTP script server on port 8421
@@ -31,8 +31,11 @@ const DEFAULT_COMMANDS = {
   windows11: defaultCommand('windows11'),
   debian: defaultCommand('debian'),
 };
-const WINDOWS_SHELL_COMMAND = 'powershell -ExecutionPolicy Bypass';
+const WINDOWS_SHELL_COMMAND = 'powershell -NoProfile -NoExit -ExecutionPolicy Unrestricted';
 const ENTER = [0x1c, 0x9c];
+const ELEVATED_ENTER = [0x1d, 0x2a, 0x1c, 0x9c, 0xaa, 0x9d];
+const UAC_APPROVE = [0xe0, 0x4b, 0xe0, 0xcb, ...ENTER];
+const WINDOWS_POLICY_COMMAND = "if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { exit }; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force";
 const RUN_DIALOG = [0xe0, 0x5b, 0x13, 0x93, 0xe0, 0xdb];
 const OPEN_TERMINAL = [0x1d, 0x38, 0x14, 0x94, 0xb8, 0x9d];
 
@@ -61,14 +64,13 @@ function planBootstrap(options) {
   if (guestOs === 'windows11') {
     steps.push({kind:'keys', codes:RUN_DIALOG, label:'open the Run dialog (Win+R)'});
     steps.push({kind:'wait', ms:2000, label:'wait for the Run dialog'});
-    steps.push({kind:'type', text:'cmd', enter:true, label:'start cmd'});
-    steps.push({kind:'wait', ms:2500, label:'wait for the console window'});
-    if (focusClick) {
-      steps.push(clickStep(clickX, clickY));
-      steps.push({kind:'wait', ms:1000, label:'wait for the console to take keyboard focus'});
-    }
-    steps.push({kind:'type', text:WINDOWS_SHELL_COMMAND, enter:true, label:'start PowerShell with a bypass execution policy'});
-    steps.push({kind:'wait', ms:1500, label:'wait for PowerShell'});
+    steps.push({kind:'type', text:WINDOWS_SHELL_COMMAND, enter:false, label:'prepare administrator PowerShell'});
+    steps.push({kind:'keys', codes:ELEVATED_ENTER, label:'launch as administrator (Ctrl+Shift+Enter)'});
+    steps.push({kind:'wait', ms:3000, label:'wait for UAC consent'});
+    steps.push({kind:'keys', codes:UAC_APPROVE, label:'approve UAC with Left and Enter'});
+    steps.push({kind:'wait', ms:3000, label:'wait for administrator PowerShell'});
+    steps.push({kind:'type', text:WINDOWS_POLICY_COMMAND, enter:true, label:'require administrator rights and set the process execution policy'});
+    steps.push({kind:'wait', ms:1000, label:'wait for execution policy configuration'});
   } else {
     if (focusClick) {
       steps.push(clickStep(clickX, clickY));

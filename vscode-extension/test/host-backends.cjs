@@ -106,3 +106,20 @@ test('MCP host tools apply the same KVM host guard as the VSIX',async()=>{
    assert.equal(calls.length,0);
  }
 });
+
+
+test('development VM visibility depends on explicit metadata, not its name',async()=>{
+ const {createVirtualBoxAdapter}=require('../../backends/virtualbox/desktop.cjs');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'vamp-dev-filter-'));
+ const previous=process.env.VAMP_SHOW_DEVELOPMENT_VMS;
+ try{
+   delete process.env.VAMP_SHOW_DEVELOPMENT_VMS;
+   fs.writeFileSync(path.join(root,'vamp-install.json'),JSON.stringify({development_only:true}));
+   const adapter=createVirtualBoxAdapter(null,{runtime:root,execute:async(_exe,args)=>({stdout:args[0]==='list'?`"Developer notes" {${id}}`:`VMState="poweroff"\nCfgFile="${path.join(root,'desktop.vbox')}"`})});
+   assert.equal((await adapter.list()).length,0);
+   process.env.VAMP_SHOW_DEVELOPMENT_VMS='1';assert.equal((await adapter.list()).length,1);
+   delete process.env.VAMP_SHOW_DEVELOPMENT_VMS;
+   fs.writeFileSync(path.join(root,'vamp-install.json'),JSON.stringify({development_only:false}));
+   assert.equal((await adapter.list())[0].name,'Developer notes');
+ }finally{if(previous===undefined)delete process.env.VAMP_SHOW_DEVELOPMENT_VMS;else process.env.VAMP_SHOW_DEVELOPMENT_VMS=previous;fs.rmSync(root,{recursive:true,force:true});}
+});

@@ -103,5 +103,3 @@ Automatic Debian installation uses the **public sandbox account `vboxuser` / `pa
 `startup_verified:true` confirms Running state only. Verify OS installation and the guest desktop separately. Recorder/Vault guest setup is not automatically completed by this Debian path. The full repository's richer lab installers remain separate workflows.
 
 On Linux, stop active VirtualBox VMs before starting KVM and vice versa. Concurrent use can crash VirtualBox with `VERR_SVM_IN_USE`; creation/start paths check for the other hypervisor.
-
-한국어: `vamp-mcp` 하나에서 VirtualBox와 KVM을 선택합니다. KVM의 `remote_vm_create`는 명시적 확인 후 VM을 생성·기동하며, Debian amd64 설치 ISO는 순정 ISO 부팅과 preseed 커널 주입으로 자동 설치합니다(xorriso 불필요). Python·virt-install·qemu-img를 호스트에 준비하세요. 게스트 설정 스크립트는 파이썬 HTTP 서버가 8421 포트로 제공하고 게스트가 wget/curl로 내려받습니다. 공개 테스트 계정은 `vboxuser` / `password123!`입니다. VM 기동 성공과 OS·게스트 도구 설치 완료는 별도로 검증해야 합니다. Linux에서는 KVM과 VirtualBox VM을 동시에 실행하지 마세요.

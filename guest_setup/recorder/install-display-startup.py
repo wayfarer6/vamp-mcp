@@ -16,7 +16,7 @@ def install(home=None,platform=None,python=None):
     else:
         base=home/'.local/share/vamp/display';startup=home/'.config/autostart'
     base.mkdir(parents=True,exist_ok=True);startup.mkdir(parents=True,exist_ok=True)
-    for name in ['apply-display.py','windows-display.py','gnome-display.py']:
+    for name in ['apply-display.py','windows-display.py','gnome-display.py','session-policy.py']:
         destination=base/name
         if destination.exists():destination.chmod(0o644)
         shutil.copyfile(Path(__file__).with_name(name),destination)
@@ -29,8 +29,10 @@ def install(home=None,platform=None,python=None):
     else:
         def quote(value):return '"'+str(value).replace('\\','\\\\').replace('"','\\"').replace('`','\\`').replace('$','\\$')+'"'
         launcher=startup/'vamp-display.desktop'
-        launcher.write_text('[Desktop Entry]\nType=Application\nName=VAMP Native Full HD\n'
+        launcher.write_text('[Desktop Entry]\nType=Application\nName=VAMP Display Setup (best effort)\n'
           +f'Exec={quote(python)} {quote(command)}\nTerminal=false\nX-GNOME-Autostart-enabled=true\nOnlyShowIn=GNOME;\n')
+        (startup/'vamp-session.desktop').write_text('[Desktop Entry]\nType=Application\nName=VAMP Automation Session\n'
+          +f'Exec={quote(python)} {quote(base/"session-policy.py")}\nTerminal=false\nX-GNOME-Autostart-enabled=true\nOnlyShowIn=GNOME;\n')
     result={'status':'registered','trigger':'every_user_login','launcher':str(launcher),
             'script':str(command),'result':str(base/'result.json'),'resolution_verified':False}
     (base/'registration.json').write_text(json.dumps(result,indent=2)+'\n')

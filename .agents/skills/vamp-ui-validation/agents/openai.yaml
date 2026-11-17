@@ -1,0 +1,4 @@
+interface:
+  display_name: "VAMP UI Validation"
+  short_description: "Check packaged VSIX UI with isolated fixtures"
+  default_prompt: "Use $vamp-ui-validation to verify the packaged VAMP UI and report observable outcomes."

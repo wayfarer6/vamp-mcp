@@ -28,7 +28,7 @@ function harness() {
     return {stdout:''};
   };
   const vscode={workspace:{getConfiguration(){return {get(){}};}},ViewColumn:{Active:1},Uri:{parse:x=>x,joinPath:(...args)=>args.join('/')},env:{openExternal:async()=>{}},ProgressLocation:{Notification:15},
-    commands:{registerCommand(name,fn){commands.set(name,fn);return {dispose(){}};},executeCommand:async()=>{}},
+    commands:{registerCommand(name,fn){commands.set(name,fn);return {dispose(){}};},executeCommand:async(...args)=>{calls.push(['command',...args]);}},
     window:{createWebviewPanel:()=>panel,showOpenDialog:async()=>[{fsPath:'/tmp/installer.iso'}],showInformationMessage:async(...args)=>{notices.push(args);return answers.confirm;},showErrorMessage:async(...args)=>{notices.push(args);return undefined;},showWarningMessage:async(...args)=>{warnings.push(args);return answers.warning;},showQuickPick:async items=>answers.quickPick?items.find(item=>item.label===answers.quickPick):items?.[0],withProgress:async(_options,task)=>task({report(){}})}};
   const module={exports:{}};
   const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./guest-bootstrap'?require(path.join(root,'guest-bootstrap')):name==='./script-server'?require(path.join(root,'script-server')):name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
@@ -42,6 +42,18 @@ test('inventory parser handles quotes and markup without accepting malformed IDs
   assert.equal(rows.length,1);assert.equal(rows[0].name,'My "Lab" <img>');
   const html=h.api.managerHTML();assert.match(html,/default-src 'none'/);assert.ok(!html.includes('innerHTML'));h.close();
 });
+test('resolution warning opens the dedicated guide without dispatching a VM operation',async()=>{
+  const h=harness();try {
+    await h.open();
+    const html=h.api.managerHTML();
+    assert.match(html,/Before automation: set the guest display to 1920×1080 at 100% scaling/);
+    assert.match(html,/data-action="resolutionGuide"/);
+    h.calls.length=0;
+    await h.send({type:'resolutionGuide'});
+    assert.deepEqual(h.calls,[['command','vamp.openResolutionGuide']]);
+  }finally{h.close();}
+});
+
 test('low-resource hosts keep a CPU for the host and use expanding disks',()=>{
   const h=harness();const r=h.api.recommendedResources({totalmem:()=>8*1024**3,cpus:()=>[{}]});
   assert.equal(r.cpus,1);assert.equal(r.memory_mb,2048);assert.equal(r.disk_mb,65536);h.close();
@@ -89,7 +101,7 @@ test('VirtualBox Start button checks system KVM guests even when manager connect
  }finally{h.close();}
 });
 
-test('keystroke bootstrap opens Run, starts cmd, focuses and types the script',async()=>{
+test('Windows bootstrap elevates PowerShell, approves UAC and configures policy before setup',async()=>{
  const {runGuestBootstrap,guestOsFromType}=require(path.join(root,'guest-bootstrap'));
  const calls=[],clicks=[];
  const result=await runGuestBootstrap({vm:id,os:'windows11',bootWaitSec:0},{
@@ -99,14 +111,18 @@ test('keystroke bootstrap opens Run, starts cmd, focuses and types the script',a
   log:()=>{},
  });
  assert.deepEqual(calls[0],['controlvm',id,'keyboardputscancode','e0','5b','13','93','e0','db']);
- assert.deepEqual(calls[1],['controlvm',id,'keyboardputstring','cmd']);
- assert.deepEqual(calls[2],['controlvm',id,'keyboardputscancode','1c','9c']);
- assert.deepEqual(clicks,[[960,540]]);
+ const keys=calls.filter(call=>call[2]==='keyboardputscancode').map(call=>call.slice(3));
+ assert.deepEqual(keys[1],['1d','2a','1c','9c','aa','9d']);
+ assert.deepEqual(keys[2],['e0','4b','e0','cb','1c','9c']);
+ assert.deepEqual(clicks,[]);
  assert.equal(result.status,'completed');
  assert.equal(result.verified,false);
  assert.match(result.next_action,/not proof of execution/);
  const typed=calls.filter(call=>call[2]==='keyboardputstring').map(call=>call[3]).join('');
- assert.ok(typed.includes('powershell -ExecutionPolicy Bypass'));
+ assert.ok(typed.includes('powershell -NoProfile -NoExit -ExecutionPolicy Unrestricted'));
+ assert.ok(typed.includes('WindowsBuiltInRole]::Administrator'));
+ assert.ok(typed.includes('Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force'));
+ assert.ok(typed.indexOf('WindowsBuiltInRole') < typed.indexOf('irm http'));
  assert.ok(typed.includes('irm http://10.0.2.2:8421/setup.ps1 | iex'));
  assert.equal(guestOsFromType('Windows11_64'),'windows11');
  assert.equal(guestOsFromType('Debian12_64'),'debian');
@@ -133,7 +149,7 @@ test('bootstrap command plans a running desktop and refuses a stopped one',async
   const plan=await h.commands.get('vamp.bootstrapGuest')(id,'windows11',{dryRun:true});
   assert.equal(plan.status,'dry_run');
   assert.equal(plan.command,'powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"');
-  assert.ok(plan.plan.some(step=>step.kind==='click'&&step.x===960&&step.y===540));
+  assert.ok(plan.plan.some(step=>step.label==='approve UAC with Left and Enter'));
   assert.ok(!h.calls.some(call=>call[2]==='keyboardputstring'));
   h.answers.state='poweroff';
   assert.equal(await h.commands.get('vamp.bootstrapGuest')(id,'windows11',{dryRun:true}),undefined);

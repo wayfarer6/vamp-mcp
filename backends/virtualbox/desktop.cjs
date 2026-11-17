@@ -13,15 +13,16 @@ function createVirtualBoxAdapter(_context,{runtime,config=()=>({get:()=>undefine
   return {command,
     async list(){
       const rows=(await command(['list','vms'])).split(/\r?\n/).flatMap(line=>{const m=line.match(/^"(.*)"\s+\{([a-f0-9-]{36})\}$/i);return m?[{name:m[1],id:m[2]}]:[];});
-      return Promise.all(rows.map(async row=>{
+      return (await Promise.all(rows.map(async row=>{
         try{
           const details=info(await command(['showvminfo',row.id,'--machinereadable']));
           let installation;
           try{installation=JSON.parse(fs.readFileSync(path.join(path.dirname(details.CfgFile),'vamp-install.json'),'utf8'));}catch{}
+          if(installation?.development_only && process.env.VAMP_SHOW_DEVELOPMENT_VMS!=='1')return null;
           return {...row,backend:'virtualbox',managed:true,state:details.VMState,memory:details.memory,cpus:details.cpus,guestOS:details.ostype,
             installation:installation?{status:installation.status,verified:installation.installation_verified,mode:installation.installation_mode}:undefined};
         }catch{return {...row,state:'unavailable'};}
-      }));
+      }))).filter(Boolean);
     },
     async start(id){await command(['startvm',id,'--type','headless']);const state=info(await command(['showvminfo',id,'--machinereadable'])).VMState;if(state!=='running')throw Error('VM did not reach Running state: '+(state||'unknown'));return {status:'running',startup_verified:true};},
     stop:id=>command(['controlvm',id,'acpipowerbutton']),

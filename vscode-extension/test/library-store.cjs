@@ -18,11 +18,15 @@ test('finds saved RPAs and recordings, previews without executing, exports compl
   for(const file of manifest.files)assert.equal(crypto.createHash('sha256').update(files.get(file.path)).digest('hex'),file.sha256);assert.equal(exported.files,2);
  }finally{await fs.rm(root,{recursive:true,force:true});}
 });
-test('recordings never export neighboring databases, VM images, hidden files or symlinks',async()=>{
+test('recordings never export neighboring databases, VM images, hidden files or symlinks',async t=>{
  const root=await fs.mkdtemp(path.join(os.tmpdir(),'vamp-library-'));
  try{
   for(const [name,value] of [['saved.py','print("safe")'],['secret.kdbx','private'],['disk.qcow2','disk'],['.env','TOKEN=private']])await fs.writeFile(path.join(root,name),value);
-  await fs.symlink(path.join(root,'secret.kdbx'),path.join(root,'linked.py'));
+  await t.test('symlink fixture is excluded from the catalog',async sub=>{
+   try { await fs.symlink(path.join(root,'secret.kdbx'),path.join(root,'linked.py')); }
+   catch(error) { if(process.platform==='win32'&&error.code==='EPERM'){sub.skip('Windows account cannot create symlinks');return;}throw error; }
+   const {items}=await catalog([{path:root,label:'Recordings'}]);assert.equal(items.length,1);
+  });
   const {items}=await catalog([{path:root,label:'Recordings'}]);assert.equal(items.length,1);await assert.rejects(preview(items[0],'../secret.kdbx'),/Choose a file/);
   await reviewedExport(items[0],path.join(root,'saved.zip'));const files=await unzip(await fs.readFile(path.join(root,'saved.zip')));assert.deepEqual([...files.keys()].sort(),['VAMP_EXPORT.json','saved.py']);
  }finally{await fs.rm(root,{recursive:true,force:true});}

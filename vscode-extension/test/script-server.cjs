@@ -58,3 +58,16 @@ test('a failing python process surfaces stderr',async()=>{
   const server=createScriptServer({runtime,python:'python3'});
   await assert.rejects(()=>server.status(),/server exploded/);
 });
+
+
+test('closing an editor leaves the leased shared server alone; Stop remains explicit',async()=>{
+  const runtime=fakeRuntime();
+  const script=path.join(runtime,'scripts','script_server.py');
+  fs.appendFileSync(script,`\nfrom pathlib import Path\nPath(__file__).with_name('last-command').write_text(command)\n`);
+  const server=createScriptServer({runtime,python:'python3'});
+  await server.start();
+  await server.dispose();
+  assert.equal(fs.readFileSync(path.join(runtime,'scripts','last-command'),'utf8'),'start');
+  await server.stop();
+  assert.equal(fs.readFileSync(path.join(runtime,'scripts','last-command'),'utf8'),'stop');
+});

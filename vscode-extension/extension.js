@@ -165,5 +165,7 @@ function activate(context) {
   }));
   context.subscriptions.push(vscode.commands.registerCommand('vamp.openGuide', () =>
     vscode.commands.executeCommand('markdown.showPreview',vscode.Uri.file(context.asAbsolutePath('USAGE.md')))));
+  context.subscriptions.push(vscode.commands.registerCommand('vamp.openResolutionGuide', () =>
+    vscode.commands.executeCommand('markdown.showPreview',vscode.Uri.file(context.asAbsolutePath('RESOLUTION.md')))));
 }
 module.exports={activate};

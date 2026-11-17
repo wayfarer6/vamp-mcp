@@ -1,0 +1,4 @@
+interface:
+  display_name: "VAMP RPA UI Checks"
+  short_description: "Define reliable RPA locators and outcome checks"
+  default_prompt: "Use $vamp-rpa-ui-checks to define reusable locators and independent success checks for this RPA."

@@ -1,6 +1,7 @@
 """Deterministic VirtualBox unattended provisioning; no AI loop required."""
 from __future__ import annotations
 import argparse
+import base64
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ import uuid
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'scripts'))
 sys.path.insert(0,str(ROOT/'backends/common'))
-from guest_install import PROFILE, require_install_host, efi_boot_plan, virtualbox_preseed
+from guest_install import PROFILE, require_install_host, efi_boot_plan, virtualbox_preseed, post_create_notice
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from script_server import SCRIPT_SERVER_PORT, guest_commands, start as start_script_server
 
@@ -47,11 +48,18 @@ def assert_no_active_kvm():
 def post_install_command(guest_os, base_url):
     """Post-install hook fetched from the host script server; no ISO is rewritten or mounted."""
     if guest_os=='windows11':
-        return f'powershell -ExecutionPolicy Bypass -Command "irm {base_url}/postwin.ps1 | iex"'
+        command=("$ErrorActionPreference='Stop'; $p=Join-Path $env:TEMP 'vamp-postwin.ps1'; "
+                 "for($i=0;$i -lt 30;$i++){try{"
+                 f"Invoke-WebRequest -UseBasicParsing -Uri '{base_url}/postwin.ps1' -OutFile $p -TimeoutSec 20; break"
+                 "}catch{if($i -eq 29){throw}; Start-Sleep -Seconds 3}}; & $p")
+        # VBox's VBOXPOST.CMD also echoes this command inside double quotes.
+        # A nested -Command string exposes its pipe/operators to cmd.exe there.
+        encoded=base64.b64encode(command.encode('utf-16-le')).decode('ascii')
+        return f'powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand {encoded}'
     return f'wget -qO /tmp/vamp-postdeb.sh {base_url}/postdeb.sh && sh /tmp/vamp-postdeb.sh'
 
 
-def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False,allow_manual_install=False,installation_mode="auto",serve_scripts=True,script_server_ttl=3600):
+def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False,allow_manual_install=False,installation_mode="auto",serve_scripts=True,script_server_ttl=7200):
     require_install_host('virtualbox')
     if installation_mode not in ('auto','manual'):raise ValueError('installation_mode must be auto or manual')
     name=name or ('VAMP-'+uuid.uuid4().hex[:8])
@@ -60,6 +68,7 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
     if not iso.is_file():raise ValueError('ISO path must be a readable local file on the VM host')
     journal={'status':'preparing','vm':name,'credentials':PUBLIC_CREDENTIALS,'events':[],
              'installation_verified':False,'recorder_installed_verified':False,
+             'development_only':os.environ.get('VAMP_DEVELOPMENT_VM')=='1',
              'guest_setup_transport':f'http://10.0.2.2:{SCRIPT_SERVER_PORT} (host Python script server)'}
     folder=Path(basedir or Path.home()/'VirtualBox VMs').expanduser().resolve()/name
     def run(*args,timeout=120):
@@ -147,6 +156,7 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
             record('script-server-failed')
             raise RuntimeError(journal['error'])
     base_url=(script_server or {}).get('guest_urls',{}).get('virtualbox_nat') or f'http://10.0.2.2:{SCRIPT_SERVER_PORT}'
+    journal['post_create_notice']=post_create_notice(selected,base_url)
     try:
         run('createvm','--name',name,'--ostype',os_type,'--register','--basefolder',folder.parent)
         record('vm-created')

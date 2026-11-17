@@ -23,6 +23,10 @@ for(const name of ['scripts/script_server.py','backends/kvm/debian-preseed.cfg',
   await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__') && source!==path.join(root,'backends/virtualbox/rpas/demos') && source!==path.join(root,'rpas/windows_print_pdf') && source!==path.join(root,'rpas/remote_host_validation')});
 }
 // A VSIX/npm runtime built on Windows must also execute on Linux/macOS.
+for(const name of ['vamp-ui-cleanup','vamp-ui-validation','vamp-rpa-ui-checks']) {
+  await cp(path.join(root,'.agents/skills',name),path.join(runtime,'skills',name),{recursive:true});
+}
+await copyFile(path.join(here,'RESOLUTION.md'),path.join(runtime,'skills/vamp-rpa-ui-checks/references/user-guide.md'));
 // Preserve native Windows files; normalize only Unix shell scripts.
 async function normalizeUnixScripts(directory){
   for(const entry of await readdir(directory,{withFileTypes:true})){

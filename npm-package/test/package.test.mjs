@@ -14,17 +14,24 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.ok(tarball,'Set VAMP_TEST_TARBALL to the npm pack tarball');
   const temporary=await mkdtemp(path.join(os.tmpdir(),'vamp-npm-test-'));
   t.after(()=>rm(temporary,{recursive:true,force:true}));
-  execFileSync(process.platform==='win32'?'npm.cmd':'npm',['install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
+  const npmCli=process.env.npm_execpath;
+  assert.ok(npmCli,'Run this check through npm test so npm_execpath is available');
+  execFileSync(process.execPath,[npmCli,'install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
   const cli=path.join(temporary,'node_modules',packageName,'bin',packageName+'.mjs');
-  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.2.1');
+  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.2.2');
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async()=>{
       const source=path.join(temporary,'installer.iso');await writeFile(source,'test');
       const args={name:'Blocked-Test',iso_path:source,confirmed:false};
+      if(process.platform==='win32') {
+        assert.throws(()=>execFileSync(process.execPath,[cli,'kvm','--call','remote_vm_create','--args',JSON.stringify(args)],{encoding:'utf8'}),error=>{
+          assert.match(error.stdout,/unsupported on win32/);return true;
+        });
+        return;
+      }
       const pending=JSON.parse(execFileSync(process.execPath,[cli,'kvm','--call','remote_vm_create','--args',JSON.stringify(args)],{encoding:'utf8'}));
       assert.equal(pending.status,'needs_confirmation');
-      if(process.platform==='win32')return;
       const fake=path.join(temporary,'busy-vbox');await writeFile(fake,'#!/bin/sh\necho busy-vm\n',{mode:0o700});
       const work=path.join(temporary,'uncreated-work');
       assert.throws(()=>execFileSync(process.execPath,[cli,'kvm','--workdir',work,'--call','remote_vm_create','--args',JSON.stringify({...args,confirmed:true})],{encoding:'utf8',env:{...process.env,VBOXMANAGE_PATH:fake}}),error=>{

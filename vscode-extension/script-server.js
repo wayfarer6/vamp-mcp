@@ -15,6 +15,8 @@ const path = require('node:path');
 const {SCRIPT_SERVER_PORT, scriptBaseUrl} = require('./guest-bootstrap');
 
 function createScriptServer({runtime, python, log = () => {}}) {
+  let operations=Promise.resolve();
+  const serial=operation=>{const result=operations.then(operation,operation);operations=result.catch(()=>{});return result;};
   const script = path.join(runtime, 'scripts/script_server.py');
   const pythonCommand = () => (typeof python === 'function' ? python() : python);
   const call = (command, extra = []) => new Promise((resolve, reject) => {
@@ -35,15 +37,18 @@ function createScriptServer({runtime, python, log = () => {}}) {
     script,
     available: () => fs.existsSync(script),
     status: () => call('status'),
-    stop: () => call('stop'),
-    start: (options = {}) => {
+    stop: () => serial(()=>call('stop')),
+    // This is shared with MCP and already-running guest installs. Closing an
+    // editor must not interrupt downloads; the bounded lease or Stop ends it.
+    dispose: async () => {},
+    start: (options = {}) => serial(async () => {
       const extra = [];
       if (options.ttlSeconds !== undefined) extra.push('--ttl', String(options.ttlSeconds));
       if (options.bind) extra.push('--bind', options.bind);
       return call('start', extra);
-    },
+    }),
     /** Reuse a running server or start one; returns its JSON status. */
-    ensure: async (options = {}) => {
+    ensure: (options = {}) => serial(async () => {
       const current = await call('status');
       if (current.status === 'running') return call('start', ['--ttl', String(options.ttlSeconds ?? 1800)]);
       if (current.status === 'port_in_use') return current;
@@ -52,7 +57,7 @@ function createScriptServer({runtime, python, log = () => {}}) {
         log(`Serving guest setup at ${started.guest_urls?.virtualbox_nat || scriptBaseUrl()} (port ${SCRIPT_SERVER_PORT})`);
       }
       return started;
-    },
+    }),
   };
 }
 

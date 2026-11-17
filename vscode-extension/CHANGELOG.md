@@ -2,6 +2,18 @@
 
 
 
+## 0.2.2
+
+- Elevate Windows keystroke setup with Ctrl+Shift+Enter, approve UAC using Left/Enter, require administrator rights and set Unrestricted execution policy for the setup process. Keep Linux and Windows display hooks registered at every desktop login.
+
+- Show a persistent 1920×1080 / 100% guest display warning with Linux and Windows guide access. Bundle AI display preflight instructions and require resolution verification before coordinate automation.
+- Use English interface guidance, reduce duplicate explanations and group recovery controls under More / Setup tools.
+- Include reusable UI cleanup, packaged VSIX validation and RPA outcome-check skills in VSIX/npm runtimes and the release skills archive.
+- Run Windows post-install setup in the first desktop session, pass its initial command safely through VirtualBox batch logging, and support clean Windows accounts without winget.
+- Show prominent first-login/setup instructions and a manual Debian resolution command; configure guest automatic sleep and screen locking for automation.
+- Show real web-server state, serialize start/stop requests, renew shared installation leases and keep downloads alive when an editor closes.
+- Hide explicitly marked development VMs from normal inventory. Development names and validation artifacts are excluded from the VSIX.
+
 ## 0.2.1
 
 - Share the desktop lifecycle interface across MCP and VSIX, separate VirtualBox/Hyper-V/KVM adapters by host support, and report Apple Hypervisor as not implemented. Normalize Unix shell scripts when packaging on Windows and when serving guest setup.
