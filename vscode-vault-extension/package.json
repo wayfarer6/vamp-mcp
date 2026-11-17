@@ -80,6 +80,11 @@
         "icon": "$(book)"
       },
       {
+        "command": "vampVault.addCredential",
+        "title": "VAMP Vault: Add Credential",
+        "icon": "$(add)"
+      },
+      {
         "command": "vampVault.openDatabase",
         "title": "VAMP Vault: Open Existing Database",
         "icon": "$(folder-opened)"
@@ -182,29 +187,34 @@
           "group": "navigation@0"
         },
         {
-          "command": "vampVault.openBrowser",
+          "command": "vampVault.addCredential",
           "when": "view == vampVault.views.credentials",
           "group": "navigation@0"
         },
         {
-          "command": "vampVault.refreshTree",
+          "command": "vampVault.openBrowser",
           "when": "view == vampVault.views.credentials",
           "group": "navigation@1"
         },
         {
-          "command": "vampVault.searchCredentials",
+          "command": "vampVault.refreshTree",
           "when": "view == vampVault.views.credentials",
           "group": "navigation@2"
         },
         {
+          "command": "vampVault.searchCredentials",
+          "when": "view == vampVault.views.credentials",
+          "group": "navigation@3"
+        },
+        {
           "command": "vampVault.lock",
           "when": "view == vampVault.views.credentials && vampVault.unlocked",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "vampVault.unlock",
           "when": "view == vampVault.views.credentials && !vampVault.unlocked",
-          "group": "navigation@3"
+          "group": "navigation@4"
         },
         {
           "command": "vampVault.revealKdbx",

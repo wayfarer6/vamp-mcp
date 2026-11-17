@@ -1,8 +1,13 @@
 // VAMP Vault — platform CLI resolver and downloader.
 //
 // Finds a usable KeePassXC CLI / VeraCrypt CLI on this machine and, when there
-// is none, downloads the official portable build for the current OS and CPU
-// into the extension's global storage, verifying the publisher checksum first.
+// is none, installs it: Windows uses winget so the user gets the full signed
+// application (and its CLI/helper executables), other platforms download the
+// official portable build for the current OS and CPU into the extension's
+// global storage, verifying the publisher checksum first.
+//
+// A winget install raises a Windows User Account Control prompt, so the caller
+// is told in English to approve it before the installer starts.
 //
 // Everything here is best-effort by design: every entry point returns a
 // structured report instead of throwing, so the MCP server and the extension
@@ -16,6 +21,37 @@ import path from 'node:path';
 
 const GITHUB_API = 'https://api.github.com';
 
+/** Official winget package identifiers, used for the human command and the install run. */
+export const WINGET_PACKAGES = {
+  keepassxc: { id: 'KeePassXCTeam.KeePassXC', label: 'KeePassXC' },
+  veracrypt: { id: 'IDRIX.VeraCrypt', label: 'VeraCrypt' },
+};
+
+/** Tools that VAMP installs through winget on Windows instead of a portable archive. */
+export const WINGET_AUTO_INSTALL = new Set(['keepassxc']);
+
+/** Copy-and-paste command for a person; it is also what a failed run reports as the next step. */
+export function wingetCommand(tool) {
+  const pkg = WINGET_PACKAGES[tool];
+  return pkg ? `winget install --id ${pkg.id} -e` : '';
+}
+
+/** Arguments for the unattended run: no package or source prompt, installer left to winget. */
+export function wingetArgs(tool) {
+  const pkg = WINGET_PACKAGES[tool];
+  if (!pkg) return [];
+  return ['install', '--id', pkg.id, '-e', '--silent', '--accept-package-agreements', '--accept-source-agreements'];
+}
+
+/**
+ * English notice for the user: the winget installer runs elevated, so Windows
+ * shows a User Account Control prompt that has to be approved by hand.
+ */
+export function wingetUacNotice(tool) {
+  const label = WINGET_PACKAGES[tool]?.label ?? 'the package';
+  return `Please approve the Windows User Account Control (UAC) prompt to complete the ${label} installation.`;
+}
+
 export const TOOLS = {
   keepassxc: {
     id: 'keepassxc',
@@ -24,7 +60,7 @@ export const TOOLS = {
     repo: 'keepassxreboot/keepassxc',
     versionArgs: ['--version'],
     manual: {
-      win32: 'winget install --id Microsoft.VCRedist.2015+.x64 -e; if ($LASTEXITCODE -eq 0) { winget install --id KeePassXCTeam.KeePassXC -e }',
+      win32: wingetCommand('keepassxc'),
       darwin: 'brew install keepassxc',
       linux: 'sudo apt install keepassxc   # or: flatpak install flathub org.keepassxc.KeePassXC',
     },
@@ -36,7 +72,7 @@ export const TOOLS = {
     repo: 'veracrypt/VeraCrypt',
     versionArgs: ['--version'],
     manual: {
-      win32: 'winget install --id VeraCrypt.VeraCrypt -e',
+      win32: wingetCommand('veracrypt'),
       darwin: 'brew install --cask veracrypt   # then install macFUSE when prompted',
       linux: 'sudo apt install veracrypt   # or download the console build for your distribution',
     },
@@ -259,9 +295,7 @@ function selectAsset(tool, release, { platform, arch }) {
     if (platform === 'linux') {
       return arch === 'arm64' ? pick(/aarch64\.AppImage$/) : pick(/x86_64\.AppImage$/);
     }
-    if (platform === 'win32') {
-      return arch === 'arm64' ? pick(/-ARM64\.zip$/i) : pick(/-x64\.zip$/i);
-    }
+    // Windows: winget installs the full signed application, so no portable archive is used there.
     return null; // macOS: the .dmg is an app-bundle installer, Homebrew is the honest route.
   }
   if (tool === 'veracrypt') {
@@ -398,12 +432,82 @@ exec "$APPDIR/${binary}" "$@"
 `;
 
 /**
+ * Install one tool through winget (Windows). The installer runs elevated, so the
+ * user is told in English to approve the UAC prompt before winget starts.
+ * Returns the same shape as installCli: {status, tool, path?, version?, ...}.
+ */
+export async function installWithWinget(tool, { binDir, platform = process.platform, env = process.env, log = () => {}, notify = () => {}, runCommand = run } = {}) {
+  const pkg = WINGET_PACKAGES[tool];
+  if (!pkg) return { status: 'manual_install_required', tool, manual_install: manualInstructions(tool, platform) };
+  const notice = wingetUacNotice(tool);
+  const command = wingetCommand(tool);
+  try { notify(notice); } catch {}
+  log(notice);
+  log(`${pkg.label}: installing ${pkg.id} with winget`);
+
+  let outcome;
+  try {
+    outcome = await runCommand('winget', wingetArgs(tool), { timeout: 900000, env, allowFailure: true });
+  } catch (error) {
+    const message = cleanError(error.message);
+    const missing = error.code === 'ENOENT' || /not recognized|cannot find|not found/i.test(message);
+    return {
+      status: 'manual_install_required',
+      tool,
+      platform: platform === 'win32' ? 'windows' : platform,
+      method: 'winget',
+      package: pkg.id,
+      command,
+      uac_notice: notice,
+      error: missing ? 'winget (App Installer) is not available on this computer.' : message,
+      manual_install: command,
+      hint: missing ? 'Install "App Installer" from the Microsoft Store, then run the command again.' : `Run it in a terminal: ${command}`,
+    };
+  }
+
+  const detail = cleanError(outcome.stderr || outcome.stdout);
+  if (outcome.code !== 0) {
+    const cancelled = /cancel|canceled|dismiss|0x800704c7|elevation/i.test(detail);
+    return {
+      status: 'failed',
+      tool,
+      method: 'winget',
+      package: pkg.id,
+      command,
+      uac_notice: notice,
+      exit_code: outcome.code,
+      error: cancelled
+        ? `The installation did not finish because the Windows UAC prompt was not approved. ${notice}`
+        : (detail || `winget exited with code ${outcome.code}`),
+      hint: `Approve the UAC prompt and run it again, or install manually: ${command}`,
+    };
+  }
+
+  const resolved = await resolveCli(tool, { binDir, platform, env });
+  return {
+    status: resolved.available ? 'installed' : 'installed_no_cli',
+    tool,
+    method: 'winget',
+    package: pkg.id,
+    command,
+    uac_notice: notice,
+    path: resolved.available ? resolved.path : null,
+    version: resolved.version ?? null,
+    error: resolved.available ? undefined : 'winget reported success, but keepassxc-cli.exe was not found in PATH or Program Files.',
+    hint: resolved.available ? undefined : 'Open KeePassXC once, then refresh; or set "VAMP Vault: KeePassxc Cli Path" to the installed keepassxc-cli.exe.',
+  };
+}
+
+/**
  * Install one CLI for this platform.
  * Returns {status, tool, path?, version?, checksum?, ...}. Never throws.
  */
-export async function installCli(tool, { binDir, platform = process.platform, arch = process.arch, log = () => {}, token, assetUrl } = {}) {
+export async function installCli(tool, { binDir, platform = process.platform, arch = process.arch, log = () => {}, token, assetUrl, notify, runCommand } = {}) {
   const info = TOOLS[tool];
   if (!info) return { status: 'unknown_tool', tool };
+  if (isWindows(platform) && WINGET_AUTO_INSTALL.has(tool)) {
+    return installWithWinget(tool, { binDir, platform, log, notify, runCommand });
+  }
   if (!binDir) return { status: 'failed', tool, error: 'no download directory configured' };
   const plan = detectPlatform(platform, arch);
 
@@ -547,7 +651,7 @@ export async function installCli(tool, { binDir, platform = process.platform, ar
  * Order matters — the brief and ordinary courtesy both prefer the copy the
  * user already has.
  */
-export async function ensureClis({ binDir, tools = ['keepassxc', 'veracrypt'], overrides = {}, allowDownload = true, force = false, platform = process.platform, arch = process.arch, log = () => {}, token } = {}) {
+export async function ensureClis({ binDir, tools = ['keepassxc', 'veracrypt'], overrides = {}, allowDownload = true, force = false, platform = process.platform, arch = process.arch, log = () => {}, notify = () => {}, token, runCommand } = {}) {
   const report = { platform: detectPlatform(platform, arch), bin_dir: binDir ?? null, tools: {} };
   for (const tool of tools) {
     const existing = await resolveCli(tool, { binDir, override: overrides[tool], platform });
@@ -559,8 +663,10 @@ export async function ensureClis({ binDir, tools = ['keepassxc', 'veracrypt'], o
       report.tools[tool] = { ...existing, status: existing.available ? 'system_install' : 'download_disabled' };
       continue;
     }
-    log(`${TOOLS[tool].label}: nothing usable found, downloading the official build`);
-    const installed = await installCli(tool, { binDir, platform, arch, log, token });
+    log(isWindows(platform) && WINGET_AUTO_INSTALL.has(tool)
+      ? `${TOOLS[tool].label}: nothing usable found, installing ${WINGET_PACKAGES[tool].label} with winget`
+      : `${TOOLS[tool].label}: nothing usable found, downloading the official build`);
+    const installed = await installCli(tool, { binDir, platform, arch, log, token, notify, runCommand });
     report.tools[tool] = { ...installed, previous: existing.attempted };
   }
   return report;

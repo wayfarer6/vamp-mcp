@@ -685,6 +685,7 @@ function activate(context) {
           overrides: { keepassxc: config().get('keepassxcCliPath') || undefined, veracrypt: config().get('veracryptCliPath') || undefined },
           allowDownload: config().get('autoDownloadCli') !== false,
           log: message => { progress.report({ message }); output.appendLine(message); },
+          notify: message => { vscode.window.showInformationMessage(message); },
         });
         output.appendLine(JSON.stringify(report, null, 2));
         output.show(true);
@@ -694,6 +695,8 @@ function activate(context) {
           ? `${tool.label ?? 'CLI'}: ${tool.version ?? 'ready'} — ${tool.path}`
           : `${tool.label ?? 'CLI'}: not available (${tool.status ?? 'unknown'}) ${tool.manual_install ? `· ${tool.manual_install}` : ''}`;
         const summary = [line({ ...keepassxc, label: 'KeePassXC' }), line({ ...veracrypt, label: 'VeraCrypt' })].join('\n');
+        const uac = [keepassxc, veracrypt].find(tool => tool.uac_notice && ['failed', 'manual_install_required'].includes(tool.status));
+        if (uac) output.appendLine(uac.uac_notice);
         changes.fire();
         resetVault();
         credentialView.refresh();
@@ -750,8 +753,78 @@ function activate(context) {
     }
   }));
 
-  // ------------------------------------------------ remote vault commands
+  /**
+   * Add one credential by hand from the sidebar. The master password is asked
+   * for first (the same prompt every read uses), then each field in turn; the
+   * password never appears in the log, in a message or in the tree.
+   */
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.addCredential', async () => {
+    try {
+      const opened = await openVault();
+      if (!opened) return;
+      const title = await vscode.window.showInputBox({
+        prompt: 'Entry title or path, e.g. github.com or Social/Naver',
+        placeHolder: 'github.com',
+        ignoreFocusOut: true,
+        validateInput: value => (value && value.trim() ? null : 'Enter an entry title.'),
+      });
+      if (title === undefined || !title.trim()) return;
+      const username = await vscode.window.showInputBox({
+        prompt: `Username or account identifier for "${title.trim()}" (optional)`,
+        ignoreFocusOut: true,
+      });
+      if (username === undefined) return;
+      const password = await vscode.window.showInputBox({
+        prompt: `Password to store for "${title.trim()}"`,
+        password: true,
+        ignoreFocusOut: true,
+        validateInput: value => (value ? null : 'Enter the password to store.'),
+      });
+      if (!password) return;
+      const url = await vscode.window.showInputBox({
+        prompt: 'Target URL (optional)',
+        placeHolder: 'https://',
+        ignoreFocusOut: true,
+      });
+      if (url === undefined) return;
+      const notes = await vscode.window.showInputBox({
+        prompt: 'Notes (optional)',
+        ignoreFocusOut: true,
+      });
+      if (notes === undefined) return;
 
+      const { splitEntryPath } = await loadModule(context, 'dist/runtime/src/vault_cli.mjs');
+      const { entry, group, path: target } = splitEntryPath(title);
+      if (!entry) {
+        vscode.window.showWarningMessage('VAMP Vault: add a title after the group, e.g. Social/Naver.');
+        return;
+      }      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'VAMP Vault: adding credential' }, async () => opened.cli.addEntry({
+        file: opened.db,
+        entry,
+        group,
+        username: username?.trim() || undefined,
+        secret: password,
+        url: url?.trim() || undefined,
+        notes: notes?.trim() || undefined,
+        databasePassword: opened.password,
+      }));
+      output.appendLine(`Added credential ${result.path ?? target} to ${path.basename(opened.db)}.`);
+      resetVault();
+      credentialView.refresh();
+      statusView.refresh();
+      vscode.window.showInformationMessage(`Credential added: ${result.path ?? target}. The password is stored in the vault and is not shown again.`);
+    } catch (error) {
+      const message = error?.message ?? String(error);
+      if (/already exists/i.test(message)) {
+        vscode.window.showWarningMessage(`VAMP Vault: an entry with that path already exists. Use "VAMP Vault: Browse Credentials" to edit it.`);
+        credentialView.refresh();
+        return;
+      }
+      await handleVaultError(error, kdbxPath());
+    }
+  }));
+
+  // ------------------------------------------------ remote vault commands
   /**
    * Everything a remote command needs, or null after telling the user what is
    * missing. A remote command never falls back to the local vault: if the host

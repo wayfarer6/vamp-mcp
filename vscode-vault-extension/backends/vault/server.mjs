@@ -25,7 +25,7 @@ import { access } from 'node:fs/promises';
 import { sep } from 'node:path';
 import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
-import { VaultCli } from '../../src/vault_cli.mjs';
+import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
 
 const VERSION = '0.1.5';
 
@@ -469,6 +469,53 @@ tool('vault_update_credential', {
     });
     cacheForget(args.entry);
     return text({ status: 'updated', ...updated });
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+tool('vault_add_credential', {
+  title: 'Add a credential by hand',
+  description: 'Create one entry the user dictates: title (or group path plus title), username, password, URL and notes. Use this when the user asks to save a credential that is not in the vault yet. It never overwrites an existing entry; use vault_update_credential for that. The password is written to the database and never returned. TOTP seeds are added in the KeePassXC application.',
+  inputSchema: {
+    entry: z.string().min(1).describe('Entry title or path, e.g. github.com or Social/Naver'),
+    username: z.string().optional().describe('Username or account identifier'),
+    password: z.string().min(1).describe('Secret/password to store'),
+    url: z.string().optional().describe('Target URL'),
+    notes: z.string().optional().describe('Optional notes'),
+    group: z.string().optional().default('/').describe('Group path in the vault'),
+    file: z.string().optional().describe('Database path. Defaults to the configured vault.'),
+  },
+}, async args => {
+  try {
+    const cli = await getCli();
+    if (!cli.hasKeepass) {
+      return failure(new Error('keepassxc-cli is not installed or was not found. Run "VAMP Vault: Set Up KeePassXC and VeraCrypt" in VS Code.'), { code: 'keepassxc_missing' });
+    }
+    const file = args.file || settings.kdbx;
+    if (!file) return failure(new Error('No database path configured.'), { code: 'path_required' });
+    if (!(await fileExists(file))) return text({ status: 'no_database', file, hint: 'Create a vault first with vault_create or "VAMP Vault: Create Vault".' });
+    const master = await masterPassword({ file });
+    const parsed = splitEntryPath(args.entry);
+    if (!parsed.entry) return failure(new Error('An entry title is required after the group path, e.g. Social/Naver.'), { code: 'entry_required' });
+    const group = args.group && args.group !== '/' ? args.group.replace(/\/+$/, '') : parsed.group;
+    const target = group ? `${group}/${parsed.entry}` : parsed.entry;
+    const existing = await cli.listEntries({ file, databasePassword: master.password });
+    if (existing.entries.some(item => item.path === target)) {
+      return text({ status: 'exists', path: target, created: false, hint: 'Use vault_update_credential to change the fields of this entry.' });
+    }
+    const created = await cli.addEntry({
+      file,
+      entry: parsed.entry,
+      group,
+      username: args.username,
+      secret: args.password,
+      url: args.url,
+      notes: args.notes,
+      databasePassword: master.password,
+    });
+    cacheForget(created.path);
+    return text({ status: 'created', ...created });
   } catch (error) {
     return failure(error);
   }

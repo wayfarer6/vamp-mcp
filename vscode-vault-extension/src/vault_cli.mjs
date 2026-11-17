@@ -63,6 +63,20 @@ export function parseMountList(text) {
   return mounted;
 }
 
+/**
+ * Split a title a person typed ("Social/Naver") into a group and an entry name,
+ * so "add" can create the group and the database keeps a real path. A leading
+ * slash is ignored; a trailing slash leaves no entry name and is reported.
+ */
+export function splitEntryPath(value) {
+  const raw = String(value ?? '').trim().replace(/^\/+/, '');
+  const slash = raw.lastIndexOf('/');
+  if (slash <= 0) return { raw, group: undefined, entry: raw, path: raw };
+  const group = raw.slice(0, slash).replace(/\/+$/, '');
+  const entry = raw.slice(slash + 1).trim();
+  return { raw, group, entry, path: group ? `${group}/${entry}` : entry };
+}
+
 export class VaultCli {
   constructor({ keepassxcCli = null, veracryptCli = null, kdbxPath, volumePath, mountPoint, platform = process.platform, env = process.env, timeoutMs = 120000 } = {}) {
     Object.assign(this, { keepassxcCli, veracryptCli, kdbxPath, volumePath, mountPoint, platform, env, timeoutMs });

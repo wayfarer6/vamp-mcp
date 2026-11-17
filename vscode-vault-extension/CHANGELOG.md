@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add credentials by hand: **VAMP Vault: Add Credential** (`+` in the Credentials view title) asks for title, username, password, URL and notes and writes the entry to the open vault; the MCP server gains `vault_add_credential` with the same parameters. A `Group/Title` path creates the group, an existing path is never overwritten, and the password is never returned.
+- Windows now installs the full signed KeePassXC application through winget (`KeePassXCTeam.KeePassXC`) instead of extracting the portable `.zip`, so `keepassxc-cli.exe` and the browser proxy come from the publisher's installer.
+- Fix the VeraCrypt winget id (`IDRIX.VeraCrypt`); the previous `VeraCrypt.VeraCrypt` was rejected by winget.
+- Announce the Windows User Account Control prompt before a winget install: *"Please approve the Windows User Account Control (UAC) prompt to complete the KeePassXC installation."* appears in the progress notification, a VS Code notification and the output log, and a refused prompt is reported with the command to run again.
+
 ## 0.1.5
 
 - Restore the VAMP bat holding a monitor, with the safe inside its screen, for the Marketplace icon and matching monochrome activity-bar icon.

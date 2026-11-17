@@ -18,9 +18,9 @@ import path from 'node:path';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
-import { parseEntryList, parseMountList, parseShowAll, VaultCli } from '../src/vault_cli.mjs';
+import { parseEntryList, parseMountList, parseShowAll, splitEntryPath, VaultCli } from '../src/vault_cli.mjs';
 import { BridgeClient } from '../src/bridge_client.mjs';
-import { detectPlatform, findOnPath } from '../src/downloader.mjs';
+import { detectPlatform, ensureClis, findOnPath, installCli, installWithWinget, manualInstructions, WINGET_PACKAGES, wingetArgs, wingetCommand, wingetUacNotice } from '../src/downloader.mjs';
 import { buildCredentialTree, buildStatusTree, findNode, flattenTree } from '../src/tree.mjs';
 
 const server = process.env.VAULT_TEST_SERVER ?? path.join(import.meta.dirname, '..', 'backends/vault/server.mjs');
@@ -142,6 +142,16 @@ await check('parseEntryList separates groups from entries', () => {
   assert.equal(listing.entries.length, 2);
   assert.equal(listing.entries[0].group, 'Mail');
 });
+await check('splitEntryPath turns a typed title into a group and a name', () => {
+  assert.deepEqual(splitEntryPath('github.com'), { raw: 'github.com', group: undefined, entry: 'github.com', path: 'github.com' });
+  const grouped = splitEntryPath(' Social/Naver ');
+  assert.equal(grouped.group, 'Social');
+  assert.equal(grouped.entry, 'Naver');
+  assert.equal(grouped.path, 'Social/Naver');
+  assert.equal(splitEntryPath('/Mail/Example').group, 'Mail');
+  assert.equal(splitEntryPath('Social/').entry, '', 'a trailing slash must not become an entry name');
+});
+
 await check('parseMountList reads VeraCrypt slots', () => {
   const mounted = parseMountList('1: /home/u/vault.hc /dev/loop0 /home/u/VAMP-Vault \n');
   assert.equal(mounted.length, 1);
@@ -157,6 +167,73 @@ await check('findOnPath finds a binary this test can see', async () => {
   const found = await findOnPath('keepassxc');
   const expected = process.env.VAULT_TEST_KEEPASSXC ?? found;
   if (expected) assert.ok(expected);
+});
+
+console.log('\nWindows install path');
+
+await check('winget ids match the published packages', () => {
+  assert.equal(WINGET_PACKAGES.keepassxc.id, 'KeePassXCTeam.KeePassXC');
+  assert.equal(WINGET_PACKAGES.veracrypt.id, 'IDRIX.VeraCrypt');
+  assert.equal(wingetCommand('keepassxc'), 'winget install --id KeePassXCTeam.KeePassXC -e');
+  assert.equal(wingetCommand('veracrypt'), 'winget install --id IDRIX.VeraCrypt -e');
+  assert.equal(manualInstructions('keepassxc', 'win32'), 'winget install --id KeePassXCTeam.KeePassXC -e');
+  assert.equal(manualInstructions('veracrypt', 'win32'), 'winget install --id IDRIX.VeraCrypt -e');
+  // The id winget rejected must not survive anywhere the user is told to copy.
+  for (const tool of ['keepassxc', 'veracrypt']) assert.ok(!manualInstructions(tool, 'win32').includes('VeraCrypt.VeraCrypt'));
+});
+
+await check('a winget install announces the UAC prompt in English', () => {
+  assert.match(wingetUacNotice('keepassxc'), /Please approve the Windows User Account Control \(UAC\) prompt/);
+  assert.match(wingetUacNotice('keepassxc'), /KeePassXC installation/);
+  assert.match(wingetUacNotice('veracrypt'), /VeraCrypt installation/);
+  assert.deepEqual(wingetArgs('keepassxc').slice(0, 4), ['install', '--id', 'KeePassXCTeam.KeePassXC', '-e']);
+});
+
+await check('the KeePassXC Windows install runs winget instead of a portable archive', async () => {
+  const calls = [], notices = [], logs = [];
+  const fakeRun = async (command, args) => { calls.push([command, args]); return { code: 0, stdout: 'Successfully installed', stderr: '' }; };
+  const result = await installCli('keepassxc', {
+    binDir: path.join(workdir, 'bin'), platform: 'win32', arch: 'x64',
+    runCommand: fakeRun, notify: message => notices.push(message), log: message => logs.push(message),
+  });
+  assert.equal(result.method, 'winget');
+  assert.equal(result.package, 'KeePassXCTeam.KeePassXC');
+  assert.equal(calls[0][0], 'winget');
+  assert.deepEqual(calls[0][1], wingetArgs('keepassxc'));
+  assert.equal(notices[0], wingetUacNotice('keepassxc'));
+  assert.ok(logs.some(line => line.includes('User Account Control')), 'the output log must carry the UAC notice');
+  assert.ok(['installed', 'installed_no_cli'].includes(result.status), `unexpected status ${result.status}`);
+  assert.ok(!result.asset, 'no archive should be downloaded on Windows');
+});
+
+await check('a refused UAC prompt reports the command to retry', async () => {
+  const notices = [];
+  const fakeRun = async () => ({ code: 1, stdout: '', stderr: 'Install failed: cancelled by user (0x800704C7)' });
+  const result = await installWithWinget('keepassxc', { platform: 'win32', runCommand: fakeRun, notify: message => notices.push(message) });
+  assert.equal(result.status, 'failed');
+  assert.match(result.error, /UAC prompt was not approved/);
+  assert.match(result.hint, /winget install --id KeePassXCTeam\.KeePassXC -e/);
+  assert.equal(notices[0], wingetUacNotice('keepassxc'));
+});
+
+await check('a missing winget falls back to the manual command', async () => {
+  const fakeRun = async () => { const error = new Error('spawn winget ENOENT'); error.code = 'ENOENT'; throw error; };
+  const result = await installWithWinget('keepassxc', { platform: 'win32', runCommand: fakeRun, notify: () => {} });
+  assert.equal(result.status, 'manual_install_required');
+  assert.match(result.error, /App Installer/);
+  assert.equal(result.manual_install, 'winget install --id KeePassXCTeam.KeePassXC -e');
+});
+
+await check('VeraCrypt is announced, never installed behind the user', async () => {
+  const calls = [];
+  const fakeRun = async (command, args) => { calls.push([command, args]); return { code: 0, stdout: '', stderr: '' }; };
+  const report = await ensureClis({
+    binDir: path.join(workdir, 'veracrypt-bin'), tools: ['veracrypt'], platform: 'win32', arch: 'x64',
+    runCommand: fakeRun, notify: () => {},
+  });
+  assert.equal(report.tools.veracrypt.status, 'manual_install_required');
+  assert.match(report.tools.veracrypt.manual_install, /IDRIX\.VeraCrypt/);
+  assert.ok(!calls.some(call => call[0] === 'winget'));
 });
 
 console.log('\nSidebar tree model');
@@ -313,13 +390,13 @@ await fakeHost.close();
 console.log('\nMCP tools');
 const client = await connect({ kdbx, volume });
 
-await check('server lists the nine vault tools', async () => {
+await check('server lists the ten vault tools', async () => {
   const { tools } = await client.listTools();
   const names = tools.map(tool => tool.name).sort();
   assert.deepEqual(names, [
-    'vault_create', 'vault_delete_credential', 'vault_get_credential', 'vault_list_credentials',
-    'vault_mount_volume', 'vault_set_credential', 'vault_status', 'vault_unmount_volume',
-    'vault_update_credential',
+    'vault_add_credential', 'vault_create', 'vault_delete_credential', 'vault_get_credential',
+    'vault_list_credentials', 'vault_mount_volume', 'vault_set_credential', 'vault_status',
+    'vault_unmount_volume', 'vault_update_credential',
   ]);
 });
 
@@ -356,6 +433,26 @@ if (!status.cli.keepassxc.available) {
   await check('vault_set_credential creates group and entry', () => {
     assert.equal(set.status, 'created');
     assert.equal(set.path, 'Mail/Example');
+  });
+
+  const added = payload(await client.callTool({
+    name: 'vault_add_credential',
+    arguments: { entry: 'Social/Naver', username: 'seoseonghun2', password: 'added-Secret-42', url: 'https://nid.naver.com', notes: 'manual entry', file: kdbx },
+  }));
+  await check('vault_add_credential creates the group from the path and hides the password', () => {
+    assert.equal(added.status, 'created');
+    assert.equal(added.path, 'Social/Naver');
+    assert.equal(added.created, true);
+    assert.ok(!JSON.stringify(added).includes('added-Secret-42'), 'the added password came back');
+  });
+
+  await check('vault_add_credential refuses to overwrite an existing entry', async () => {
+    const again = payload(await client.callTool({
+      name: 'vault_add_credential',
+      arguments: { entry: 'Social/Naver', password: 'another-Secret-1', file: kdbx },
+    }));
+    assert.equal(again.status, 'exists');
+    assert.equal(again.created, false);
   });
 
   const listed = payload(await client.callTool({ name: 'vault_list_credentials', arguments: { file: kdbx } }));

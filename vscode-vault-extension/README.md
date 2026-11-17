@@ -15,7 +15,7 @@ It is the companion to [VAMP](https://marketplace.visualstudio.com/items?itemNam
 ## Get started
 
 1. Install the **VAMP** extension first; VAMP Vault declares it as an extension dependency.
-2. Run **VAMP Vault: Set Up KeePassXC & VeraCrypt CLI**. It reuses a KeePassXC or VeraCrypt you already have, and otherwise downloads the official build for your OS and CPU into the extension's storage, verifying the publisher's SHA-256 before use.
+2. Run **VAMP Vault: Set Up KeePassXC & VeraCrypt CLI**. It reuses a KeePassXC or VeraCrypt you already have. Otherwise it installs KeePassXC on Windows through winget (`KeePassXCTeam.KeePassXC`, the full signed application) and asks you to approve the Windows User Account Control (UAC) prompt; on Linux and macOS it downloads the official build for your OS and CPU into the extension's storage, verifying the publisher's SHA-256 before use.
 3. Run **VAMP Vault: Create Vault** and type a master password. It is kept in VS Code secret storage, not in a settings file or an environment variable.
 4. Open MCP server management, start **VAMP Vault**, and let the agent call it.
 
@@ -112,7 +112,8 @@ VS Code extension host            remote proxy (Node, stdio)        SSH        r
 | --- | --- | --- |
 | `vault_create` | Create a `.kdbx`, optionally with an encrypted volume beside it. Refuses to overwrite unless `overwrite:true`. | `status: created`, paths, optional volume report |
 | `vault_get_credential` | Read the approved fields of one entry: `username`, `password`, `totp`, `url`, `notes`, `attributes`. | The requested values, `approved_by`, `cached` |
-| `vault_set_credential` | Add an entry, creating its group. Suggests the update tool instead of silently overwriting. | `status: created` or `status: exists` |
+| `vault_add_credential` | Save one credential the user dictates: `entry` (a `Group/Title` path creates the group), `username`, `password`, `url`, `notes`. Never overwrites. | `status: created`, `path`, `created: true` — or `status: exists` |
+| `vault_set_credential` | Add an entry, creating its group, with optional overwrite. Use `vault_add_credential` for a plain hand-entered credential. | `status: created` or `status: exists` |
 | `vault_update_credential` | Change `username`, `password`, `url` or `notes`; omitted fields are untouched. | `status: updated`, fields changed |
 | `vault_delete_credential` | Move an entry to the KeePassXC recycle bin after approval. | `status: deleted`, `recyclable` |
 | `vault_list_credentials` | Entry and group paths, no passwords. | `entries`, `groups`, `count` |
@@ -140,10 +141,12 @@ The setup command and `vault_status` report which of these applied.
 | Platform | KeePassXC | VeraCrypt |
 | --- | --- | --- |
 | Linux x64/arm64 | PATH, `/usr/bin`, `/snap/bin`, Flatpak, else the official AppImage extracted into extension storage with a launcher that sets `LD_LIBRARY_PATH` | PATH or the official AppImage (needs GTK 3, which desktop distributions ship); mounting also needs FUSE and permission to mount as your user |
-| Windows x64/ARM64 | PATH, `Program Files\KeePassXC`, else the official portable `.zip` extracted into extension storage | Install manually (`winget install --id VeraCrypt.VeraCrypt -e`): the CLI talks to a kernel driver that only the signed installer registers, and that needs administrator rights |
+| Windows x64/ARM64 | PATH, `Program Files\KeePassXC`, else winget installs the full signed application (`winget install --id KeePassXCTeam.KeePassXC -e`), which brings `keepassxc-cli.exe` and the browser proxy. Approve the UAC prompt Windows shows for that installer | Install manually (`winget install --id IDRIX.VeraCrypt -e`): the CLI talks to a kernel driver that only the signed installer registers, and that needs administrator rights |
 | macOS x64/arm64 | PATH, `/Applications/KeePassXC.app`, Homebrew, else `brew install keepassxc` | `brew install --cask veracrypt` plus macFUSE; the `.dmg` is an app bundle, not a portable binary |
 
 Every download is checked against the SHA-256 the publisher lists (the `.DIGEST` asset for KeePassXC, `sha256sum.txt` for VeraCrypt). A mismatch deletes the file and reports `checksum_mismatch`; nothing is executed.
+
+A winget install is the one step that leaves the extension: winget fetches the package from Microsoft's community repository, the installer runs elevated, and Windows shows a User Account Control prompt. VAMP says so before it starts — *"Please approve the Windows User Account Control (UAC) prompt to complete the KeePassXC installation."* — in the progress notification, a VS Code notification and the VAMP Vault output log. If the prompt is refused, the report says so and repeats the command you can run yourself; VAMP never retries silently.
 
 ## Security guide
 
@@ -175,6 +178,7 @@ Every download is checked against the SHA-256 the publisher lists (the `.DIGEST`
 | --- | --- |
 | **VAMP Vault: Set Up KeePassXC & VeraCrypt CLI** | Resolve, download and verify both binaries; report versions and paths. |
 | **VAMP Vault: Create Vault** | Ask for a path and master password, create the `.kdbx`, store the password in secret storage. |
+| **VAMP Vault: Add Credential** | The `+` in the Credentials view title. Asks for the entry title (a `Group/Title` path creates the group), username, password, URL and notes, then adds it to the open vault. Unlock is asked first when needed; the password is never echoed. |
 | **VAMP Vault: Show Status** | Database, volume, mount point, lock state, CLI versions, mounted volumes. |
 | **VAMP Vault: Lock (Forget Master Password)** | Delete the master password from secret storage. |
 | **VAMP Vault: Unlock** | Ask for the master password, verify it against the database, and keep it in secret storage. |

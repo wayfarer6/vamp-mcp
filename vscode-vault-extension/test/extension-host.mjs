@@ -184,7 +184,7 @@ await check('every sidebar command is registered', () => {
   for (const id of [
     'vampVault.refreshTree', 'vampVault.unlock', 'vampVault.lock', 'vampVault.revealKdbx',
     'vampVault.exportKdbx', 'vampVault.searchCredentials', 'vampVault.copyUsername',
-    'vampVault.copyPassword', 'vampVault.showEntry',
+    'vampVault.copyPassword', 'vampVault.showEntry', 'vampVault.addCredential',
   ]) {
     assert.ok(commandHandlers.has(id), `${id} is not registered`);
   }
