@@ -13,6 +13,8 @@ import uuid
 
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'scripts'))
+sys.path.insert(0,str(ROOT/'backends/common'))
+from guest_install import PROFILE, require_install_host, efi_boot_plan, virtualbox_preseed
 sys.path.insert(0,str(Path(__file__).resolve().parent))
 from script_server import SCRIPT_SERVER_PORT, guest_commands, start as start_script_server
 
@@ -50,6 +52,7 @@ def post_install_command(guest_os, base_url):
 
 
 def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False,allow_manual_install=False,installation_mode="auto",serve_scripts=True,script_server_ttl=3600):
+    require_install_host('virtualbox')
     if installation_mode not in ('auto','manual'):raise ValueError('installation_mode must be auto or manual')
     name=name or ('VAMP-'+uuid.uuid4().hex[:8])
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',name):raise ValueError('Use 1-64 letters/digits/underscore/hyphen for name')
@@ -69,14 +72,15 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         detected=parse(run('unattended','detect','--iso',iso,'--machine-readable'))
     except RuntimeError:
         manual_types={'debian':'Debian_64','ubuntu':'Ubuntu_64','windows11':'Windows11_64'}
-        if not allow_manual_install or guest_os not in manual_types:raise
+        if guest_os not in manual_types or not (allow_manual_install or (guest_os=='debian' and installation_mode=='auto')):raise
         detected={'OSTypeId':manual_types[guest_os],'IsInstallSupported':'false'}
     os_type=detected.get('OSTypeId',detected.get('detectedOSTypeId',''))
     if not (re.fullmatch(r'Debian[0-9]*_64',os_type) or re.fullmatch(r'Ubuntu[0-9]*_64',os_type) or os_type=='Windows11_64'):
         raise ValueError(f'Only detected Debian/Ubuntu amd64 or Windows11 x64 ISO supported by this initial profile: {os_type or "unknown"}')
     unattended_supported=detected.get('IsInstallSupported',detected.get('isInstallSupported','true')).lower() in ('true','1','yes','on')
     if installation_mode=='manual':unattended_supported=False
-    if not unattended_supported and not allow_manual_install:
+    direct_debian_boot=(installation_mode=='auto' and guest_os=='debian' and not unattended_supported)
+    if not unattended_supported and not allow_manual_install and not direct_debian_boot:
         raise ValueError('VirtualBox reports this ISO does not support unattended installation')
     selected='windows11' if os_type=='Windows11_64' else ('ubuntu' if os_type.startswith('Ubuntu') else 'debian')
     if guest_os and guest_os!=selected:raise ValueError('Selected guest OS does not match detected ISO')
@@ -90,7 +94,7 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         return {'status':'preflight_ready','vm_created':False,'guest_os':selected,
                 'resource_profile':{'memory_mb':memory_mb,'cpus':cpus,'disk_mb':disk_mb},
                 'windows_confirmation_required':selected=='windows11' and not windows_confirmed,
-                'installation_mode':'unattended' if unattended_supported else 'manual',
+                'installation_mode':'unattended' if unattended_supported or direct_debian_boot else 'manual',
                 'guest_setup':{'transport':'http','port':SCRIPT_SERVER_PORT,'commands':guest_commands(SCRIPT_SERVER_PORT)},
                 'credentials':PUBLIC_CREDENTIALS,'iso':str(iso)}
     if selected=='windows11' and not windows_confirmed:
@@ -118,6 +122,12 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
             state=parse(run('showvminfo',name,'--machinereadable')).get('VMState','unknown')
             if state=='running':
                 journal.update(vm_state=state,startup_verified=True)
+                # Stock Windows install media waits for a key before booting.
+                # Send once on the initial provisioning boot, never on later reboots.
+                if selected=='windows11':
+                    time.sleep(PROFILE['boot_wait_seconds'])
+                    run('controlvm',name,'keyboardputscancode','1c','9c')
+                    journal['events'].append('installer-boot-enter-sent')
                 return
             if state not in ('starting','restoring'):break
             time.sleep(1)
@@ -133,8 +143,9 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
             script_server={'status':'failed','port':SCRIPT_SERVER_PORT,'error':str(exc)}
         journal['script_server']=script_server
         if script_server.get('status')!='running':
-            journal['script_server_warning']=('Guest setup scripts are not being served. Start them with '
-                f'"python3 scripts/script_server.py start" before the guest runs its post-install step ({script_server.get("error","unknown error")}).')
+            journal.update(status='failed',error='Guest setup HTTP server could not start: '+str(script_server.get('error',script_server.get('status'))))
+            record('script-server-failed')
+            raise RuntimeError(journal['error'])
     base_url=(script_server or {}).get('guest_urls',{}).get('virtualbox_nat') or f'http://10.0.2.2:{SCRIPT_SERVER_PORT}'
     try:
         run('createvm','--name',name,'--ostype',os_type,'--register','--basefolder',folder.parent)
@@ -144,9 +155,10 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         from shares import prepare
         journal['recording_share']=prepare(name,run)
         options=['modifyvm',name,'--memory',memory_mb,'--cpus',cpus,'--vram',128,
-                 '--mouse','usbtablet','--nic1','nat','--boot1','dvd','--boot2','disk',
+                 '--mouse','usbtablet','--nic1','nat','--nat-localhostreachable1','on','--boot1','dvd','--boot2','disk',
                  '--graphicscontroller','vboxsvga' if os_type=='Windows11_64' else 'vmsvga']
         if os_type=='Windows11_64':options+=['--firmware','efi','--tpm-type','2.0','--ioapic','on']
+        if direct_debian_boot:options+=['--firmware','efi']
         run(*options)
         disk=folder/(name+'.vdi')
         run('createmedium','disk','--filename',disk,'--size',disk_mb,'--format','VDI')
@@ -156,6 +168,19 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         if not unattended_supported:
             run('storageattach',name,'--storagectl','SATA','--port','1','--device','0','--type','dvddrive','--medium',iso)
             start_verified()
+            if direct_debian_boot:
+                # Debian 13 DVD detection is unimplemented in some VBox builds.
+                # Boot the stock EFI GRUB console with the HTTP preseed instead.
+                time.sleep(PROFILE['boot_wait_seconds'])
+                for step in efi_boot_plan('debian',base_url):
+                    if step['kind']=='wait':time.sleep(step['seconds'])
+                    elif step['kind'] in ('text','line'):
+                        run('controlvm',name,'keyboardputstring',step['text'])
+                    if step['kind'] in ('line','enter'):
+                        run('controlvm',name,'keyboardputscancode','1c','9c')
+                journal.update(status='installation_started',installation_mode='unattended',boot_method='efi-http-preseed',os_type=os_type,credentials=PUBLIC_CREDENTIALS,journal=str(journal_path))
+                record('debian-http-preseed-boot-dispatched')
+                return journal
             journal.update(status='installation_started',installation_mode='manual',os_type=os_type,
                            frontend='headless',journal=str(journal_path),
                            credentials={'public_sandbox_credentials':False,'account_setup':'Choose your account in the OS installer'},
@@ -171,6 +196,10 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         install_args=['unattended','install',name,'--iso',iso,'--user','vboxuser',password_flag,'password123!',
               '--full-user-name','VAMP Sandbox User','--hostname',name.lower()+'.vamp.local',
               '--no-install-additions','--post-install-command',post_install_command(selected,base_url)]
+        if selected=='debian':
+            template=folder/'debian-preseed.cfg'
+            template.write_text(virtualbox_preseed(),encoding='utf-8')
+            install_args+=['--script-template',str(template)]
         if os_type=='Windows11_64':
             install_args+=['--image-index',image_index]
             if product_key:install_args+=['--key',product_key]

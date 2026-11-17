@@ -3,6 +3,7 @@
 // through the local CLI (virsh / VBoxManage). Callers reach these tools over
 // SSH stdio, so no hypervisor port is exposed to the network.
 import fs from 'node:fs/promises';
+import hostSupport from '../common/host-support.cjs';
 import path from 'node:path';
 import { describeConfig } from './config.mjs';
 import { clickEvents, parseDomainIds, parseDomainInfo, parseDomainXml, CLICK_BUTTONS } from './libvirt.mjs';
@@ -58,6 +59,8 @@ function parseMonitorReply(stdout) {
 export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
   const exec = async (exe, args, { timeoutMs = 30000, input } = {}) => {
     try {
+      const tool=path.basename(exe).replace(/\.exe$/i,'');
+      if(['virsh','virt-install','qemu-img'].includes(tool))hostSupport.requireBackendHost('kvm',config.platform);
       const result = await run(exe, args, { timeoutMs, input });
       return { ok: true, stdout: String(result?.stdout ?? ''), stderr: String(result?.stderr ?? '') };
     } catch (error) {
@@ -577,7 +580,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
 
   async function createVm(args = {}) {
     if (config.backend !== 'kvm') throw new Error('VM creation through this host server is KVM-only. Use the VirtualBox vm_create tool for VirtualBox.');
-    if (config.platform !== 'linux') throw new Error('KVM creation requires a Linux host.');
+    hostSupport.requireBackendHost('kvm',config.platform);
     if (args.confirmed !== true) return {status:'needs_confirmation',vm_created:false,message:'Authorize creation and startup, then pass confirmed:true with a host ISO path.'};
     const guest_os=args.guest_os ?? 'debian';
     if (!['debian','ubuntu','windows11'].includes(guest_os)) throw new Error('Unsupported guest_os');
@@ -590,7 +593,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     }
     const lifecycle=(await import('../common/host-backends.cjs')).default;
     const adapter=lifecycle.hostBackends({globalStorageUri:{fsPath:config.workdir}},{
-      runtime:config.repo || config.workdir,config:()=>({get:key=>key==='libvirtUri'?config.libvirtUri:key==='kvmPythonExecutable'?config.python:undefined}),
+      runtime:config.repo || config.workdir,platform:config.platform,config:()=>({get:key=>key==='libvirtUri'?config.libvirtUri:key==='kvmPythonExecutable'?config.python:undefined}),
       execute:(exe,argv,options)=>run(exe,argv,{timeoutMs:options.timeout}),
     });
     const created=await adapter.create('kvm',{name:args.name,iso_path:args.iso_path,guest_os,installation_mode:args.installation_mode,...values});

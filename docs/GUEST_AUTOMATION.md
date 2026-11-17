@@ -90,3 +90,20 @@ AI는 세션 시작 시 필요 여부와 추가 공간을 설명하고 선택을
 중단된 VM을 `vm_start`로 시작할 때는 녹화 공유를 먼저 등록해, VM 시작 전 가능한 경우 영구 설정으로 남깁니다. 이미 실행 중인 VM에 transient로 붙였던 공유는 호스트 오류/VM 전원 종료 뒤 다시 prepare해야 할 수 있습니다.
 
 `install-linux-additions.sh`는 Debian 계열 게스트 root에서 일치하는 Guest Additions ISO가 `/dev/sr0`에 연결되었을 때 사용할 수 있는 보조 스크립트입니다. 현재 커널 headers를 구할 수 없거나 빌드가 실패하면 중단하며 커널을 임의 업그레이드하지 않습니다. 설치 후 vboxsf 그룹과 재로그인/재부팅을 확인하세요. Oracle의 mount.vboxsf 헬퍼는 일부 일반 fstab 옵션(예: nofail)을 거부할 수 있어, 첫 부팅 RPA에서는 VAMPRecords를 명시적 uid/gid 옵션으로 마운트합니다. 영구 자동 마운트는 Guest Additions 서비스와 사용자 vboxsf 그룹을 우선 사용하세요.
+
+
+## Debian GNOME unattended installation (2026-11-17)
+
+VirtualBox renders its unattended template from the common `guest_setup/http/debian-preseed.cfg` through `backends/common/guest_install.py`. The template installs `task-gnome-desktop`, GDM and Xorg and preserves the VirtualBox postinstall hook. If a selected Debian ISO cannot be detected by VirtualBox (including Debian 13.7 DVD on 7.2.22), provisioning instead starts the stock ISO with EFI, waits 10 seconds and types GRUB commands that fetch `guest_setup/http/debian-preseed.cfg` from the temporary host Python HTTP server. NAT host-loopback access is enabled so `10.0.2.2:8421` reaches that server. No Inject Bootstrap action is required.
+
+Hyper-V Generation 2 uses the same HTTP CFG through its Default Switch host IPv4 address and synthetic keyboard. This path is implemented but has not been tested on a Hyper-V guest. The host must allow guest access to TCP 8421. Other OS installers remain manual on Hyper-V.
+
+Both Debian paths invoke `postdeb.sh` during the installer late-command stage. It downloads the recorder bundle, configures GNOME Xorg and installs the recorder for `vboxuser`. `/var/lib/vamp/guest-setup.complete` is written only after that script succeeds. The public sandbox credentials are `vboxuser` / `password123!`. Installation startup is not proof of completion. No snapshot is created by provisioning.
+
+Windows initial provisioning sends Enter once after a 10-second wait. Later VM starts and installer reboots do not receive unsolicited keys.
+
+
+Host support is separate from guest OS support. `backends/common/host-backends.cjs` routes the common lifecycle interface to `virtualbox/desktop.cjs`, `hyperv/desktop.cjs` or `kvm/desktop.cjs`. Host capability policy and shared boot sequences live in `backends/common/guest-install.json`. VirtualBox supports Windows/Linux/macOS hosts; Hyper-V is Windows-only; KVM is Linux-only. Apple Hypervisor is reserved for macOS and reported as not implemented. Existing amd64 install profiles separately require an x64 host; this does not restrict VirtualBox management on Apple Silicon. MCP and VSIX use the same VirtualBox adapter and Python provisioner. npm packages copy the VSIX runtime rather than maintaining another implementation.
+
+
+Validation on the current Windows host, 2026-11-17: VirtualBox 7.2.22 with the stock Debian 13.7 amd64 DVD completed HTTP preseed installation, HTTP postinstall/bundle download and reboot without further input. The resulting GNOME 48.7 X11 session reached 1920x1080; the successful guest setup marker and executable recorder launcher were checked from the desktop terminal. Test VM: `VAMP-Debian-GNOME-Final`, no snapshots. Evidence: `artifacts/autoinstall-validation/result.json` and `final-verified.png`. This validates VirtualBox here; Hyper-V, Linux/macOS execution and Apple Hypervisor implementation are not established by this run.

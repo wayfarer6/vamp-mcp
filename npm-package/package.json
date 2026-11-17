@@ -1,6 +1,6 @@
 {
   "name": "vamp-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "VM-isolated GUI automation over MCP: VirtualBox control, reviewed RPA library, and KVM/VirtualBox host control over stdio or SSH.",
   "type": "module",
   "license": "MIT",

@@ -1,0 +1,58 @@
+{
+  "schema_version": 1,
+  "boot_wait_seconds": 10,
+  "script_server_port": 8421,
+  "hosts": {
+    "virtualbox": [
+      "win32",
+      "linux",
+      "darwin"
+    ],
+    "hyperv": [
+      "win32"
+    ],
+    "kvm": [
+      "linux"
+    ],
+    "apple-hypervisor": [
+      "darwin"
+    ]
+  },
+  "amd64_install_host_arches": [
+    "x64",
+    "AMD64",
+    "x86_64"
+  ],
+  "debian": {
+    "cfg": "debian-preseed.cfg",
+    "efi_boot": [
+      {
+        "kind": "text",
+        "text": "c"
+      },
+      {
+        "kind": "wait",
+        "seconds": 1
+      },
+      {
+        "kind": "line",
+        "text": "linux /install.amd/vmlinuz auto=true priority=critical preseed/url={base_url}/debian-preseed.cfg vamp_base={base_url} --- quiet"
+      },
+      {
+        "kind": "line",
+        "text": "initrd /install.amd/initrd.gz"
+      },
+      {
+        "kind": "line",
+        "text": "boot"
+      }
+    ]
+  },
+  "windows11": {
+    "efi_boot": [
+      {
+        "kind": "enter"
+      }
+    ]
+  }
+}

@@ -81,7 +81,7 @@ test('Start button verifies VM state instead of treating CLI success as a runnin
  }finally{h.close();}
 });
 
-test('VirtualBox Start button checks system KVM guests even when manager connection is session',async()=>{
+test('VirtualBox Start button checks system KVM guests even when manager connection is session',{skip:process.platform!=='linux'},async()=>{
  const h=harness();try{
   await h.open();h.answers.activeKvm='qemu:///system';await h.send({type:'start',id});
   assert.ok(h.messages.some(m=>m.type==='error'&&/KVM desktop is running at qemu:\/\/\/system/.test(m.message)));
@@ -151,12 +151,12 @@ test('VM manager offers Inject Bootstrap and refuses it on a stopped desktop',as
  }finally{h.close();}
 });
 
-test('create offers the bootstrap script without injecting unasked',async()=>{
+test('unattended creation uses its post-install hook without a bootstrap prompt',async()=>{
  const h=harness();try{
   await h.open();await h.send({type:'iso'});
   await h.send({type:'create',os:'windows11',name:'Win-Desktop'});
   const offer=h.notices.findLast(args=>String(args[0]).includes('installation started'));
-  assert.ok(offer.includes('Inject Bootstrap Script'));
+  assert.equal(offer,undefined);
   assert.ok(!h.calls.some(call=>call[2]==='keyboardputstring'));
  }finally{h.close();}
 });

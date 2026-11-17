@@ -38,10 +38,25 @@ export DEBIAN_FRONTEND=noninteractive
 python3 /opt/rpa-recorder-setup/recorder/configure-debian-mirrors.py
 apt-get update
 apt-get install -y build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot task-gnome-desktop xorg gnome-session-xsession
-if [ -f /etc/gdm3/daemon.conf ]; then
- sed -i "/^#\?WaylandEnable=/d; /\[daemon\]/a WaylandEnable=false" /etc/gdm3/daemon.conf
-fi
+for gdm_config in /etc/gdm3/daemon.conf /etc/gdm/custom.conf; do
+ if [ -f "$gdm_config" ]; then
+  sed -i "/^#\?WaylandEnable=/d; /\[daemon\]/a WaylandEnable=false" "$gdm_config"
+ fi
+done
+# Debian 13 uses a static gdm.service; enabling gdm3 alone does not create
+# display-manager.service when tasksel was skipped by the unattended installer.
+gdm_unit=
+for candidate in /usr/lib/systemd/system/gdm.service /usr/lib/systemd/system/gdm3.service /lib/systemd/system/gdm3.service; do
+ if [ -f "$candidate" ]; then gdm_unit=$candidate; break; fi
+done
+[ -n "$gdm_unit" ]
+ln -sf "$gdm_unit" /etc/systemd/system/display-manager.service
+systemctl set-default graphical.target
 user_home=$(getent passwd vboxuser | cut -d: -f6)
 [ -n "$user_home" ]
 /usr/sbin/runuser -u vboxuser -- env HOME="$user_home" RPA_DEPS_READY=1 sh /opt/rpa-recorder-setup/recorder/setup.sh
 '
+
+# Written only after the target user recorder setup exits successfully.
+mkdir -p "$target/var/lib/vamp"
+touch "$target/var/lib/vamp/guest-setup.complete"

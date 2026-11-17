@@ -42,7 +42,7 @@ test('ensure reuses a running server instead of starting a second one',async()=>
   const server=createScriptServer({runtime:fakeRuntime(),python:'python3'});
   const ensured=await server.ensure();
   assert.equal(ensured.status,'running');
-  assert.equal(ensured.argv[0],'status');
+  assert.equal(ensured.argv[0],'start');
 });
 
 test('a missing runtime script is reported instead of silently skipped',()=>{

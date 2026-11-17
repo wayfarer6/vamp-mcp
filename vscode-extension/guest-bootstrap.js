@@ -13,7 +13,11 @@
  * different window, or may ignore the keys. Verify the guest before reporting success.
  */
 
-const SCRIPT_SERVER_PORT = 8421;
+const fs = require('node:fs');
+const path = require('node:path');
+const policySource = path.join(__dirname, '../backends/common/guest-install.json');
+const installerPolicy = require(fs.existsSync(policySource) ? policySource : './dist/runtime/backends/common/guest-install.json');
+const SCRIPT_SERVER_PORT = installerPolicy.script_server_port;
 const DEFAULT_GUEST_HOST = '10.0.2.2';
 function scriptBaseUrl(host = DEFAULT_GUEST_HOST, port = SCRIPT_SERVER_PORT) {
   return `http://${host}:${port}`;

@@ -46,8 +46,19 @@ switch($request.action){
         } else {Set-VMFirmware -VM $vm -EnableSecureBoot Off}
         $dvd=Add-VMDvdDrive -VM $vm -Path $iso -Passthru
         Set-VMFirmware -VM $vm -FirstBootDevice $dvd
+        $mode='manual'
+        $base=$null
+        if($request.guest_os -eq 'debian'){
+            if(-not $switch){throw 'Debian autoinstall needs the Hyper-V Default Switch'}
+            $address=Get-NetIPAddress -AddressFamily IPv4 | Where-Object InterfaceAlias -eq ('vEthernet ('+$switch.Name+')') | Select-Object -First 1
+            if(-not $address){throw 'No host IPv4 address on Default Switch'}
+            $base='http://'+$address.IPAddress+':8421'
+            $mode='unattended'
+        }
         Start-VM -VM $vm
-        @{status='installation_started';installation_mode='manual';id=$vm.Id.ToString();vm=$name;embedded_display_supported=$false;network_connected=[bool]$switch} | ConvertTo-Json -Compress
+        . (Join-Path $PSScriptRoot 'Send-InstallerBoot.ps1')
+        Invoke-HyperVInstallerBoot -VM $vm -GuestOS $request.guest_os -BaseUrl $base
+        @{status='installation_started';installation_mode=$mode;installation_verified=$false;guest_setup_base_url=$base;id=$vm.Id.ToString();vm=$name;embedded_display_supported=$false;network_connected=[bool]$switch} | ConvertTo-Json -Compress
     }
     {$_ -in 'start','stop','delete'} {
         $id=[guid]$request.id

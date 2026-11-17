@@ -33,6 +33,7 @@ import socket
 import subprocess
 import sys
 import tarfile
+import tempfile
 import threading
 import time
 import urllib.error
@@ -42,7 +43,9 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT_SERVER_PORT = 8421
+sys.path.insert(0,str(ROOT/'backends/common'))
+from guest_install import PROFILE
+SCRIPT_SERVER_PORT = PROFILE['script_server_port']
 DEFAULT_BIND = '0.0.0.0'
 DEFAULT_TTL = 1800
 SERVICE = 'vamp-script-server'
@@ -149,7 +152,7 @@ def stage(source: Path | None = None, destination: Path | None = None,
     destination.mkdir(parents=True)
 
     http = source / 'http'
-    for name in ('setup.sh', 'postdeb.sh'):
+    for name in ('setup.sh', 'postdeb.sh', 'debian-preseed.cfg'):
         shutil.copy2(http / name, destination / name)
         (destination / name).chmod(0o755)
     for name in ('setup.ps1', 'setup-all.ps1', 'setup-win.cmd', 'postwin.ps1'):
@@ -179,6 +182,11 @@ def stage(source: Path | None = None, destination: Path | None = None,
         (destination / 'cli').mkdir(exist_ok=True)
         for name in ('SHA256SUMS', 'veracrypt.tar.gz'):
             shutil.copy2(cli_source / name, destination / 'cli' / name)
+
+    # Host checkout line endings must never leak into a Linux guest shell.
+    # Normalize before creating either archive, including nested recorder scripts.
+    for shell in destination.rglob('*.sh'):
+        shell.write_bytes(shell.read_bytes().replace(b'\r\n', b'\n'))
 
     tar_path = destination / 'vamp-guest-setup.tar.gz'
     with tarfile.open(tar_path, 'w:gz') as archive:
@@ -420,6 +428,20 @@ def start(source: Path | None = None, port: int = SCRIPT_SERVER_PORT, bind: str 
           ttl: int = DEFAULT_TTL) -> dict:
     current = status(port)
     if current['status'] == 'running':
+        # Refresh upgraded/normalized payloads without deleting files currently
+        # being downloaded. Publish each staged file atomically.
+        if current.get('directory'):
+            with tempfile.TemporaryDirectory(prefix='vamp-stage-') as temporary:
+                staged=stage(source,Path(temporary)/'stage',port=port)
+                staged_root=Path(staged['directory'])
+                live=Path(current['directory'])
+                for file in staged_root.rglob('*'):
+                    if file.is_file():
+                        target=live/file.relative_to(staged_root)
+                        target.parent.mkdir(parents=True,exist_ok=True)
+                        pending=target.with_name(target.name+'.pending')
+                        shutil.copy2(file,pending)
+                        os.replace(pending,target)
         return {**current, 'reused': True}
     if current['status'] == 'port_in_use':
         return current

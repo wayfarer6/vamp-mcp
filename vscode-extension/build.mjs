@@ -16,12 +16,25 @@ await build({entryPoints:[path.join(root,'backends/common/host-backends.cjs')],o
 const built=await build({metafile:true,entryPoints:[path.join(root,'backends/virtualbox/server.mjs')],
   outfile:path.join(runtime,'backends/virtualbox/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',
   banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
-for(const name of ['scripts/script_server.py','backends/kvm/debian-preseed.cfg','scripts/build_recorder_media.py','rpas','backends/common/Test-Environment.ps1','recording_converter.py','guest_keys.py','backends/library/registry.py','backends/library/replay.py','guest_setup','third_party/pyautogui-recorder','backends/virtualbox/setup_windows_sdk.py','backends/hyperv/scripts/Manage-Desktop.ps1',
+for(const name of ['scripts/script_server.py','backends/kvm/debian-preseed.cfg','scripts/build_recorder_media.py','rpas','backends/common/Test-Environment.ps1','backends/common/host-support.cjs','backends/virtualbox/desktop.cjs','backends/common/guest_install.py','backends/common/guest-install.json','backends/hyperv/scripts/Send-InstallerBoot.ps1','recording_converter.py','guest_keys.py','backends/library/registry.py','backends/library/replay.py','guest_setup','third_party/pyautogui-recorder','backends/virtualbox/setup_windows_sdk.py','backends/hyperv/scripts/Manage-Desktop.ps1',
   'scripts/remote_host_setup.sh','scripts/macos','third_party/mcp-virtualbox/scripts/mouse_click.py','backends/virtualbox/rpas','backends/virtualbox/history.py','backends/virtualbox/recording_listener.py','backends/virtualbox/mouse_click.py','backends/virtualbox/mouse_move.py','backends/virtualbox/shares.py','backends/virtualbox/transfers.py','backends/virtualbox/vnc.py','backends/virtualbox/recordings.py','backends/virtualbox/snapshots.py','backends/virtualbox/profiles.json','backends/virtualbox/display.py','backends/virtualbox/provision.py','backends/virtualbox/requirements.txt']) {
   const destination=path.join(runtime,name);
   await mkdir(path.dirname(destination),{recursive:true});
   await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__') && source!==path.join(root,'backends/virtualbox/rpas/demos') && source!==path.join(root,'rpas/windows_print_pdf') && source!==path.join(root,'rpas/remote_host_validation')});
 }
+// A VSIX/npm runtime built on Windows must also execute on Linux/macOS.
+// Preserve native Windows files; normalize only Unix shell scripts.
+async function normalizeUnixScripts(directory){
+  for(const entry of await readdir(directory,{withFileTypes:true})){
+    const file=path.join(directory,entry.name);
+    if(entry.isDirectory())await normalizeUnixScripts(file);
+    else if(entry.isFile()&&entry.name.endsWith('.sh')){
+      const source=await readFile(file,'utf8');
+      if(source.includes('\r\n'))await writeFile(file,source.replaceAll('\r\n','\n'));
+    }
+  }
+}
+await normalizeUnixScripts(runtime);
 await mkdir(path.join(here,'dist/notices'),{recursive:true});
 for(const name of ['LICENSE','THIRD_PARTY_NOTICES.md']) await copyFile(path.join(root,name),path.join(here,name));
 await copyFile(path.join(root,'third_party/mcp-virtualbox/LICENSE'),path.join(here,'dist/notices/mcp-virtualbox-LICENSE'));

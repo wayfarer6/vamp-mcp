@@ -1,2 +1,6 @@
 # Preserve imported third-party files byte-for-byte, including upstream whitespace.
 third_party/** -whitespace
+
+# Unix scripts authored here must run from Windows checkouts and packages.
+guest_setup/**/*.sh text eol=lf
+scripts/**/*.sh text eol=lf

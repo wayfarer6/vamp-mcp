@@ -25,9 +25,18 @@ class ScriptServerTests(unittest.TestCase):
         if self.previous is None:script_server.os.environ.pop('VAMP_SCRIPT_SERVER_DIR',None)
         else:script_server.os.environ['VAMP_SCRIPT_SERVER_DIR']=self.previous
 
+    def test_windows_checkout_shells_are_normalized_in_http_and_archives(self):
+        import tarfile
+        self.assertNotIn(b'\r', (self.root/'stage/postdeb.sh').read_bytes())
+        self.assertIn(b'/etc/systemd/system/display-manager.service',(self.root/'stage/postdeb.sh').read_bytes())
+        with tarfile.open(self.root/'stage/vamp-guest-setup.tar.gz') as archive:
+            for member in archive.getmembers():
+                if member.isfile() and member.name.endswith('.sh'):
+                    self.assertNotIn(b'\r',archive.extractfile(member).read(),member.name)
+
     def test_stage_places_bootstraps_bundles_and_manifest(self):
         files=set(self.staged['files'])
-        for name in ('setup.sh','setup.ps1','setup-all.ps1','setup-win.cmd','postdeb.sh','postwin.ps1',
+        for name in ('debian-preseed.cfg','setup.sh','setup.ps1','setup-all.ps1','setup-win.cmd','postdeb.sh','postwin.ps1',
                      'vamp-guest-setup.tar.gz','vamp-guest-setup.zip','vamp-setup.json',
                      'recorder/setup.sh','recorder/recorder.zip','vault/setup-guest-vault.sh'):
             self.assertIn(name,files)
@@ -83,8 +92,8 @@ class ScriptServerTests(unittest.TestCase):
             names=set(archive.namelist())
             self.assertIn('PyAutoGuiRecorder.py',names)
             self.assertIn('LICENSE',names)
-            self.assertEqual(archive.read('PyAutoGuiRecorder.py'),
-                             (ROOT/'third_party/pyautogui-recorder/PyAutoGuiRecorder.py').read_bytes())
+            self.assertEqual(archive.read('PyAutoGuiRecorder.py').replace(b'\r\n',b'\n'),
+                             (ROOT/'third_party/pyautogui-recorder/PyAutoGuiRecorder.py').read_bytes().replace(b'\r\n',b'\n'))
 
     def test_stage_survives_a_copy_without_recorder_sources(self):
         clean=self.root/'clean'

@@ -45,7 +45,7 @@ function createScriptServer({runtime, python, log = () => {}}) {
     /** Reuse a running server or start one; returns its JSON status. */
     ensure: async (options = {}) => {
       const current = await call('status');
-      if (current.status === 'running') return current;
+      if (current.status === 'running') return call('start', ['--ttl', String(options.ttlSeconds ?? 1800)]);
       if (current.status === 'port_in_use') return current;
       const started = await call('start', ['--ttl', String(options.ttlSeconds ?? 1800)]);
       if (started.status === 'running') {

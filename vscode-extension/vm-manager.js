@@ -32,7 +32,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
   const cfg=()=>vscode.workspace.getConfiguration('vamp');
   const executable=()=>cfg().get('vboxManagePath') || (process.platform==='win32'
     ? path.join(process.env.ProgramFiles || 'C:/Program Files','Oracle/VirtualBox/VBoxManage.exe') : 'VBoxManage');
-  const vbox=async args=>(await run(executable(),args,{timeout:30000,maxBuffer:4*1024**2})).stdout;
+  const vbox=args=>adapters.command('virtualbox',args);
   let backend=context.globalState?.get('vamp.manager.backend') || 'virtualbox';
   const scriptServer=createScriptServer({
     runtime,
@@ -40,7 +40,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
     log:message=>output.appendLine('[script-server] '+message),
   });
   context.subscriptions.push({dispose(){scriptServer.stop().catch(()=>{});}});
-  const adapters=require('./host-backends').hostBackends(context,{runtime,config:cfg});
+  const adapters=require('./host-backends').hostBackends(context,{runtime,config:cfg,python:pythonPath,vboxExecutable:executable,spawn:execFile});
   let environment={state:'unknown',message:'Not verified yet'};
   async function verifyEnvironment(){
     const folder=path.join(context.globalStorageUri.fsPath,'python');
@@ -148,17 +148,9 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
       return (result.vms||[]).map(vm=>({...vm,memory:vm.memory_mb,backend:'remote',managed:false}));
     }
     if(selectedBackend!=='virtualbox')return adapters.list(selectedBackend);
-    const rows=parseInventory(await vbox(['list','vms']));
-    return Promise.all(rows.map(async row=>{
-      try {
-        const info=parseInfo(await vbox(['showvminfo',row.id,'--machinereadable']));
-        let installation;
-        try {installation=JSON.parse(fs.readFileSync(path.join(path.dirname(info.CfgFile),'vamp-install.json'),'utf8'));}catch{}
-        return {...row,backend:'virtualbox',managed:true,state:info.VMState,memory:info.memory,cpus:info.cpus,guestOS:info.ostype,
-          installation:installation ? {status:installation.status,verified:installation.installation_verified,mode:installation.installation_mode} : undefined};
-      } catch {return {...row,state:'unavailable'};}
-    }));
+    return adapters.list('virtualbox');
   }
+
   async function refresh() {
     if(refreshing || !panel)return;
     refreshing=true;
@@ -178,7 +170,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
       if(currentBackend!==backend || currentConnection!==(cfg().get('libvirtUri') || 'qemu:///session'))return;
       if(!fs.existsSync(pythonPath()))environment={state:'missing',message:'Not prepared'};
       if(environment.state==='unknown')await verifyEnvironment();
-      post({type:'state',environment,backend,connection:currentConnection,version,problem,pythonReady:fs.existsSync(pythonPath()),vms:rows,
+      post({type:'state',environment,capabilities:adapters.capabilities(),backend,connection:currentConnection,version,problem,pythonReady:fs.existsSync(pythonPath()),vms:rows,
         remote:remote?{...remote.summary(),report:remote.state?.report||null,error:remote.state?.error||''}:{configured:false,detail:'Remote support is not loaded.'},
         resources:recommendedResources(),iso:selectedISO ? path.basename(selectedISO) : '',busy});
     } finally {refreshing=false;if(currentBackend!==backend || currentConnection!==(cfg().get('libvirtUri') || 'qemu:///session'))refresh();}
@@ -259,12 +251,16 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
         if(backend==='virtualbox')await vbox(['--version']);else await adapters.check(backend);
         await checkOtherHypervisor();
         const choice=await vscode.window.showInformationMessage(
-          `Create ${name}? ${resources.memory_mb/1024} GB memory, ${resources.cpus} CPUs, 64 GB expanding disk. Installation ISO: ${path.basename(selectedISO)}. ${backend==='virtualbox'||(backend==='kvm'&&message.os==='debian')?'Automatic-install login: vboxuser / password123! (public sandbox credentials).':'Complete OS installation in the guest and choose your own account.'}${message.os==='windows11' ? ' Windows requires your own license.' : ''}`,
+          `Create ${name}? ${resources.memory_mb/1024} GB memory, ${resources.cpus} CPUs, 64 GB expanding disk. Installation ISO: ${path.basename(selectedISO)}. ${backend==='virtualbox'||(['kvm','hyperv'].includes(backend)&&message.os==='debian')?'Automatic-install login: vboxuser / password123! (public sandbox credentials).':'Complete OS installation in the guest and choose your own account.'}${message.os==='windows11' ? ' Windows requires your own license.' : ''}`,
           {modal:true},'Create and Start');
         if(choice!=='Create and Start')return;
         let details;
         if(backend!=='virtualbox'){
           progress('1/3 · Checking '+backend+' and preparing the desktop…');
+          if(backend==='hyperv'&&message.os==='debian'){
+            const server=await scriptServer.ensure({ttlSeconds:7200});
+            if(server.status!=='running')throw Error('Guest setup server failed: '+(server.error||server.status));
+          }
           details=await adapters.create(backend,{iso_path:selectedISO,name,guest_os:message.os,...resources});
         }else{
         progress('1/3 · Preparing the host environment…');
@@ -272,16 +268,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
         if(fs.existsSync(pythonPath())){try {await run(pythonPath(),['-c','import mcp, robot, pycdlib'],{timeout:15000});ready=true;}catch{}}
         if(!ready && !await setupPython())throw new Error('Python setup failed. Open logs for installation details.');
         progress('2/3 · Checking your ISO and preparing the VM…');
-        details=await new Promise((resolve,reject)=>{
-          const child=execFile(pythonPath(),[path.join(runtime,'backends/virtualbox/provision.py'),'--json-stdin'],
-            {env:{...process.env,VBOXMANAGE_PATH:executable()},timeout:420000,maxBuffer:4*1024**2},(error,stdout,stderr)=>{
-              let data;try {data=JSON.parse(stdout);}catch{}
-              if(error || data?.status==='failed')reject(new Error(data?.error || stderr || error?.message || 'VM creation failed.'));
-              else resolve(data);
-            });
-          child.stdin.on('error',()=>{});
-          child.stdin.end(JSON.stringify({iso_path:selectedISO,name,guest_os:message.os,windows_confirmed:message.os==='windows11',allow_manual_install:true,...resources}));
-        });
+        details=await adapters.create('virtualbox',{iso_path:selectedISO,name,guest_os:message.os,windows_confirmed:message.os==='windows11',allow_manual_install:true,...resources});
         }
         output.appendLine(JSON.stringify(details,null,2));
         if(details.status!=='installation_started')throw new Error(details.action_required || details.status);
@@ -292,11 +279,6 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
           return;
         }
         progress('3/3 · Installation started. Open the VM screen to follow OS installation. A running VM does not yet mean the guest is ready.');
-        vscode.window.showInformationMessage(`${name}: installation started. Follow the VM screen; setup completion has not been verified. When the guest desktop appears, VAMP can inject the post-install script with keystrokes (Win+R → cmd → PowerShell).`, 'Inject Bootstrap Script', 'Not Now')
-          .then(choice=>{
-            if(choice!=='Inject Bootstrap Script')return;
-            return bootstrapGuest(created?.id || name, message.os==='windows11'?'windows11':'debian', {}).catch(error=>{output.appendLine(error.message);vscode.window.showErrorMessage('VAMP bootstrap: '+error.message);});
-          });
       } else if(['start','screen','stop','delete'].includes(message.type)) {
         // Resolve an actual inventory UUID; webview data never supplies a command or filesystem path.
         const vm=(await inventory()).find(row=>row.id===message.id);
@@ -307,9 +289,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
             else {
               await checkOtherHypervisor();
               if(backend==='virtualbox'){
-                await vbox(['startvm',vm.id,'--type','headless']);
-                const started=parseInfo(await vbox(['showvminfo',vm.id,'--machinereadable']));
-                if(started.VMState!=='running')throw Error('VM did not reach Running state: '+(started.VMState||'unknown'));
+                await adapters.start('virtualbox',vm.id);
               }else await adapters.start(backend,vm.id);
             }
           }
@@ -318,7 +298,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
         if(message.type==='screen')await openScreen(vm);
         if(message.type==='stop') {
           if(backend==='remote')await remote.stop(vm);
-          else if(backend==='virtualbox')await vbox(['controlvm',vm.id,'acpipowerbutton']);else await adapters.stop(backend,vm.id);
+          else await adapters.stop(backend,vm.id);
           progress(`${vm.name}: shutdown requested. The status changes after the guest shuts down.`);
         }
         if(message.type==='delete') {
@@ -326,7 +306,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
           if(backend!=='virtualbox' && !vm.managed)throw Error('Only desktops created by VAMP can be deleted here.');
           if(!['poweroff','saved','aborted'].includes(vm.state))throw new Error('Shut down the VM before deleting it.');
           const answer=await vscode.window.showWarningMessage(`Delete ${vm.name} and its virtual disks? All files stored inside this VM will be permanently removed.`,{modal:true},'Delete VM and Disks');
-          if(answer==='Delete VM and Disks'){if(backend==='virtualbox')await vbox(['unregistervm',vm.id,'--delete']);else await adapters.remove(backend,vm.id);}
+          if(answer==='Delete VM and Disks'){await adapters.remove(backend,vm.id);}
         }
       }
     } catch(error) {progress(error.message);post({type:'error',message:error.message});}
@@ -388,7 +368,7 @@ body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);backgr
 @media(max-height:600px){body{padding:10px}h1{margin:4px 0}section{padding:10px 0;margin:8px 0}}@media(max-width:480px){body{padding:12px}button{max-width:100%;white-space:normal}.row{gap:8px}.steps{grid-template-columns:1fr}}
 </style></head><body><main>
 <div class="row spread"><div class="row">${logoUri?`<img src="${logoUri}" width="36" height="36" alt="VAMP purple bat and VM">`:""}<div><h1>Virtual Machines</h1><p>Manage desktops on this computer.</p></div></div><button class="secondary" data-action="guide">Setup guide</button></div>
-<section><h2>Connection</h2><label>Virtualization platform<select id="backend"><option value="virtualbox">VirtualBox · Linux / Windows / macOS</option><option value="kvm">KVM / QEMU · Linux · live VNC screen</option><option value="hyperv">Hyper-V · Windows · management only</option><option value="remote">Remote server · SSH · screenshots</option></select></label><label id="connection-label" hidden>KVM connection<select id="connection"><option value="qemu:///session">My desktops · no administrator needed</option><option value="qemu:///system">System desktops · libvirt permission needed</option></select></label><p id="backend-note"></p>
+<section><h2>Connection</h2><label>Virtualization platform<select id="backend"><option value="virtualbox">VirtualBox · Linux / Windows / macOS</option><option value="kvm">KVM / QEMU · Linux · live VNC screen</option><option value="hyperv">Hyper-V · Windows · management only</option><option value="apple-hypervisor" disabled>Apple Hypervisor ? macOS ? not implemented</option><option value="remote">Remote server · SSH · screenshots</option></select></label><label id="connection-label" hidden>KVM connection<select id="connection"><option value="qemu:///session">My desktops · no administrator needed</option><option value="qemu:///system">System desktops · libvirt permission needed</option></select></label><p id="backend-note"></p>
 <div id="remote-panel" class="remote" hidden>
 <div class="row spread"><h3>Remote server · SSH</h3><span class="badge">screenshots only</span></div>
 <p id="remote-status" role="status">Connect to the host that owns the desktops. This computer only runs the SSH client.</p>
@@ -413,7 +393,7 @@ for(const id of ['remote-host','remote-port','remote-user','remote-key','remote-
 $('remote-backend').addEventListener('change',()=>{filled['remote-backend']=$('remote-backend').value;});
 $('name').addEventListener('input',controls);$('os').addEventListener('change',resources);$('connection').addEventListener('change',()=>send('connection'));$('backend').addEventListener('change',()=>send('backend'));
 window.addEventListener('message',event=>{const m=event.data;if(m.type==='busy'){busy=m.value;controls();}if(m.type==='progress'||m.type==='error'){$('notice').textContent=m.message;$('notice').className=m.type==='error'?'error':'';}
-if(m.type==='state'){state=m;busy=m.busy;$('backend').value=m.backend;$('connection-label').hidden=m.backend!=='kvm';$('connection').value=m.connection;$('host-label').textContent={virtualbox:'VirtualBox',kvm:'KVM / QEMU',hyperv:'Hyper-V',remote:'Remote host'}[m.backend];$('host').textContent=m.backend==='remote'?(m.version?'Connected over SSH · '+m.version:(m.problem||'Set the remote host, then verify.')):(m.version?'Ready · '+m.version:(m.problem||'Install the selected hypervisor, then refresh.'));$('vbox-download').hidden=m.backend!=='virtualbox';$('backend-note').textContent=m.backend==='remote'?'Desktops run on the remote host. This window takes screenshots over SSH and can start or stop them; there is no live screen stream.':m.backend==='hyperv'?'Manage Hyper-V desktops here. Embedded VM screen is unsupported; use VMConnect. Windows Hyper-V permissions are required.':m.backend==='kvm'?'Linux host: install KVM, libvirt, virt-install and qemu-img. New desktops use local VNC for the embedded live viewer.':'Start a desktop to open its screen in the editor automatically.';$('python').textContent=m.environment?.message||'Not verified';$('env-check').hidden=m.environment?.state!=='ready';$('install-note').textContent=m.backend==='virtualbox'?'Python setup runs automatically if needed. Compatible ISOs install automatically; other ISOs open an installer for you to complete. Guest setup is then downloaded over HTTP from port 8421 (wget/curl). A failed setup is kept for inspection.':m.backend==='kvm'?'Debian amd64 ISOs install automatically from the stock ISO with a preseed passed to the kernel (no ISO rewrite, no xorriso). Public sandbox login: vboxuser / password123!. Guest setup is served over HTTP on port 8421. Other OS installers are manual.':'VAMP creates the VM and attaches your ISO. Complete OS installation in VMConnect.';$('iso').textContent=m.iso||'No ISO selected';
+if(m.type==='state'){state=m;busy=m.busy;for(const option of $('backend').options){const capability=m.capabilities?.[option.value];option.disabled=!!capability&&(!capability.hostSupported||!capability.implemented);}$('backend').value=m.backend;$('connection-label').hidden=m.backend!=='kvm';$('connection').value=m.connection;$('host-label').textContent={virtualbox:'VirtualBox',kvm:'KVM / QEMU',hyperv:'Hyper-V',remote:'Remote host'}[m.backend];$('host').textContent=m.backend==='remote'?(m.version?'Connected over SSH · '+m.version:(m.problem||'Set the remote host, then verify.')):(m.version?'Ready · '+m.version:(m.problem||'Install the selected hypervisor, then refresh.'));$('vbox-download').hidden=m.backend!=='virtualbox';$('backend-note').textContent=m.backend==='remote'?'Desktops run on the remote host. This window takes screenshots over SSH and can start or stop them; there is no live screen stream.':m.backend==='hyperv'?'Manage Hyper-V desktops here. Embedded VM screen is unsupported; use VMConnect. Windows Hyper-V permissions are required.':m.backend==='kvm'?'Linux host: install KVM, libvirt, virt-install and qemu-img. New desktops use local VNC for the embedded live viewer.':'Start a desktop to open its screen in the editor automatically.';$('python').textContent=m.environment?.message||'Not verified';$('env-check').hidden=m.environment?.state!=='ready';$('install-note').textContent=m.backend==='virtualbox'?'Python setup runs automatically if needed. Debian installs GNOME automatically, including stock EFI ISO fallback when VirtualBox ISO detection is unavailable. Other unsupported ISOs open a manual installer. Guest setup is then downloaded over HTTP from port 8421 (wget/curl). A failed setup is kept for inspection.':m.backend==='kvm'?'Debian amd64 ISOs install automatically from the stock ISO with a preseed passed to the kernel (no ISO rewrite, no xorriso). Public sandbox login: vboxuser / password123!. Guest setup is served over HTTP on port 8421. Other OS installers are manual.':'Debian installs GNOME automatically from the stock ISO and downloads guest setup over HTTP on port 8421. Other installers require VMConnect.';$('iso').textContent=m.iso||'No ISO selected';
 if(m.backend==='remote'&&m.remote){setField('remote-host',m.remote.host);setField('remote-port',m.remote.port);setField('remote-user',m.remote.username);setField('remote-key',m.remote.privateKeyPath);setField('remote-backend',m.remote.backend);setField('remote-uri',m.remote.libvirtUri);$('remote-status').textContent=m.problem?m.problem:(m.remote.configured?(m.remote.report?(m.remote.report.ready?'Environment verified · ':'Needs attention · ')+m.remote.detail:'Configured · '+m.remote.detail):m.remote.detail);$('remote-status').className=m.problem||m.remote.error?'error':'';}
 resources();controls();const signature=m.backend+JSON.stringify(m.vms);if(signature===inventorySignature)return;inventorySignature=signature;$('vms').replaceChildren();
 if(!m.vms.length){const p=document.createElement('p');p.textContent=m.version?'No desktops yet. Create your first one above.':'VMs appear here after the selected hypervisor is ready.';$('vms').append(p);}

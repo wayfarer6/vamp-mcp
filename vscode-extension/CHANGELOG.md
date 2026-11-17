@@ -1,5 +1,13 @@
 # Changelog
 
+
+
+## 0.2.1
+
+- Share the desktop lifecycle interface across MCP and VSIX, separate VirtualBox/Hyper-V/KVM adapters by host support, and report Apple Hypervisor as not implemented. Normalize Unix shell scripts when packaging on Windows and when serving guest setup.
+
+- Fix Windows PowerShell environment verification argument quoting. Debian VirtualBox and Hyper-V autoinstall now use GNOME preseed profiles and HTTP postinstall; VirtualBox supports an EFI preseed fallback for unsupported ISO detection and enables NAT host-loopback access. Hyper-V guest execution remains unverified.
+
 ## Unreleased
 
 - **Python 3.15+ works on Linux, macOS and Windows.** Every host and guest script asks the interpreter for `sys.version_info` instead of matching version strings, so 3.15 and later releases are accepted the day they are installed. Ubuntu/SSH `scripts/remote_host_setup.sh` no longer rejects 3.15 with "install 3.11 or newer"; `scripts/windows/setup-host.ps1` and the remote SSH server use numeric version comparison.

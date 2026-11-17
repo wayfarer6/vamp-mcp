@@ -121,7 +121,7 @@ test('libvirt and VirtualBox output parse into the same desktop shape', async ()
   assert.equal(status.port_forwarding[0].host_port, 2222);
 });
 
-test('remote tools list, inspect, start, stop and capture against a fake virsh', async () => {
+test('remote tools list, inspect, start, stop and capture against a fake virsh', {skip:process.platform!=='linux'}, async () => {
   const host = fakeHost();
   const { resolveConfig } = await load('config.mjs');
   const { createTools } = await load('tools.mjs');
@@ -172,7 +172,7 @@ test('Python 3.15 through 4.x rank above the 3.11 minimum', async () => {
   assert.ok(compare('v22.14.0', '20.0.0') > 0);
 });
 
-test('remote host setup accepts a 3.15 interpreter and rejects an older one', async () => {
+test('remote host setup accepts a 3.15 interpreter and rejects an older one', {skip:process.platform!=='linux'}, async () => {
   const host = fakeHost();
   const fakePython = version => {
     const file = path.join(host.bin, 'python3');
@@ -281,7 +281,7 @@ test('stdio transport keeps request order and rejects malformed lines', async ()
   assert.equal(lines[2].error.code, -32700);
 });
 
-test('the packaged server runs as a one-shot tool call over its command line', async () => {
+test('the packaged server runs as a one-shot tool call over its command line', {skip:process.platform!=='linux'}, async () => {
   const host = fakeHost();
   const server = path.join(repo, 'backends/remote_ssh/server.mjs');
   const listed = await runNode([server, '--backend', 'kvm', '--workdir', host.work, '--call', 'remote_vm_list'], { env: { PATH: `${host.bin}${path.delimiter}${process.env.PATH}` } });
@@ -299,11 +299,13 @@ test('the packaged server runs as a one-shot tool call over its command line', a
   assert.match((await runNode([server, '--help'])).stdout, /--call TOOL/);
 });
 
-test('the remote command line expands $HOME and runs the uploaded server', async () => {
+test('the remote command line expands $HOME and runs the uploaded server', {skip:process.platform==='win32'}, async () => {
   const client = await load('client.mjs');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-remote-home-'));
   const remoteDir = path.join(home, '.vamp', 'remote');
   fs.mkdirSync(remoteDir, { recursive: true });
+  const shared=path.join(home,'.vamp/common');fs.mkdirSync(shared,{recursive:true});
+  for(const name of ['host-support.cjs','guest-install.json'])fs.copyFileSync(path.join(repo,'backends/common',name),path.join(shared,name));
   for (const name of fs.readdirSync(path.join(repo, 'backends/remote_ssh'))) {
     if (!name.endsWith('.mjs')) continue;
     fs.copyFileSync(path.join(repo, 'backends/remote_ssh', name), path.join(remoteDir, name));
@@ -432,7 +434,7 @@ test('remote chords hold modifiers through the target key and release in reverse
   const { createTools } = await load('tools.mjs');
   const { resolveConfig } = await load('config.mjs');
   const calls = [];
-  const tools = createTools({ config: resolveConfig(), run: async (exe, args) => {
+  const tools = createTools({ config: resolveConfig({platform:'linux'}), run: async (exe, args) => {
     calls.push(args); return { stdout: '{"return":{}}', stderr: '' };
   }});
   await tools.sendKeys({vm: VM_A, hotkey:['super','r']});
@@ -459,7 +461,7 @@ test('remote tablet clicks use separate down/up requests, including release afte
   const { resolveConfig } = await load('config.mjs');
   const calls = [];
   let failDown = false;
-  const tools = createTools({config:resolveConfig(),run:async (exe,args) => {
+  const tools = createTools({config:resolveConfig({platform:'linux'}),run:async (exe,args) => {
     const payload = JSON.parse(args.at(-1)); calls.push(payload.arguments.events);
     if(failDown && calls.length === 2) throw new Error('injected delivery failure');
     return {stdout:'{"return":{}}',stderr:''};
