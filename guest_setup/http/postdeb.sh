@@ -37,6 +37,23 @@ set -eu
 export DEBIAN_FRONTEND=noninteractive
 python3 /opt/rpa-recorder-setup/recorder/configure-debian-mirrors.py
 apt-get update
+# VAMP guests are driven from the host over SSH. Install and enable the server
+# here as well as through pkgsel/include, so a customized preseed or a Debian
+# 13 image that does not ship sshd still boots with SSH reachable.
+apt-get install -y openssh-server
+ssh_unit=
+for candidate in /lib/systemd/system/ssh.service /usr/lib/systemd/system/ssh.service /lib/systemd/system/sshd.service /usr/lib/systemd/system/sshd.service; do
+ if [ -f "$candidate" ]; then ssh_unit=${candidate##*/}; break; fi
+done
+[ -n "$ssh_unit" ]
+systemctl enable "$ssh_unit"
+# The public sandbox account needs non-interactive sudo for host-side setup.
+for account in vboxuser vagrant; do
+ id "$account" >/dev/null 2>&1 || continue
+ printf "%s ALL=(ALL) NOPASSWD:ALL\n" "$account" > "/etc/sudoers.d/90-vamp-$account"
+ chmod 0440 "/etc/sudoers.d/90-vamp-$account"
+done
+if command -v visudo >/dev/null 2>&1; then visudo -cf /etc/sudoers >/dev/null; fi
 apt-get install -y dconf-cli build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot task-gnome-desktop xorg gnome-session-xsession
 python3 /opt/rpa-recorder-setup/recorder/configure-gdm.py
 python3 /opt/rpa-recorder-setup/recorder/configure-debian-display.py prepare

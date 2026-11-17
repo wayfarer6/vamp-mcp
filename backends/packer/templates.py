@@ -6,6 +6,22 @@ from toolchain import POLICY,answer_iso
 
 ROOT=Path(__file__).resolve().parents[2]
 
+SSH_PACKAGE='openssh-server'
+
+
+def ensure_openssh_preseed(text):
+    """A VAMP guest answers SSH, so every rendered preseed carries the server."""
+    lines=[line for line in text.splitlines() if not line.startswith('d-i preseed/late_command')]
+    found=False
+    for index,line in enumerate(lines):
+        if not line.startswith('d-i pkgsel/include'):continue
+        found=True
+        packages=line.split()
+        if SSH_PACKAGE not in packages:
+            lines[index]=line.rstrip()+' '+SSH_PACKAGE
+    if not found:lines.append('d-i pkgsel/include string '+SSH_PACKAGE)
+    return '\n'.join(lines)
+
 def windows_postinstall(base,callback,backend='virtualbox'):
     script=r'''$ErrorActionPreference='Stop'
 $principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
@@ -47,6 +63,12 @@ try {
   }
  }
  if($backend -eq 'virtualbox' -and -not(Get-Service VBoxService -ErrorAction SilentlyContinue)){throw 'Guest Additions service is missing after reboot'}
+ $ssh=Get-Service -Name sshd -ErrorAction SilentlyContinue
+ if(-not $ssh){throw 'OpenSSH Server service is missing after guest setup'}
+ if($ssh.StartType -ne 'Automatic'){Set-Service -Name sshd -StartupType Automatic}
+ if($ssh.Status -ne 'Running'){Start-Service sshd}
+ if(-not(Get-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -ErrorAction SilentlyContinue).DefaultShell){throw 'OpenSSH DefaultShell is not configured after guest setup'}
+ if(-not(Get-NetFirewallRule -Name 'OpenSSH-Server-In-TCP' -ErrorAction SilentlyContinue)){throw 'OpenSSH inbound firewall rule is missing after guest setup'}
  $reset=Join-Path ([Environment]::GetFolderPath('Desktop')) 'Set-Resolution-1920x1080.ps1'
  if(Test-Path -LiteralPath $reset){& $reset;if(-not $?){throw 'Full HD display setup failed'}}
  @{status='completed';drivers_rebooted=(Test-Path -LiteralPath $driverMarker)} | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $state 'completed.json')
@@ -79,7 +101,7 @@ def render(request,folder,iso_hash,base,callback):
             'output_directory':str(folder/'artifact')}
     if guest=='debian':
         text=(ROOT/'guest_setup/http/debian-preseed.cfg').read_text()
-        text='\n'.join(line for line in text.splitlines() if not line.startswith('d-i preseed/late_command'))
+        text=ensure_openssh_preseed(text)
         text+='\nd-i preseed/late_command string wget -qO /tmp/vamp-postdeb.sh '+base+'/postdeb.sh && VAMP_SCRIPT_BASE_URL='+base+' VAMP_PACKER_CALLBACK='+callback+' sh /tmp/vamp-postdeb.sh\n'
         if backend=='kvm':text+='d-i grub-installer/force-efi-extra-removable boolean true\n'
         (http/'preseed.cfg').write_text(text)

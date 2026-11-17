@@ -30,6 +30,17 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     process.env.VAMP_RPA_REGISTRY ||= path.join(os.homedir(),'.vamp','rpa-catalog');
     process.env.VAMP_REMOTE_REPO ||= runtime;
     process.env.VAMP_REMOTE_PYTHON ||= process.env.RPA_HOST_PYTHON;
+    // Every VAMP server warms the local OCR/YOLO workers in the background so
+    // the first verification does not wait for a model load. The call never
+    // blocks stdio: the workers are detached from this process.
+    try {
+      const vision = (await import(pathToFileURL(path.join(runtime, 'backends/common/vision-preload.cjs')).href)).default;
+      const report = vision.ensureVisionServices({runtime, logger: message => process.stderr.write(message + '\n')});
+      if (report.status === 'started') process.stderr.write(`vamp-mcp: vision workers starting (pid ${report.pid})\n`);
+      else if (report.status === 'unavailable') process.stderr.write(`vamp-mcp: vision workers unavailable: ${report.reason}\n`);
+    } catch (error) {
+      process.stderr.write(`vamp-mcp: vision preload skipped: ${error.message}\n`);
+    }
     // The existing remote server reads argv directly. Strip our subcommand.
     process.argv=[process.argv[0],path.join(runtime,'backends',entries[command],'server.mjs'),...args,...(command==='kvm'?['--backend','kvm']:[])];
     await import(pathToFileURL(process.argv[1]).href);

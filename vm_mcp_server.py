@@ -16,8 +16,9 @@ async def model_lifespan(server):
     if sys.platform != 'win32' and os.environ.get('VAMP_PRELOAD_MODELS', '1') != '0':
         try:
             from model_daemon import ensure_services
-            await asyncio.to_thread(ensure_services, wait=False)
-        except (OSError, RuntimeError, TimeoutError) as error:
+            states=await asyncio.to_thread(ensure_services, wait=False)
+            logging.getLogger('vamp').info('Vision workers: %s', sorted(states))
+        except (ImportError, OSError, RuntimeError, TimeoutError) as error:
             logging.getLogger('vamp').warning('Vision preload unavailable: %s', error)
     yield {}
 

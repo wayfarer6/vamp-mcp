@@ -12,6 +12,7 @@ function hostBackends(context,options){
       if(backend==='kvm')cache.set(backend,require('../kvm/desktop.cjs').createKvmAdapter(context,{...options,platform}));
       else if(backend==='hyperv')cache.set(backend,require('../hyperv/desktop.cjs').createHyperVAdapter(context,{...options,platform}));
       else if(backend==='virtualbox')cache.set(backend,require('../virtualbox/desktop.cjs').createVirtualBoxAdapter(context,{...options,platform}));
+      else if(backend==='vagrant')cache.set(backend,require('../vagrant/desktop.cjs').createVagrantAdapter(context,{...options,platform}));
       else throw Error('Unsupported backend');
     }
     const implementation=cache.get(backend);
@@ -26,11 +27,15 @@ function hostBackends(context,options){
     capabilities:()=>backendCapabilities(platform),
     check:async backend=>adapter(backend).check(),
     list:async backend=>adapter(backend).list(),
-    async create(backend,values){requireInstallHost(backend,platform,options.architecture||process.arch);return (options.packerCall||require('./packer.cjs').packer(options))('create',{backend,libvirt_uri:options.config?.().get('libvirtUri'),...values});},
+    async create(backend,values){
+      // Vagrant boxes replace the Packer ISO installation, so its own adapter
+      // writes the project; every hypervisor backend keeps using Packer.
+      if(backend==='vagrant')return adapter(backend).create(values);
+      requireInstallHost(backend,platform,options.architecture||process.arch);return (options.packerCall||require('./packer.cjs').packer(options))('create',{backend,libvirt_uri:options.config?.().get('libvirtUri'),...values});},
     start:async(backend,id)=>adapter(backend).start(uuid(id)),
     stop:async(backend,id)=>adapter(backend).stop(uuid(id)),
     remove:async(backend,id)=>adapter(backend).remove(uuid(id)),
-    endpoint:async id=>adapter('kvm').endpoint(uuid(id)),
+    endpoint:async (backendOrId,id)=>id?adapter(backendOrId).endpoint(uuid(id)):adapter('kvm').endpoint(uuid(backendOrId)),
   };
 }
 const preparePacker=(options,backend)=>require('./packer.cjs').packer(options)('prepare',{backend:backend==='remote'?'virtualbox':backend});

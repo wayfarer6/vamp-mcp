@@ -6,7 +6,7 @@
 // without opening a hypervisor port or copying guest credentials off the host.
 import { execFile } from 'node:child_process';
 import { createInterface } from 'node:readline';
-import { pathToFileURL } from 'node:url';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolveConfig, parseArgs } from './config.mjs';
 import { createTools, VERSION } from './tools.mjs';
 
@@ -194,6 +194,17 @@ async function main() {
       process.stdout.write(`${JSON.stringify({ status: 'error', message: String(error?.message || error) })}\n`);
       return 1;
     }
+  }
+  // Warm this host's OCR/YOLO workers before the first tool call; the workers
+  // are detached, so stdio and the MCP handshake are never delayed. A host that
+  // runs this server without the VAMP repository simply logs the skip.
+  try {
+    const { default: visionPreload } = await import('../common/vision-preload.cjs');
+    const vision = visionPreload.ensureVisionServices({runtime: process.env.VAMP_REMOTE_REPO || fileURLToPath(new URL('../..', import.meta.url)),logger: message => process.stderr.write(`${message}\n`)});
+    if (vision.status === 'started') process.stderr.write(`vamp-remote: vision workers starting (pid ${vision.pid})\n`);
+    else if (vision.status === 'unavailable') process.stderr.write(`vamp-remote: vision workers unavailable: ${vision.reason}\n`);
+  } catch (error) {
+    process.stderr.write(`vamp-remote: vision preload skipped: ${error?.message || error}\n`);
   }
   await serveStdio({ tools: tools.tools });
   return 0;

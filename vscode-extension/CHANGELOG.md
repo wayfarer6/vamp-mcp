@@ -1,6 +1,11 @@
 # Changelog
 
+## 0.2.6
 
+- Add a Vagrant lifecycle adapter (`backends/vagrant`) that follows the shared desktop interface: projects under `~/.vamp/vagrant`, a generated Vagrantfile with the SSH communicator, script server 8421 / VNC 5900 / RDP 3389 forwarding, synced folders and virtualbox, libvirt, hyperv, qemu and parallels provider blocks.
+- Add a Vagrant provider plugin manager: per-platform and per-architecture provider selection, `vagrant plugin list` detection and `vagrant plugin install` for vagrant-libvirt, vagrant-qemu and vagrant-parallels. VirtualBox and Hyper-V stay built in. The VM Manager screens are unchanged; the adapter is registered through the shared host backend layer.
+- Install and enable an SSH server in every Packer guest. Debian adds openssh-server to the preseed, enables ssh in the chroot and writes NOPASSWD sudoers for vboxuser and vagrant. Windows installs the OpenSSH.Server capability, starts sshd at boot, allows port 22 and sets the PowerShell DefaultShell. The Windows orchestrator fails the build when the sshd service, firewall rule or DefaultShell is missing.
+- Warm the local OCR/YOLO model workers whenever an MCP server starts: the Python stdio server preloads through `model_daemon`, and the VirtualBox, RPA Library, remote SSH and npm CLI servers spawn `scripts/model_service.py start --no-wait` detached. `VAMP_PRELOAD_MODELS=0` turns this off and a host without the model environment only logs it.
 
 ## 0.2.5
 

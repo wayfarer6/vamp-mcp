@@ -18,7 +18,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.ok(npmCli,'Run this check through npm test so npm_execpath is available');
   execFileSync(process.execPath,[npmCli,'install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
   const cli=path.join(temporary,'node_modules',packageName,'bin',packageName+'.mjs');
-  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.2.5');
+  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.2.6');
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async()=>{
