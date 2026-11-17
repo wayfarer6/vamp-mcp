@@ -4,6 +4,7 @@
 // SSH stdio, so no hypervisor port is exposed to the network.
 import fs from 'node:fs/promises';
 import hostSupport from '../common/host-support.cjs';
+import packerModule from '../common/packer.cjs';
 import path from 'node:path';
 import { describeConfig } from './config.mjs';
 import { clickEvents, parseDomainIds, parseDomainInfo, parseDomainXml, CLICK_BUTTONS } from './libvirt.mjs';
@@ -528,7 +529,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
         const manager = managers.find(([, found]) => found)?.[0];
         const sudo = await exec('sudo', ['-n', 'true'], { timeoutMs: 10000 });
         const installs = {
-          'apt-get': ['apt-get', 'install', '-y', 'qemu-kvm', 'libvirt-daemon-system', 'libvirt-clients', 'virtinst', 'qemu-utils'],
+          'apt-get': ['apt-get', 'install', '-y', 'qemu-kvm', 'libvirt-daemon-system', 'libvirt-clients', 'virtinst', 'qemu-utils', 'osinfo-db', 'libosinfo-bin', 'ovmf', 'swtpm'],
           dnf: ['dnf', 'install', '-y', 'qemu-kvm', 'libvirt-daemon-config-network', 'libvirt-daemon-kvm', 'virt-install', 'qemu-img'],
           yum: ['yum', 'install', '-y', 'qemu-kvm', 'libvirt', 'libvirt-client', 'virt-install', 'qemu-img'],
           zypper: ['zypper', '--non-interactive', 'install', 'qemu-kvm', 'libvirt', 'virt-install'],
@@ -565,6 +566,8 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
           : { fix: 'Install VirtualBox on the remote host (https://www.virtualbox.org/wiki/Downloads), then set remoteVboxManage if it is not on PATH.' });
     }
 
+    const packerScript=path.join(config.repo||config.workdir,'backends/packer/runner.py');
+    await runStep('packer','Install HashiCorp Packer CLI and official hypervisor plugin',[config.python||'python3',packerScript,'prepare','--backend',config.backend],600000);
     const failed = steps.filter(step => step.status === 'failed');
     const manual = steps.filter(step => step.status === 'needs_manual');
     return {
@@ -579,8 +582,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
   }
 
   async function createVm(args = {}) {
-    if (config.backend !== 'kvm') throw new Error('VM creation through this host server is KVM-only. Use the VirtualBox vm_create tool for VirtualBox.');
-    hostSupport.requireBackendHost('kvm',config.platform);
+    hostSupport.requireBackendHost(config.backend,config.platform);
     if (args.confirmed !== true) return {status:'needs_confirmation',vm_created:false,message:'Authorize creation and startup, then pass confirmed:true with a host ISO path.'};
     const guest_os=args.guest_os ?? 'debian';
     if (!['debian','ubuntu','windows11'].includes(guest_os)) throw new Error('Unsupported guest_os');
@@ -593,15 +595,19 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     }
     const lifecycle=(await import('../common/host-backends.cjs')).default;
     const adapter=lifecycle.hostBackends({globalStorageUri:{fsPath:config.workdir}},{
-      runtime:config.repo || config.workdir,platform:config.platform,config:()=>({get:key=>key==='libvirtUri'?config.libvirtUri:key==='kvmPythonExecutable'?config.python:undefined}),
+      runtime:config.repo || config.workdir,python:()=>config.python||(process.platform==='win32'?'python':'python3'),platform:config.platform,config:()=>({get:key=>key==='libvirtUri'?config.libvirtUri:key==='kvmPythonExecutable'?config.python:undefined}),
       execute:(exe,argv,options)=>run(exe,argv,{timeoutMs:options.timeout}),
     });
-    const created=await adapter.create('kvm',{name:args.name,iso_path:args.iso_path,guest_os,installation_mode:args.installation_mode,...values});
-    return { ...created,backend:'kvm',guest_os,os_installation_completed:false,guest_setup_completed:false,
-      next_action:created.installation_mode==='unattended'?'Debian unattended installation started; verify the guest desktop before declaring completion. Public sandbox login: vboxuser / password123!.':'Complete the OS installer in the guest console. VM startup is not installation completion.'};
+    const created=await adapter.create(config.backend,{name:args.name,iso_path:args.iso_path,guest_os,installation_mode:args.installation_mode,windows_confirmed:args.windows_confirmed,...values});
+    return { ...created,backend:config.backend,guest_os,os_installation_completed:false,guest_setup_completed:false,
+      next_action:'Packer build queued. Use remote_golden_images for completion status, file paths, sizes and logs. Public sandbox autologin: vboxuser / password123!.'};
   }
 
+  const packer=packerModule.packer({runtime:config.repo||config.workdir,python:()=>config.python||(process.platform==='win32'?'python':'python3')});
   const tools = [
+    {name:'remote_packer_prepare',description:'Download the managed Packer CLI and selected official plugin on this host; creates no VM.',inputSchema:{type:'object',properties:{},additionalProperties:false},handler:()=>packer('prepare',{backend:config.backend})},
+    {name:'remote_golden_images',description:'List golden image build status, absolute paths and byte sizes on this host.',inputSchema:{type:'object',properties:{},additionalProperties:false},handler:()=>packer('images')},
+    {name:'remote_golden_image_delete',description:'Delete a VAMP golden image by ID. Without confirmed returns path/size; get explicit user approval before confirmed:true. Live VM disks are separate.',inputSchema:{type:'object',properties:{id:{type:'string',pattern:'^[a-f0-9]{32}$'},confirmed:{type:'boolean',default:false}},required:['id'],additionalProperties:false},handler:args=>packer('delete-image',args)},
     {
       name: 'remote_env_check',
       title: 'Check the remote host environment',
@@ -626,11 +632,11 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     },
     {
       name: 'remote_vm_create',
-      title: 'Create a KVM VM from a host ISO',
-      description: 'KVM only: create and start a new VM using the same provisioner as the VS Code manager. Requires confirmed:true. Debian default; Windows additionally requires windows_confirmed:true and your own license. Debian amd64 installer ISOs default to automatic installation using public sandbox credentials vboxuser/password123!. Ubuntu/Windows are manual; use installation_mode:manual to opt out.',
+      title: 'Create a VM with HashiCorp Packer',
+      description: 'Create and deploy a new VM with the selected hypervisor through the same Packer runner as VS Code. Requires confirmed:true. HashiCorp Packer installs Debian/Windows and post-install scripts, waits 60s after reboot, exports a golden image and deploys a separate live disk. Windows requires windows_confirmed:true and your own license. Public sandbox autologin vboxuser/password123!.',
       inputSchema: {type:'object',properties:{
         name:{type:'string',pattern:'^[A-Za-z][A-Za-z0-9_-]{0,62}$'},iso_path:{type:'string',description:'Absolute ISO path on the host running this server'},
-        guest_os:{type:'string',enum:['debian','ubuntu','windows11'],default:'debian'},installation_mode:{type:'string',enum:['manual','unattended']},
+        guest_os:{type:'string',enum:['debian','windows11'],default:'debian'},installation_mode:{type:'string',enum:['auto','unattended']},
         memory_mb:{type:'integer',minimum:2048,maximum:131072},cpus:{type:'integer',minimum:1,maximum:64},disk_mb:{type:'integer',minimum:32768,maximum:2097152},
         confirmed:{type:'boolean',default:false},windows_confirmed:{type:'boolean',default:false}
       },required:['name','iso_path'],additionalProperties:false},

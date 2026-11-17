@@ -12,8 +12,9 @@ function harness() {
   const context={subscriptions:[],extensionUri:'/extension',globalStorageUri:{fsPath:'/tmp/vamp-manager-test'},globalState:{get:()=>undefined,update:async()=>{}}};
   const panel={visible:false,reveal(){},webview:{cspSource:'test:',asWebviewUri:x=>x,postMessage(m){messages.push(m);},onDidReceiveMessage(fn){receive=fn;}},onDidDispose(fn){dispose=fn;},onDidChangeViewState(){},dispose(){dispose?.();}};
   const answers={warning:undefined,confirm:'Create and Start',state:'poweroff',setup:true,missingPython:false};
-  const child={stdin:{on(){},end(value){calls.push(['provision',JSON.parse(value)]);}}};
+  const child={stdin:{on(){},end(value){if(value)calls.push(['provision',JSON.parse(value)]);}}};
   const execFile=(exe,args,options,callback)=>{
+    if(String(args?.[0]||'').endsWith('runner.py')){setImmediate(()=>callback(null,JSON.stringify(args[1]==='images'?{images:answers.goldens||[]}:args[1]==='delete-image'?{status:'deleted',path:'/golden/fixture'}:{status:'installation_started',engine:'packer',installation_mode:'unattended'}),''));return {stdin:{on(){},end(value){if(value)calls.push(['provision',JSON.parse(value)]);}}};}
     if(String(args?.[0]||'').endsWith('script_server.py')){setImmediate(()=>callback(null,JSON.stringify({status:'running',port:8421,guest_urls:{virtualbox_nat:'http://10.0.2.2:8421'}}),''));return {stdin:{end(){}}};}
     setImmediate(()=>callback(null,JSON.stringify({status:'installation_started',installation_mode:'unattended'}),''));return child;
   };
@@ -31,7 +32,7 @@ function harness() {
     commands:{registerCommand(name,fn){commands.set(name,fn);return {dispose(){}};},executeCommand:async(...args)=>{calls.push(['command',...args]);}},
     window:{createWebviewPanel:()=>panel,showOpenDialog:async()=>[{fsPath:'/tmp/installer.iso'}],showInformationMessage:async(...args)=>{notices.push(args);return answers.confirm;},showErrorMessage:async(...args)=>{notices.push(args);return undefined;},showWarningMessage:async(...args)=>{warnings.push(args);return answers.warning;},showQuickPick:async items=>answers.quickPick?items.find(item=>item.label===answers.quickPick):items?.[0],withProgress:async(_options,task)=>task({report(){}})}};
   const module={exports:{}};
-  const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./guest-bootstrap'?require(path.join(root,'guest-bootstrap')):name==='./script-server'?require(path.join(root,'script-server')):name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
+  const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./guest-bootstrap'?require(path.join(root,'guest-bootstrap')):name==='./script-server'?require(path.join(root,'script-server')):name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{packer:options=>require(path.join(root,'host-backends')).packer({...options,spawn:execFile}),hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
   vm.runInNewContext(`(function(require,module,exports){${fs.readFileSync(path.join(root,'vm-manager.js'),'utf8')}\n})`,{setInterval,clearInterval,process,console})(req,module,module.exports);
   const api=module.exports;
   api.registerManager(context,{pythonPath:()=>__filename,runtime:'/runtime',output:{appendLine(){},show(){}},setupPython:async()=>{calls.push(['setup']);return answers.setup;}});
@@ -72,15 +73,15 @@ test('one-click create installs missing dependencies and ignores injected paths 
   const h=harness();try {
     await h.open();await h.send({type:'iso'});h.answers.missingPython=true;
     await h.send({type:'create',os:'debian',name:'My-Desktop',iso:'/malicious.iso',cpus:64});
-    const request=h.calls.find(c=>c[0]==='provision')[1];assert.equal(request.iso_path,'/tmp/installer.iso');assert.equal(request.name,'My-Desktop');assert.equal(request.disk_mb,65536);assert.ok(request.cpus<=2);assert.equal(request.allow_manual_install,true);assert.ok(h.calls.some(c=>c[0]==='setup'));
-    assert.match(h.messages.findLast(m=>m.type==='progress').message,/not yet mean the guest is ready/);
+    const request=h.calls.find(c=>c[0]==='provision')[1];assert.equal(request.iso_path,'/tmp/installer.iso');assert.equal(request.name,'My-Desktop');assert.equal(request.disk_mb,65536);assert.ok(request.cpus<=2);assert.equal(request.backend,'virtualbox');assert.ok(h.calls.some(c=>c[0]==='setup'));
+    assert.match(h.messages.findLast(m=>m.type==='progress').message,/Packer build queued/);
   }finally{h.close();}
 });
 test('failed preparation never launches provisioning and returns controls to idle',async()=>{
   const h=harness();try {
     await h.open();await h.send({type:'iso'});h.answers.missingPython=true;h.answers.setup=false;
     await h.send({type:'create',os:'debian',name:'My-Desktop'});
-    assert.ok(!h.calls.some(c=>c[0]==='provision'));assert.match(h.messages.findLast(m=>m.type==='error').message,/Python setup failed/);assert.equal(h.messages.at(-1).busy,false);
+    assert.ok(!h.calls.some(c=>c[0]==='provision'));assert.match(h.messages.findLast(m=>m.type==='error').message,/Environment setup failed/);assert.equal(h.messages.at(-1).busy,false);
   }finally{h.close();}
 });
 
@@ -148,7 +149,7 @@ test('bootstrap command plans a running desktop and refuses a stopped one',async
   h.answers.state='running';
   const plan=await h.commands.get('vamp.bootstrapGuest')(id,'windows11',{dryRun:true});
   assert.equal(plan.status,'dry_run');
-  assert.equal(plan.command,'powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"');
+  assert.equal(plan.command,'powershell -ExecutionPolicy Unrestricted -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"');
   assert.ok(plan.plan.some(step=>step.label==='approve UAC with Left and Enter'));
   assert.ok(!h.calls.some(call=>call[2]==='keyboardputstring'));
   h.answers.state='poweroff';
@@ -174,5 +175,19 @@ test('unattended creation uses its post-install hook without a bootstrap prompt'
   const offer=h.notices.findLast(args=>String(args[0]).includes('installation started'));
   assert.equal(offer,undefined);
   assert.ok(!h.calls.some(call=>call[2]==='keyboardputstring'));
+ }finally{h.close();}
+});
+
+test('golden deletion resolves a known ID, shows path/size and requires explicit confirmation',async()=>{
+ const h=harness();try{
+  h.answers.goldens=[{id:'a'.repeat(32),name:'Fixture',path:'/golden/fixture',bytes:1024**3,status:'completed'}];
+  await h.open();
+  await h.send({type:'goldenDelete',id:'a'.repeat(32),path:'/untrusted/path'});
+  assert.match(h.warnings.at(-1)[1].detail,/\/golden\/fixture/);
+  assert.match(h.warnings.at(-1)[1].detail,/1.00 GiB/);
+  assert.ok(!h.warnings.at(-1)[1].detail.includes('/untrusted/path'));
+  h.answers.warning='Delete Golden Image';
+  await h.send({type:'goldenDelete',id:'a'.repeat(32)});
+  assert.ok(h.messages.some(m=>m.type==='progress'&&m.message.includes('Golden image deleted')));
  }finally{h.close();}
 });

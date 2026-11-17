@@ -2,6 +2,14 @@
 
 **Before recording or replaying an RPA, set the VM's display to 1920×1080 at 100% scaling.** Change the guest display, not your host monitor. Resizing or zooming the viewer does not establish the guest resolution. Finish guest setup first and keep the VM awake and unlocked during setup and automation.
 
+## Reset shortcuts installed by guest setup
+
+- **Windows Desktop:** double-click `Set-Resolution-1920x1080.cmd`. It opens the companion PowerShell script and applies Full HD. Press any key to close its result window.
+- **Debian home folder:** open a terminal in the logged-in guest and run `~/set-resolution-1920x1080.sh`.
+
+Run these inside the VM when the display drifts. They reuse the same display helper as the per-login hook, apply 1920x1080 and report the observed result. They do not resize the host screen. If the guest driver rejects Full HD, the script reports that failure; finish the guest display driver setup first. All shortcut instructions and messages are in English.
+
+
 ## Linux VM — Debian / Ubuntu GNOME
 
 1. Inside the guest, open **Settings → Displays**.
@@ -37,3 +45,5 @@ Check the actual guest screen dimensions, not a resized preview. For VirtualBox,
 An RPA recorded at another resolution needs recalibration or a matching recording. If the guest cannot reach 1920×1080, report the observed resolution and resolve the display driver/session issue before coordinate-based replay.
 
 References: [GNOME display settings](https://teams.pages.gitlab.gnome.org/websites/help.gnome.org/gnome-help/look-resolution.html), [Microsoft display resolution and layout](https://support.microsoft.com/en-us/windows/hardware/display-graphics/change-your-screen-resolution-and-layout-in-windows).
+
+Windows guest setup and display-reset scripts request administrator PowerShell when needed. Approve the UAC prompt. The elevated process runs `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force` before the script. MCP and VSIX share the same Ctrl+Shift+Enter / UAC Left+Enter bootstrap. Script execution policy changes apply to that process.

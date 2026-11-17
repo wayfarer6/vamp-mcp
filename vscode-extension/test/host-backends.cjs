@@ -22,51 +22,14 @@ test('KVM inventory covers unconfigured guests and never deletes their storage',
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 
-test('KVM creation boots the stock Debian ISO with an injected preseed and starts Running',async()=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'vamp-create-'));const calls=[];
- try {
- const iso=path.join(root,'Debian installer.iso');fs.writeFileSync(iso,'test');
- fs.mkdirSync(path.join(root,'backends/kvm'),{recursive:true});
- const preseed=path.join(root,'backends/kvm/debian-preseed.cfg');fs.writeFileSync(preseed,'d-i preseed/late_command string true\n');
- const execute=async(exe,args)=>{calls.push([exe,...args]);if(args.includes('domuuid'))return {stdout:id};if(args.includes('domstate'))return {stdout:'running'};return {stdout:''};};
- const backend=hostBackends({globalStorageUri:{fsPath:root}},{runtime:root,platform:'linux',architecture:'x64',config:()=>({get:()=>undefined}),execute});
- const result=await backend.create('kvm',{name:'Debian-Test',iso_path:iso,guest_os:'debian',memory_mb:2048,cpus:2,disk_mb:32768});
- assert.equal(result.installation_mode,'unattended');assert.equal(result.startup_verified,true);assert.equal(result.installation_verified,false);
- const command=calls.find(call=>call[0]==='virt-install');
- const location=command[command.indexOf('--location')+1];
- assert.equal(location,`${iso},kernel=install.amd/vmlinuz,initrd=install.amd/initrd.gz`);
- assert.ok(command.includes('--initrd-inject'));const injected=command[command.indexOf('--initrd-inject')+1];assert.ok(injected.endsWith(path.join('kvm','Debian-Test','preseed.cfg')));assert.equal(fs.readFileSync(injected,'utf8'),fs.readFileSync(preseed,'utf8'));
- assert.ok(!command.some(arg=>String(arg).includes('device=cdrom')),'the stock ISO is read as a location, not attached as a rewritten CD');
- assert.ok(!calls.some(call=>String(call).includes('build_debian_installer')||String(call).includes('xorriso')),'xorriso is never used');
- assert.equal(command[command.indexOf('--boot')+1],'hd,cdrom');assert.equal(result.credentials.username,'vboxuser');
- await assert.rejects(backend.create('kvm',{name:'Debian-Test',iso_path:iso,guest_os:'debian',memory_mb:2048,cpus:2,disk_mb:32768}),/EEXIST/);
- }finally{fs.rmSync(root,{recursive:true,force:true});}
+test('all host adapters route new VM installation through the common Packer runner',async()=>{
+ for(const [backend,platform] of [['virtualbox','win32'],['hyperv','win32'],['kvm','linux']]){
+  const calls=[];
+  const adapter=hostBackends({globalStorageUri:{fsPath:'/unused'}},{runtime:'/runtime',platform,architecture:'x64',config:()=>({get:()=>undefined}),packerCall:async(action,request)=>{calls.push({action,request});return {status:'installation_started',engine:'packer'};}});
+  const result=await adapter.create(backend,{name:'Packer-Test',iso_path:'/host/install.iso',guest_os:'debian'});
+  assert.equal(result.engine,'packer');assert.equal(calls.length,1);assert.equal(calls[0].action,'create');assert.equal(calls[0].request.backend,backend);assert.equal(calls[0].request.iso_path,'/host/install.iso');
+ }
 });
-
-test('KVM start failure cannot report installation started; invalid resources never create disks',async()=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'vamp-create-fail-'));const calls=[];
- try {
- const iso=path.join(root,'source.iso');fs.writeFileSync(iso,'test');
- const execute=async(exe,args)=>{calls.push([exe,...args]);if(args.includes('domuuid'))return {stdout:id};if(args.includes('domstate'))return {stdout:'shut off'};return {stdout:''};};
- const backend=hostBackends({globalStorageUri:{fsPath:root}},{runtime:root,platform:'linux',architecture:'x64',config:()=>({get:()=>undefined}),execute});
- await assert.rejects(backend.create('kvm',{name:'Invalid',iso_path:iso,guest_os:'debian',memory_mb:1,cpus:2,disk_mb:32768}),/Invalid VM resources/);assert.equal(calls.length,0);
- await assert.rejects(backend.create('kvm',{name:'Not-Started',iso_path:iso,guest_os:'ubuntu',memory_mb:2048,cpus:2,disk_mb:32768}),/did not start/);
- }finally{fs.rmSync(root,{recursive:true,force:true});}
-});
-
-test('KVM refuses to create or start while VirtualBox holds hardware virtualization',async()=>{
- const root=fs.mkdtempSync(path.join(os.tmpdir(),'vamp-conflict-'));const calls=[];
- try {
- const iso=path.join(root,'source.iso');fs.writeFileSync(iso,'test');
- const execute=async(exe,args)=>{calls.push([exe,...args]);return {stdout:exe.endsWith('VBoxManage')?'"busy-vm" {11111111-2222-3333-4444-555555555555}':''};};
- const backend=hostBackends({globalStorageUri:{fsPath:root}},{runtime:root,platform:'linux',architecture:'x64',config:()=>({get:()=>undefined}),execute});
- await assert.rejects(backend.create('kvm',{name:'Conflict',iso_path:iso,guest_os:'debian',memory_mb:2048,cpus:2,disk_mb:32768}),/VirtualBox VM is active/);
- await assert.rejects(backend.start('kvm',id),/VirtualBox VM is active/);
- assert.ok(!calls.some(call=>call[0]==='qemu-img'||call.includes('start')));
- assert.equal(fs.existsSync(path.join(root,'desktops')),false);
- }finally{fs.rmSync(root,{recursive:true,force:true});}
-});
-
 
 test('host policy rejects unsupported backends before spawning tools',async()=>{
  const {backendCapabilities}=require('../../backends/common/host-support.cjs');

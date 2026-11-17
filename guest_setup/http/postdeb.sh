@@ -38,11 +38,7 @@ export DEBIAN_FRONTEND=noninteractive
 python3 /opt/rpa-recorder-setup/recorder/configure-debian-mirrors.py
 apt-get update
 apt-get install -y build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot task-gnome-desktop xorg gnome-session-xsession
-for gdm_config in /etc/gdm3/daemon.conf /etc/gdm/custom.conf; do
- if [ -f "$gdm_config" ]; then
-  sed -i "/^#\?WaylandEnable=/d; /\[daemon\]/a WaylandEnable=false" "$gdm_config"
- fi
-done
+python3 /opt/rpa-recorder-setup/recorder/configure-gdm.py
 # Debian 13 uses a static gdm.service; enabling gdm3 alone does not create
 # display-manager.service when tasksel was skipped by the unattended installer.
 gdm_unit=
@@ -60,3 +56,39 @@ user_home=$(getent passwd vboxuser | cut -d: -f6)
 # Written only after the target user recorder setup exits successfully.
 mkdir -p "$target/var/lib/vamp"
 touch "$target/var/lib/vamp/guest-setup.complete"
+
+# Packer waits through the first reboot, then finalizes in the auto-login desktop.
+if [ -n "${VAMP_PACKER_CALLBACK:-}" ]; then
+  printf '%s\n' "$VAMP_PACKER_CALLBACK" > "$target/var/lib/vamp/packer-callback"
+  cat > "$target/usr/local/sbin/vamp-packer-finalize" <<'FINALIZE'
+#!/bin/sh
+set -eu
+sleep 60
+uid=$(id -u vboxuser)
+user_home=$(getent passwd vboxuser | cut -d: -f6)
+test -S "/run/user/$uid/bus"
+/usr/sbin/runuser -u vboxuser -- env HOME="$user_home" XDG_RUNTIME_DIR="/run/user/$uid" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" DISPLAY=:0 RPA_DEPS_READY=1 sh /opt/rpa-recorder-setup/recorder/setup.sh
+touch /var/lib/vamp/packer-postinstall.complete
+callback=$(cat /var/lib/vamp/packer-callback)
+curl --fail --retry 10 --retry-delay 5 -X POST "$callback"
+systemctl disable vamp-packer-finalize.service
+rm -f /var/lib/vamp/packer-callback
+shutdown -h now
+FINALIZE
+  chmod 755 "$target/usr/local/sbin/vamp-packer-finalize"
+  cat > "$target/etc/systemd/system/vamp-packer-finalize.service" <<'SERVICE'
+[Unit]
+Description=VAMP Packer post-login setup (60 second desktop wait)
+After=graphical.target network-online.target
+Wants=network-online.target
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/vamp-packer-finalize
+TimeoutStartSec=3600
+Restart=on-failure
+RestartSec=15
+[Install]
+WantedBy=graphical.target
+SERVICE
+  chroot "$target" systemctl enable vamp-packer-finalize.service
+fi

@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import desktopAdapter from './desktop.cjs';
+import packerModule from '../common/packer.cjs';
 // First-party MIT integration; upstream files remain unmodified.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { registerDisplayTools } from '../../third_party/mcp-virtualbox/dist/tools/display.js';
 import { registerInputTools } from '../../third_party/mcp-virtualbox/dist/tools/input.js';
-import { registerBootstrapTools } from '../../third_party/mcp-virtualbox/dist/tools/bootstrap.js';
-import { registerScriptServerTools } from '../../third_party/mcp-virtualbox/dist/tools/script-server.js';
+import guestBootstrap from '../common/guest-bootstrap.cjs';
+import { registerScriptServerTools, startScriptServer } from '../../third_party/mcp-virtualbox/dist/tools/script-server.js';
 import { vboxManage, parseVMList, parseMachineReadable } from '../../third_party/mcp-virtualbox/dist/vbox.js';
 import { McpServer } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js';
 import { StdioServerTransport } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js';
@@ -15,7 +15,7 @@ import { z } from '../../third_party/mcp-virtualbox/node_modules/zod/index.js';
 import { config as vboxConfig } from '../../third_party/mcp-virtualbox/dist/types.js';
 vboxConfig.mouseHelperPath=process.env.MOUSE_HELPER_PATH || fileURLToPath(new URL('./mouse_click.py',import.meta.url));
 vboxConfig.pythonPath=process.env.PYTHON_PATH || process.env.RPA_HOST_PYTHON || (process.platform==='win32'?'python':'python3');
-const server = new McpServer({name: 'VAMP', version: '0.2.2'}, {instructions:'Before recording or coordinate-based guest automation, verify the actual guest framebuffer is 1920x1080 with 100% guest scaling. If different, adjust the guest display using the authorized backend and verify fresh evidence before continuing; respect user pauses. A resized viewer is not proof. Read skills/vamp-rpa-ui-checks/references/display.md in the packaged runtime (or .agents/skills/vamp-rpa-ui-checks/references/display.md in the repository) for Linux and Windows guidance. Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup. Guest setup scripts are served over HTTP from the host Python script server on port 8421; guests install them with wget/curl (vm_script_server_start/status/stop). VAMP does not rewrite ISOs and does not use xorriso.'});
+const server = new McpServer({name: 'VAMP', version: '0.2.3'}, {instructions:'Before recording or coordinate-based guest automation, verify the actual guest framebuffer is 1920x1080 with 100% guest scaling. If different, adjust the guest display using the authorized backend and verify fresh evidence before continuing; respect user pauses. A resized viewer is not proof. If the guest display drifts, use the guest-local reset shortcut: Windows Desktop Set-Resolution-1920x1080.cmd or Debian home ~/set-resolution-1920x1080.sh. Do not run guest commands on the host. Read skills/vamp-rpa-ui-checks/references/display.md in the packaged runtime (or .agents/skills/vamp-rpa-ui-checks/references/display.md in the repository) for Linux and Windows guidance. Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup. Guest setup scripts are served over HTTP from the host Python script server on port 8421; guests install them with wget/curl (vm_script_server_start/status/stop). New VM installations use HashiCorp Packer and official hypervisor plugins. Windows guest setup runs as administrator with Unrestricted process execution policy, installs VirtualBox Guest Additions or KVM virtio-win guest drivers and resumes after the driver reboot before reporting completion. Explain the CLI/plugin downloads, large golden images plus separate live disks, public sandbox autologin, and the 60-second post-reboot setup wait. Windows answer media is generated with an isolated pycdlib helper; original ISOs are not rewritten.'});
 const result = value => ({content: [{type: 'text', text: JSON.stringify(value)}]});
 async function displayAction(action,values) {
   const python=process.env.RPA_HOST_PYTHON || 'python';
@@ -134,12 +134,12 @@ server.tool('vamp_setup','First-run setup: check VirtualBox, show current resour
   const {readFile}=await import('node:fs/promises');
   const profiles=JSON.parse(await readFile(new URL('./profiles.json',import.meta.url),'utf8'));
   return result({status:'needs_user_input',virtualbox_installed:installed,virtualbox_version:version,
-    default_guest:'debian',profiles:profiles.profiles,vnc:await initialVncProbe,
+    installation_engine:'HashiCorp Packer',packer_notice:'Preparation downloads the managed Packer CLI and official VirtualBox plugin. Builds create large golden images and separate live disks, and wait 60 seconds after first reboot for post-install setup. Debian uses public sandbox autologin.',default_guest:'debian',profiles:profiles.profiles,vnc:await initialVncProbe,
     questions:['At this session, take a snapshot before changes? It uses additional disk space and only preserves the captured point in time.','Set up the VM environment now?','Provide the host OS installation ISO path. Debian is the default.','Create a Windows VM too? Recommend it when your certificate workflow needs Windows-only security software.'],
     windows_notice:'Windows requires a valid license. Activate it yourself after installation. No license is included.',
     public_credentials:{username:'vboxuser',password:'password123!'},
     install_guide:'https://www.virtualbox.org/wiki/Downloads',
-    next_action:installed?'After user setup consent and ISO/spec confirmation, call vm_create once.':'Guide the user to install VirtualBox for the host OS, or use an authorized host-install workflow. Recheck --version before VM creation.',
+    next_action:installed?'After setup consent call vm_packer_prepare, then confirm ISO/specs and call vm_create once. Use vm_golden_images for build completion and storage paths.':'Guide the user to install VirtualBox for the host OS, or use an authorized host-install workflow. Recheck --version before VM creation.',
     vm_created:false});
 });
 server.tool('vm_list', 'List registered VirtualBox VMs without starting them', {}, async () =>
@@ -175,20 +175,40 @@ server.tool('vm_start', 'Explicitly start an existing VM with detachable observa
 });
 registerDisplayTools(server);
 registerInputTools(server);
-registerBootstrapTools(server);
+server.tool('vm_guest_bootstrap','Run guest setup with the same bootstrap as VSIX. Windows opens administrator PowerShell via Ctrl+Shift+Enter, approves UAC with Left/Enter and sets Unrestricted execution policy for the process. Delivery is not proof of setup completion.',{
+  vm:z.string().min(1),os:z.enum(['windows11','debian']).default('windows11'),command:z.string().optional(),
+  bootWaitSec:z.number().min(0).default(30),clickX:z.number().default(960),clickY:z.number().default(540),
+  dryRun:z.boolean().default(false),focusClick:z.boolean().default(true),openTerminal:z.boolean().default(false),username:z.string().optional(),password:z.string().optional(),
+  chunkSize:z.number().int().min(1).max(100).default(50),keyDelayMs:z.number().min(0).default(30),serveScripts:z.boolean().default(true),scriptServerUrl:z.string().optional(),
+},async args=>{
+  if(!args.dryRun){
+    const state=parseMachineReadable(await vboxManage('showvminfo',args.vm,'--machinereadable')).VMState;
+    if(!['running','paused'].includes(state))throw Error('Start the guest before injecting setup.');
+    if(args.serveScripts)await startScriptServer();
+  }
+  const report=await guestBootstrap.runGuestBootstrap(args,{
+    vbox:argv=>vboxManage(...argv),
+    click:(x,y)=>new Promise((resolve,reject)=>execFile(vboxConfig.pythonPath,[vboxConfig.mouseHelperPath,args.vm,String(x),String(y),'left'],{windowsHide:true,timeout:30000},error=>error?reject(error):resolve())),
+  });
+  return {...result(report),isError:report.status==='failed'};
+});
 registerScriptServerTools(server);
-server.tool('vm_create', 'Create a NEW Debian/Windows11 VM from a host ISO, start unattended installation with separate UI. PUBLIC defaults vboxuser/password123!. Returns started, not installed. Guest setup is served over HTTP on port 8421 (wget/curl); no ISO is rewritten and xorriso is not used.', {
+server.tool('vm_create', 'Create a NEW VM through HashiCorp Packer: install CLI and official plugin, build OS and post-install scripts, wait 60s after reboot, export a golden image and deploy a separate live disk. Returns queued; use vm_golden_images for status/paths. Public sandbox autologin vboxuser/password123!.', {
+  backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox'),switch_name:z.string().min(1).optional(),libvirt_uri:z.enum(['qemu:///session','qemu:///system']).optional(),
   name:z.string().min(1).optional(), iso_path:z.string().min(1),
   memory_mb:z.number().int().optional(), cpus:z.number().int().optional(),
   disk_mb:z.number().int().optional(), basedir:z.string().optional(),
   image_index:z.number().int().default(1), product_key:z.string().default(''),
-  guest_os:z.enum(['debian','windows11','ubuntu']).optional(), allow_manual_install:z.boolean().default(true), installation_mode:z.enum(['auto','manual']).default('auto'), windows_confirmed:z.boolean().default(false), preflight_only:z.boolean().default(false),
+  guest_os:z.enum(['debian','windows11']).default('debian'), allow_manual_install:z.boolean().default(true), installation_mode:z.enum(['auto']).default('auto'), windows_confirmed:z.boolean().default(false), preflight_only:z.boolean().default(false),
   serve_scripts:z.boolean().default(true).describe('Start the host Python HTTP script server on port 8421 so the guest installs the recorder with wget/curl'),
 }, async (args) => {
-  const adapter=desktopAdapter.createVirtualBoxAdapter(null,{runtime:fileURLToPath(new URL('../../',import.meta.url))});
-  const output=await adapter.create(args);
+  const output=await packerCall('create',args);
   return result(output);
 });
+const packerCall=packerModule.packer({runtime:fileURLToPath(new URL('../../',import.meta.url))});
+server.tool('vm_packer_prepare','Download checksum-pinned HashiCorp Packer CLI for this host and install the selected official hypervisor plugin. Does not create a VM.',{backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox')},async args=>result(await packerCall('prepare',args)));
+server.tool('vm_golden_images','List Packer build status, golden image IDs, absolute file paths, byte sizes and log paths. Live VM disks are stored separately.',{},async()=>result(await packerCall('images')));
+server.tool('vm_golden_image_delete','Permanently delete one VAMP golden image and build logs by ID. Call without confirmed first to inspect its path/size, then obtain explicit user approval. Live VM disks remain separate.',{id:z.string().regex(/^[a-f0-9]{32}$/),confirmed:z.boolean().default(false)},async args=>result(await packerCall('delete-image',args)));
 server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach to an empty DVD slot of an OFF VM. Does not run installer or record.', {
   vm: z.string().optional(), controller: z.string().optional(),
   port: z.number().int().min(0).default(1), device: z.number().int().min(0).default(0),

@@ -1,4 +1,19 @@
 $ErrorActionPreference = 'Stop'
+$principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
+    $payload='Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force; '
+    if($PSCommandPath){$payload+="& '"+$PSCommandPath.Replace("'","''")+"'"}
+    else {
+        $origin=if($env:VAMP_SCRIPT_BASE_URL){$env:VAMP_SCRIPT_BASE_URL}else{'http://10.0.2.2:8421'}
+        $payload+="irm '"+($origin+'/setup.ps1').Replace("'","''")+"' | iex"
+    }
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
+    $elevated=Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile','-ExecutionPolicy','Unrestricted','-EncodedCommand',$encoded) -Wait -PassThru
+    if($elevated.ExitCode -ne 0){throw 'Administrator setup did not complete successfully'}
+    return
+}
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force
+
 # Run in the guest desktop user's session.
 & (Join-Path $PSScriptRoot 'configure-session.ps1')
 $desktop = [Environment]::GetFolderPath('Desktop')
@@ -84,7 +99,7 @@ cd /d "%~dp0"
 ".venv\Scripts\python.exe" vamp-recorder.py
 pause
 '@ | Set-Content -Encoding ascii -LiteralPath (Join-Path $folder 'Start-Recorder.cmd')
-& $venvPython (Join-Path $PSScriptRoot 'install-display-startup.py')
+& $venvPython (Join-Path $PSScriptRoot 'install-display-startup.py') --desktop $desktop
 if ($LASTEXITCODE -ne 0) { throw 'Display login hook registration failed' }
 Write-Output "Recorder installed: $folder"
 @{status='installed';recording_started=$false;session_policy='awake_unlocked'} | ConvertTo-Json | Set-Content -Encoding UTF8 -LiteralPath (Join-Path $folder 'installation.json')

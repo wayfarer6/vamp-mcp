@@ -13,12 +13,12 @@ const packageName=vault?'vamp-mcp-vault':'vamp-mcp';
 test('packed npm install works outside the repository', {timeout:45000}, async t=>{
   assert.ok(tarball,'Set VAMP_TEST_TARBALL to the npm pack tarball');
   const temporary=await mkdtemp(path.join(os.tmpdir(),'vamp-npm-test-'));
-  t.after(()=>rm(temporary,{recursive:true,force:true}));
+  t.after(()=>rm(temporary,{recursive:true,force:true,maxRetries:20,retryDelay:100}));
   const npmCli=process.env.npm_execpath;
   assert.ok(npmCli,'Run this check through npm test so npm_execpath is available');
   execFileSync(process.execPath,[npmCli,'install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
   const cli=path.join(temporary,'node_modules',packageName,'bin',packageName+'.mjs');
-  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.2.2');
+  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.6':'0.2.3');
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async()=>{
@@ -67,6 +67,8 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
           child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2025-03-26',capabilities:{},clientInfo:{name:'vamp-package-test',version:'1.0.0'}}})+'\n');
         });
         assert.ok(result.result?.tools.some(tool=>tool.name===expected),JSON.stringify(result));
+        if(command==='virtualbox')for(const name of ['vm_packer_prepare','vm_golden_images','vm_golden_image_delete'])assert.ok(result.result.tools.some(tool=>tool.name===name),name);
+        if(command==='kvm'||command==='remote')for(const name of ['remote_packer_prepare','remote_golden_images','remote_golden_image_delete'])assert.ok(result.result.tools.some(tool=>tool.name===name),name);
         if(command==='kvm'||command==='remote')assert.ok(result.result.tools.some(tool=>tool.name==='remote_vm_create'));
       } finally {child.kill();}
     });

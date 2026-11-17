@@ -231,6 +231,8 @@ if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--json-stdin',action='store_true',required=True)
     parser.parse_args()
-    try: print(json.dumps(create(**json.load(sys.stdin))))
+    sys.path.insert(0,str(ROOT/'backends/packer'))
+    from runner import create as packer_create
+    try: print(json.dumps(packer_create({'backend':'virtualbox',**json.load(sys.stdin)})))
     except Exception as exc:
         print(json.dumps({'status':'failed','error':str(exc)}));sys.exit(1)

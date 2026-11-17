@@ -30,15 +30,7 @@ function createVirtualBoxAdapter(_context,{runtime,config=()=>({get:()=>undefine
     check:async()=>(await command(['--version'])).trim(),
     async create(request){
       requireInstallHost('virtualbox',platform,architecture);
-      return new Promise((resolve,reject)=>{
-        const child=spawn(typeof python==='function'?python():python,[path.join(runtime,'backends/virtualbox/provision.py'),'--json-stdin'],{env:{...process.env,VBOXMANAGE_PATH:executable()},timeout:420000,maxBuffer:4*1024**2},(error,stdout,stderr)=>{
-          let data;try{data=JSON.parse(stdout);}catch{}
-          if(error||data?.status==='failed')reject(Error(data?.error||stderr||error?.message||'VM creation failed'));
-          else resolve(data);
-        });
-        child.stdin.on('error',()=>{});
-        child.stdin.end(JSON.stringify(request));
-      });
+      return require('../common/packer.cjs').packer({runtime,python,spawn})('create',{backend:'virtualbox',...request});
     },
   };
 }

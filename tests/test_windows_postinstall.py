@@ -54,6 +54,11 @@ class WindowsPostinstallTests(unittest.TestCase):
             setup="throw 'expected-test-failure'" if fail else "'configured' | Set-Content (Join-Path $env:TEMP 'setup-ran')"
             archive.writestr('recorder/setup.ps1',setup)
         quote=lambda value:"'"+str(value).replace("'","''")+"'"
+        entry=root/'postwin-fixture.ps1'
+        code=(ROOT/'guest_setup/http/postwin.ps1').read_text()
+        code=code.replace('if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){','if($false){')
+        code=code.replace('Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force','')
+        entry.write_text(code,encoding='utf8')
         harness=root/'run.ps1'
         harness.write_text(
             "$ErrorActionPreference='Stop'\n"
@@ -63,7 +68,7 @@ class WindowsPostinstallTests(unittest.TestCase):
             +"$env:USERNAME='test-guest'\n"
             +"function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$TimeoutSec) "
             +f"Copy-Item -LiteralPath {quote(source)} -Destination $OutFile }}\n"
-            +f"& {quote(ROOT/'guest_setup/http/postwin.ps1')}\n",
+            +f"& {quote(entry)}\n",
             encoding='utf8',
         )
         result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(harness)],capture_output=True,text=True)

@@ -28,17 +28,18 @@ function vncEndpoint(xml){
 /** @returns {import('../common/desktop-interface').DesktopAdapter} */
 function createKvmAdapter(context,{runtime,config,execute=run,platform=process.platform}){
   require('../common/host-support.cjs').requireBackendHost('kvm',platform);
-  const storage=path.join(context.globalStorageUri.fsPath,'desktops');
+  const storage=path.join(process.env.VAMP_HOME||path.join(require('node:os').homedir(),'.vamp'),'vms');
   const uri=()=>config().get('libvirtUri') || 'qemu:///session';
   const command=async(exe,args,timeout=30000)=>(await execute(exe,args,{timeout,maxBuffer:4*1024**2,env:{...process.env,LC_ALL:'C'}})).stdout;
   const virsh=args=>command('virsh',['-c',uri(),...args]);
   const checkID=id=>{if(!UUID.test(id))throw Error('Invalid VM identifier');return id;};
-  const record=(backend,name)=>path.join(storage,backend,name,'vamp-ui.json');
   function managed(backend,id){
-    const root=path.join(storage,backend);
-    if(!fs.existsSync(root))return;
-    for(const name of fs.readdirSync(root)){
-      try{const item=JSON.parse(fs.readFileSync(record(backend,name),'utf8'));if(item.id===id)return {...item,folder:path.dirname(record(backend,name))};}catch{}
+    for(const base of [storage,path.join(context.globalStorageUri.fsPath,'desktops')]){
+      const root=path.join(base,backend);if(!fs.existsSync(root))continue;
+      for(const name of fs.readdirSync(root)){
+        const record=path.join(root,name,'vamp-ui.json');
+        try{const item=JSON.parse(fs.readFileSync(record,'utf8'));if(item.id===id)return {...item,folder:path.dirname(record)};}catch{}
+      }
     }
   }
   async function ensureNoVirtualBox(){
@@ -61,40 +62,7 @@ function createKvmAdapter(context,{runtime,config,execute=run,platform=process.p
         return {...info,backend:'kvm',state:({'shut off':'poweroff',running:'running',paused:'paused',crashed:'aborted'})[raw]||raw,managed:!!managed('kvm',id)};
       }));
     },
-    async create({name,iso_path,guest_os,memory_mb,cpus,disk_mb,installation_mode}){
-      if(!/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test(name))throw Error('Use a name starting with a letter, followed by letters, numbers, hyphens or underscores.');
-      if(!['debian','ubuntu','windows11'].includes(guest_os))throw Error('Unsupported operating system');
-      for(const [value,min,max] of [[memory_mb,guest_os==='windows11'?4096:2048,131072],[cpus,1,64],[disk_mb,32768,2097152]])if(!Number.isInteger(value)||value<min||value>max)throw Error('Invalid VM resources');
-      const mode=installation_mode || (guest_os==='debian'?'unattended':'manual');
-      if(!['manual','unattended'].includes(mode) || (mode==='unattended' && guest_os!=='debian'))throw Error('Automatic installation is supported for Debian amd64 installer ISOs only');
-      if(!fs.statSync(iso_path).isFile() || iso_path.includes(','))throw Error('Choose a readable local ISO without a comma in its path.');
-      await ensureNoVirtualBox();
-      const existing=await virsh(['list','--all','--name']);if(existing.split(/\r?\n/).includes(name))throw Error('A VM with this name already exists.');
-      const folder=path.join(storage,'kvm',name);fs.mkdirSync(path.dirname(folder),{recursive:true});fs.mkdirSync(folder);
-      const disk=path.join(folder,'disk.qcow2');
-      let installer=iso_path, location=[];
-      if(mode==='unattended'){
-        // No ISO rewrite: boot the stock ISO's kernel/initrd and inject the preseed into the initrd.
-        const packaged=path.join(runtime,'backends/kvm/debian-preseed.cfg');
-        if(!fs.existsSync(packaged))throw Error('Packaged Debian preseed file is missing from the VAMP runtime; choose manual installation.');
-        // virt-install injects a file into the initrd under its own name; preseed/file= needs /preseed.cfg.
-        const preseed=path.join(folder,'preseed.cfg');fs.copyFileSync(packaged,preseed);
-        location=['--location',`${iso_path},kernel=install.amd/vmlinuz,initrd=install.amd/initrd.gz`,
-          '--initrd-inject',preseed,'--extra-args','auto=true priority=critical preseed/file=/preseed.cfg console=ttyS0,115200n8 console=tty0'];
-        installer=null;
-      }
-      fs.writeFileSync(path.join(folder,'creation.json'),JSON.stringify({status:'preparing',name,disk,iso_path}));
-      await command('qemu-img',['create','-f','qcow2',disk,`${disk_mb}M`]);
-      const args=['--connect',uri(),'--name',name,'--virt-type','kvm','--memory',String(memory_mb),'--vcpus',String(cpus),'--cpu','host-passthrough','--disk',`path=${disk},format=qcow2,bus=${guest_os==='windows11'?'sata':'virtio'}`,...(installer?['--disk',`path=${installer},device=cdrom,readonly=on`]:[]),...location,...(location.length?[]:['--import']),'--osinfo','detect=on,require=off','--graphics','vnc,listen=127.0.0.1','--video',guest_os==='windows11'?'vga':'virtio','--input','tablet,bus=usb','--network',uri().endsWith('/session')?'user,model=e1000e':'network=default,model=virtio','--noautoconsole','--serial',`pty,log.file=${path.join(folder,'serial.log')},log.append=on`];
-      if(guest_os==='windows11')args.push('--boot','uefi,hd,cdrom','--tpm','backend.type=emulator,backend.version=2.0,model=tpm-crb');
-      else args.push('--boot','hd,cdrom');
-      try{await command('virt-install',args,180000);}catch(error){throw Error(`KVM setup failed. Partial setup preserved at ${folder}. ${error.message}${mode==='unattended'?' Debian automatic installation reads the stock ISO with virt-install; if the host lacks that tooling, choose manual installation (xorriso is no longer used).':''}`);}
-      const id=(await virsh(['domuuid',name])).trim();checkID(id);
-      const state=(await virsh(['domstate',id])).trim();
-      if(state!=='running')throw Error(`VM was created but did not start (state: ${state}). Setup is preserved at ${folder}`);
-      fs.writeFileSync(record('kvm',name),JSON.stringify({id,name,disk,guest_os,installation_mode:mode}));
-      return {status:'installation_started',installation_mode:mode,vm:name,id,vm_state:state,startup_verified:true,installation_verified:false,serial_log:path.join(folder,'serial.log'),...(mode==='unattended'?{credentials:{username:'vboxuser',password:'password123!',public_sandbox_credentials:true}}:{})};
-    },
+    create:values=>require('../common/packer.cjs').packer({runtime,python:()=>config().get('kvmPythonExecutable')||'python3'})('create',{backend:'kvm',libvirt_uri:uri(),...values}),
     async start(id){checkID(id);await ensureNoVirtualBox();await virsh(['start',id]);const state=(await virsh(['domstate',id])).trim();if(state!=='running')throw Error('VM did not reach Running state: '+state);return {status:'running',startup_verified:true};},
     async stop(id){checkID(id);return virsh(['shutdown',id]);},
     async endpoint(id){checkID(id);return vncEndpoint(await virsh(['dumpxml',id]));},
@@ -103,6 +71,10 @@ function createKvmAdapter(context,{runtime,config,execute=run,platform=process.p
       const item=managed('kvm',id);if(!item)throw Error('Only desktops created by VAMP can be deleted here.');
       const state=(await virsh(['domstate',id])).trim();if(state!=='shut off')throw Error('Shut down the VM before deleting it.');
       await virsh(['undefine',id,'--nvram','--tpm','--managed-save','--snapshots-metadata','--checkpoints-metadata']);
+      if(item.volume){
+        if(item.pool!=='default'||!/^vamp-[A-Za-z][A-Za-z0-9_-]{0,62}\.qcow2$/.test(item.volume))throw Error('Unexpected managed storage volume; inspect the ownership record.');
+        await virsh(['vol-delete','--pool',item.pool,item.volume]);
+      }
       fs.rmSync(item.folder,{recursive:true,force:true});
     }
   };

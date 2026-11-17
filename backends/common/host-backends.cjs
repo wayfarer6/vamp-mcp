@@ -26,11 +26,12 @@ function hostBackends(context,options){
     capabilities:()=>backendCapabilities(platform),
     check:async backend=>adapter(backend).check(),
     list:async backend=>adapter(backend).list(),
-    async create(backend,values){requireInstallHost(backend,platform,options.architecture||process.arch);return adapter(backend).create(values);},
+    async create(backend,values){requireInstallHost(backend,platform,options.architecture||process.arch);return (options.packerCall||require('./packer.cjs').packer(options))('create',{backend,libvirt_uri:options.config?.().get('libvirtUri'),...values});},
     start:async(backend,id)=>adapter(backend).start(uuid(id)),
     stop:async(backend,id)=>adapter(backend).stop(uuid(id)),
     remove:async(backend,id)=>adapter(backend).remove(uuid(id)),
     endpoint:async id=>adapter('kvm').endpoint(uuid(id)),
   };
 }
-module.exports={hostBackends,domainInfo,vncEndpoint};
+const preparePacker=(options,backend)=>require('./packer.cjs').packer(options)('prepare',{backend:backend==='remote'?'virtualbox':backend});
+module.exports={hostBackends,domainInfo,vncEndpoint,preparePacker,packer:require('./packer.cjs').packer};

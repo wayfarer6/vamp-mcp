@@ -1,8 +1,8 @@
 {
   "name": "vamp-mcp-tools",
   "displayName": "VAMP MCP Tools — VM Automation & Vault",
-  "description": "VM-isolated GUI automation and MCP for local and remote hypervisors. Includes VAMP Vault for encrypted credentials and certificates.",
-  "version": "0.2.2",
+  "description": "Packer-powered VM setup, post-install automation and golden image management over MCP. Includes VM GUI automation and VAMP Vault.",
+  "version": "0.2.3",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -28,7 +28,9 @@
     "hypervisor",
     "KVM",
     "VirtualBox",
-    "Hyper-V"
+    "Hyper-V",
+    "Packer",
+    "golden image"
   ],
   "extensionPack": [
     "wayfarer6.vamp-vault"
@@ -314,7 +316,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.2.2.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.2.3.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
     "test:manager": "node --test test/vm-manager.cjs test/script-server.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs",

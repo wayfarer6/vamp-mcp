@@ -100,7 +100,7 @@ function activate(context) {
     if(settingUp) return false;
     settingUp=true;
     try {
-      await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'VAMP Python setup'}, async progress => {
+      await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'VAMP environment setup'}, async progress => {
         const configured=config().get('pythonExecutable');
         // Any interpreter from 3.11 upward is accepted, including 3.15 and
         // later, because Python compares its own version tuple here.
@@ -127,7 +127,9 @@ function activate(context) {
           } else output.appendLine('Install VirtualBox and rerun Python setup to prepare its mouse SDK.');
         }
         changes.fire();
-        vscode.window.showInformationMessage('VAMP Python ready. VirtualBox must be installed separately.');
+        const packer=require('./host-backends').preparePacker;
+        if(packer)await packer({runtime,python:pythonPath},context.globalState?.get('vamp.manager.backend')||'virtualbox');
+        vscode.window.showInformationMessage('VAMP environment ready. HashiCorp Packer CLI and the selected official plugin were installed. Hypervisor software must be installed separately.');
       });
       return true;
     } catch(error) { output.appendLine(String(error)); output.show(); vscode.window.showErrorMessage(`VAMP setup failed: ${error.message}`); return false; }

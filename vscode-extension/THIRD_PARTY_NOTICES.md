@@ -25,3 +25,8 @@ Any vendored adapter must include its original LICENSE and source URL, pinned re
 ## VAMP guest recorder adaptation
 
 `guest_setup/recorder/vamp-recorder.py` is an explicitly GPL-3.0-only UI adaptation of the recorder workflow, not covered by the root MIT license. It is distributed as source with `RECORDER-LICENSE` (full GPL-3.0 text) and the original recorder source/provenance. It uses thread-safe UI queues, explicit user recording controls and shared-folder saving. The host/server code remains separately MIT licensed.
+
+
+## HashiCorp Packer and official hypervisor plugins
+
+New VM installation invokes separately downloaded HashiCorp Packer CLI and official VirtualBox, Hyper-V or QEMU plugins. These binaries are not bundled in VAMP or covered by VAMP's MIT license. Packer CLI and each plugin retain their upstream licenses and notices. See https://developer.hashicorp.com/packer and the respective HashiCorp plugin repositories. VAMP pins the CLI archive SHA-256 and plugin versions in backends/packer/policy.json.

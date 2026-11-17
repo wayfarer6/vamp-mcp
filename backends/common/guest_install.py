@@ -33,8 +33,9 @@ def post_create_notice(guest_os, base_url):
     return {
         'title':'Warning: Verify post-install setup after first login.',
         'message':'Log in after OS installation. Guest setup downloads and runs automatically. If it fails or does not start, run the recovery command below inside the guest. Do not suspend or lock the VM until setup completes. Setup disables automatic sleep and screen locking.',
-        'setup_command':f'powershell -NoProfile -ExecutionPolicy Bypass -Command "irm {base_url}/setup.ps1 | iex"' if windows else f'wget -qO /tmp/vamp-setup.sh {base_url}/setup.sh && sh /tmp/vamp-setup.sh --base={base_url}',
-        'resolution_note':'Before automation, set Windows Settings > System > Display to 1920x1080 and Scale 100%. Open the resolution guide in VM Manager if this mode is unavailable.' if windows else 'Debian may not keep 1920x1080. After setup, run this command in a GNOME Xorg terminal. If the mode is unavailable, check Guest Additions and guest display settings.',
+        'setup_command':f'powershell -NoProfile -ExecutionPolicy Unrestricted -Command "irm {base_url}/setup.ps1 | iex"' if windows else f'wget -qO /tmp/vamp-setup.sh {base_url}/setup.sh && sh /tmp/vamp-setup.sh --base={base_url}',
+        'resolution_reset':{'windows_desktop':'Set-Resolution-1920x1080.cmd','windows_powershell':'Set-Resolution-1920x1080.ps1','debian_home':'~/set-resolution-1920x1080.sh'},
+        'resolution_note':'Windows Desktop: double-click Set-Resolution-1920x1080.cmd if the display drifts. Before automation, set Windows Settings > System > Display to 1920x1080 and Scale 100%. Open the resolution guide in VM Manager if this mode is unavailable.' if windows else 'Debian home folder: run ~/set-resolution-1920x1080.sh if the display drifts. Debian may not keep 1920x1080. After setup, run this command in a GNOME Xorg terminal. If the mode is unavailable, check Guest Additions and guest display settings.',
         'resolution_command':None if windows else 'xrandr --output "$(xrandr --query | awk \'/ connected/{print $1; exit}\')" --mode 1920x1080',
     }
 

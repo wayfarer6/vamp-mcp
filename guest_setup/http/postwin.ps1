@@ -1,6 +1,21 @@
 # VAMP Windows postinstall, run at the first desktop login of the unattended account.
 # It downloads and executes setup immediately in that user's session.
 $ErrorActionPreference = 'Stop'
+$principal=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){
+    $payload='Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force; '
+    if($PSCommandPath){$payload+="& '"+$PSCommandPath.Replace("'","''")+"'"}
+    else {
+        $origin=if($env:VAMP_SCRIPT_BASE_URL){$env:VAMP_SCRIPT_BASE_URL}else{'http://10.0.2.2:8421'}
+        $payload+="irm '"+($origin+'/postwin.ps1').Replace("'","''")+"' | iex"
+    }
+    $encoded=[Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($payload))
+    $elevated=Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoProfile','-ExecutionPolicy','Unrestricted','-EncodedCommand',$encoded) -Wait -PassThru
+    if($elevated.ExitCode -ne 0){throw 'Administrator setup did not complete successfully'}
+    return
+}
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force
+
 $base = if ($env:VAMP_SCRIPT_BASE_URL) { $env:VAMP_SCRIPT_BASE_URL } else { 'http://10.0.2.2:8421' }
 $target = Join-Path $env:ProgramData 'RPA-Recorder-Setup'
 New-Item -ItemType Directory -Force -Path $target | Out-Null

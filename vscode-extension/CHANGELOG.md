@@ -2,6 +2,15 @@
 
 
 
+## 0.2.3
+
+- Install Windows Guest Additions / virtio-win guest drivers during setup and resume elevated post-install setup after a driver reboot. Install English Full HD reset shortcuts on the Windows Desktop and Debian home folder. Share administrator/UAC handling across MCP and VSIX.
+
+- Use HashiCorp Packer with checksum-pinned host CLI and official per-hypervisor plugins for VSIX/MCP VM creation. Share Debian/Windows installation and 60-second post-reboot guest setup across VirtualBox, Hyper-V and KVM.
+- Enable Debian GNOME automatic login in the public sandbox. Export golden images before deploying separate live disks; show image paths, file sizes, logs and confirmed golden-image deletion in VM Manager and MCP.
+- Build the Ubuntu KVM profile from native osinfo-db and virt-manager XML; adapt NAT/libvirt storage and Hyper-V Generation 2 networking. Hardware tests for KVM/Hyper-V are user-run.
+- Catch the Windows ISO boot prompt with a one-second delay and an initial Enter burst; keep the first-login launcher below the Windows command limit.
+
 ## 0.2.2
 
 - Elevate Windows keystroke setup with Ctrl+Shift+Enter, approve UAC using Left/Enter, require administrator rights and set Unrestricted execution policy for the setup process. Keep Linux and Windows display hooks registered at every desktop login.
