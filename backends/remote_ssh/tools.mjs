@@ -27,9 +27,17 @@ function positiveNumber(value, fallback, min, max) {
   return Math.max(min, Math.min(max, number));
 }
 
-function compare(version, minimum) {
-  const left = String(version).split('.').map(Number);
-  const right = String(minimum).split('.').map(Number);
+// Compares dotted version strings numerically so 3.15 sorts above 3.14 and 3.11.
+// Any non-numeric suffix ('3.15.0rc1', '3.15-dev', 'v22.14.0') is read as
+// its leading number, and a missing segment counts as 0, so the check keeps
+// working when a newer Python or Node release appears.
+export function compare(version, minimum) {
+  const segments = value => String(value ?? '').trim().replace(/^v/i, '').split('.').map(part => {
+    const match = /^\d+/.exec(part);
+    return match ? Number(match[0]) : 0;
+  });
+  const left = segments(version);
+  const right = segments(minimum);
   for (let index = 0; index < Math.max(left.length, right.length); index += 1) {
     const a = left[index] || 0;
     const b = right[index] || 0;
@@ -401,7 +409,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
 
     const pythonVersion = await exec(config.python, ['-c', 'import sys;print("%d.%d.%d"%sys.version_info[:3])'], { timeoutMs: 15000 });
     const python = pythonVersion.ok ? pythonVersion.stdout.trim() : '';
-    add('python', 'Python for RPA replay', python && compare(python, '3.11.0') >= 0 ? 'ok' : python ? 'warn' : 'missing', python || detail(pythonVersion), python && compare(python, '3.11.0') >= 0 ? undefined : `Install Python 3.11+ and set remotePython (${config.python}).`);
+    add('python', 'Python for RPA replay', python && compare(python, '3.11.0') >= 0 ? 'ok' : python ? 'warn' : 'missing', python || detail(pythonVersion), python && compare(python, '3.11.0') >= 0 ? undefined : `Install Python 3.11+ (3.15 and newer work too) and set remotePython (${config.python}).`);
 
     if (config.backend === 'kvm') {
       const libvirtVersion = await exec('virsh', ['--version'], { timeoutMs: 15000 });
@@ -478,13 +486,15 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     }
     record('workdir', 'Work directory and server configuration', dry_run ? 'planned' : 'done', config.workdir);
 
-    const pythonProbe = await exec(config.python, ['-c', 'import sys;print("%d.%d"%sys.version_info[:2])'], { timeoutMs: 15000 });
+    // The label states the range so a newer interpreter (3.15, 3.16) is not
+    // mistaken for an unsupported one; the comparison itself is numeric.
+    const pythonProbe = await exec(config.python, ['-c', 'import sys;print("%d.%d.%d"%sys.version_info[:3])'], { timeoutMs: 15000 });
     if (!pythonProbe.ok) {
-      record('python', 'Python 3.11+', 'needs_manual', `${config.python} -V`, { fix: 'Install Python 3.11 or newer on the remote host, then run setup again.' });
+      record('python', 'Python 3.11+ (3.15+ supported)', 'needs_manual', `${config.python} -V`, { fix: 'Install Python 3.11 or newer (3.15 and newer work too) on the remote host, then run setup again.' });
     } else if (compare(pythonProbe.stdout.trim(), '3.11') < 0) {
-      record('python', 'Python 3.11+', 'needs_manual', `${config.python} -V`, { fix: `Detected Python ${pythonProbe.stdout.trim()}. Install 3.11 or newer and set remotePython.` });
+      record('python', 'Python 3.11+ (3.15+ supported)', 'needs_manual', `${config.python} -V`, { fix: `Detected Python ${pythonProbe.stdout.trim()}. Install 3.11 or newer and set remotePython.` });
     } else {
-      record('python', 'Python 3.11+', 'ok', `Python ${pythonProbe.stdout.trim()}`);
+      record('python', 'Python 3.11+ (3.15+ supported)', 'ok', `Python ${pythonProbe.stdout.trim()}`);
       if (python_venv) {
         const venv = path.join(config.workdir, 'venv');
         const exists = await fsx.access(path.join(venv, config.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python')).then(() => true).catch(() => false);

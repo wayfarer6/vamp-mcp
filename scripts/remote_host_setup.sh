@@ -71,10 +71,13 @@ fi
 python_bin="${VAMP_REMOTE_PYTHON:-python3}"
 if have "$python_bin"; then
   python_version="$("$python_bin" -c 'import sys;print("%d.%d.%d"%sys.version_info[:3])' 2>/dev/null)"
-  case "$python_version" in
-    3.11.*|3.12.*|3.13.*|3.14.*|4.*) add_step python "Python 3.11+" ok "$python_bin -V" "$python_version" ;;
-    *) add_step python "Python 3.11+" needs_manual "$python_bin -V" "found $python_version; install 3.11 or newer" ;;
-  esac
+  # Compare the interpreter's own version tuple so any future release (3.15, 3.16,
+  # 4.x) passes without a hardcoded version list to maintain.
+  if "$python_bin" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 11) else 1)' >/dev/null 2>&1; then
+    add_step python "Python 3.11+ (supports 3.15+)" ok "$python_bin -V" "${python_version:-unknown}"
+  else
+    add_step python "Python 3.11+" needs_manual "$python_bin -V" "found ${python_version:-unknown}; install 3.11 or newer"
+  fi
   if [ "$dry_run" = "0" ] && [ ! -x "$workdir/venv/bin/python" ]; then
     say "creating Python virtual environment"
     if "$python_bin" -m venv "$workdir/venv" >/dev/null 2>&1; then

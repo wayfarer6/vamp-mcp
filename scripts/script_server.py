@@ -52,6 +52,15 @@ GUEST_HOSTS = {
     'kvm_default_network': '192.168.122.1',
 }
 SKIP = shutil.ignore_patterns('__pycache__', '*.pyc', '.git')
+# The recorder bundle is committed to the repository so a clean checkout, a
+# published package or a remote host can stage guest setup without the local
+# third_party recorder sources. This URL is the last resort when neither the
+# sources nor the committed bundle are present.
+RECORDER_ZIP_URL = os.environ.get(
+    'VAMP_RECORDER_ZIP_URL',
+    'https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/guest_setup/recorder/recorder.zip',
+)
+RECORDER_ENTRY = 'PyAutoGuiRecorder.py'
 
 
 def state_directory() -> Path:
@@ -85,6 +94,49 @@ def digest(path: Path) -> str:
         return hashlib.file_digest(handle, 'sha256').hexdigest()
 
 
+def _recorder_zip_usable(path: Path) -> bool:
+    """True when path is a zip that carries the recorder program itself."""
+    try:
+        with zipfile.ZipFile(path) as archive:
+            return RECORDER_ENTRY in {Path(name).name for name in archive.namelist()}
+    except (OSError, zipfile.BadZipFile):
+        return False
+
+
+def download_recorder_zip(destination: Path, url: str = RECORDER_ZIP_URL, timeout: int = 30) -> Path:
+    """Fetch the committed recorder bundle when no local copy exists."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    request = urllib.request.Request(url, headers={'User-Agent': 'vamp-script-server'})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        payload = response.read()
+    if not payload.startswith(b'PK'):
+        raise RuntimeError(f'{url} did not return a zip archive')
+    destination.write_bytes(payload)
+    if not _recorder_zip_usable(destination):
+        destination.unlink(missing_ok=True)
+        raise RuntimeError(f'{url} is not a usable recorder bundle (no {RECORDER_ENTRY})')
+    return destination
+
+
+def ensure_recorder_zip(folder: Path, recorder_source: Path | None = None) -> Path:
+    """Keep recorder.zip beside the recorder setup.
+
+    Order: rebuild from the packaged recorder sources, reuse the bundle that
+    ships in the repository, then download it from the project's GitHub URL.
+    """
+    recorder_zip = folder / 'recorder.zip'
+    if recorder_source and recorder_source.is_dir():
+        folder.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(recorder_zip, 'w', zipfile.ZIP_DEFLATED) as archive:
+            for path in sorted(recorder_source.rglob('*')):
+                if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
+                    archive.write(path, str(path.relative_to(recorder_source)))
+        return recorder_zip
+    if _recorder_zip_usable(recorder_zip):
+        return recorder_zip
+    return download_recorder_zip(recorder_zip)
+
+
 def stage(source: Path | None = None, destination: Path | None = None,
           port: int = SCRIPT_SERVER_PORT) -> dict:
     """Build the served folder: HTTP bootstraps at the root plus the setup trees."""
@@ -110,14 +162,16 @@ def stage(source: Path | None = None, destination: Path | None = None,
         if (source / name).is_dir():
             _copy_tree(source / name, destination / name)
 
-    # Guest setups expect recorder.zip beside setup.sh; build it from the packaged recorder sources.
+    # Guest setups expect recorder.zip beside setup.sh: rebuild it from the
+    # packaged recorder sources, otherwise keep the bundle committed in the
+    # repository, otherwise download it so a clean environment still works.
     recorder_source = source.parent / 'third_party' / 'pyautogui-recorder'
-    recorder_zip = destination / 'recorder' / 'recorder.zip'
-    if recorder_source.is_dir():
-        with zipfile.ZipFile(recorder_zip, 'w', zipfile.ZIP_DEFLATED) as archive:
-            for path in sorted(recorder_source.rglob('*')):
-                if path.is_file() and '__pycache__' not in path.parts and path.suffix != '.pyc':
-                    archive.write(path, str(path.relative_to(recorder_source)))
+    try:
+        ensure_recorder_zip(destination / 'recorder', recorder_source)
+    except (OSError, RuntimeError, urllib.error.URLError) as error:
+        # A missing recorder only disables the recording tool, so keep serving
+        # the rest of guest setup and say plainly what is missing.
+        print(f'vamp: recorder bundle unavailable: {error}', file=sys.stderr)
 
     # Optional verified VeraCrypt CLI payload for the vault setup.
     cli_source = source.parent / 'artifacts' / 'kvm-setup' / 'bin'

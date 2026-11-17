@@ -7,6 +7,15 @@ if (-not (Test-Path $vbox)) { throw 'Install VirtualBox for Windows from https:/
 if (-not (Get-Command node -ErrorAction SilentlyContinue)) { throw 'Install Node.js 22+ and reopen PowerShell first.' }
 if ([int](& node -p 'process.versions.node.split(".")[0]') -lt 22) { throw 'Node.js 22+ is required.' }
 if (-not $SkipNpm -and -not (Get-Command npm.cmd -ErrorAction SilentlyContinue)) { throw 'npm.cmd is missing. Complete the Node.js installation and reopen PowerShell first.' }
+# Any Python from 3.11 upward works, including 3.15 and later releases. The
+# interpreter compares its own version tuple, so a new minor version does not
+# need a change here.
+& $Python -c 'import sys; assert sys.version_info >= (3, 11), f"Python 3.11+ required, got {sys.version}"'
+if ($LASTEXITCODE) {
+    throw "Python 3.11 or newer is required (3.11 through 3.15+ are supported); '$Python' did not qualify. Install Python from https://www.python.org/downloads/ (32/64-bit matching Windows) and rerun with -Python C:\Path\To\python.exe. The Microsoft Store alias is not usable here."
+}
+$pythonVersion = (& $Python -c 'import sys; print("%d.%d.%d" % sys.version_info[:3])').Trim()
+Write-Host "Using Python $pythonVersion ($Python)"
 & $Python -m venv .venv-virtualbox
 if ($LASTEXITCODE) { throw 'Python venv failed' }
 $venv = Join-Path $root '.venv-virtualbox/Scripts/python.exe'

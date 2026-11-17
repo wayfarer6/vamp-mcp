@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import shutil
 import tempfile
 import threading
 import unittest
@@ -72,6 +73,39 @@ class ScriptServerTests(unittest.TestCase):
         self.assertIn("vamp-guest-setup.zip",text)
         self.assertIn('Invoke-WebRequest',text)
         self.assertIn("recorder/setup.ps1",text)
+
+    def test_committed_recorder_bundle_carries_the_program(self):
+        # recorder.zip is committed so a clean checkout and the published
+        # packages can stage guest setup without third_party sources.
+        bundle=ROOT/'guest_setup/recorder/recorder.zip'
+        self.assertTrue(bundle.is_file())
+        with zipfile.ZipFile(bundle) as archive:
+            names=set(archive.namelist())
+            self.assertIn('PyAutoGuiRecorder.py',names)
+            self.assertIn('LICENSE',names)
+            self.assertEqual(archive.read('PyAutoGuiRecorder.py'),
+                             (ROOT/'third_party/pyautogui-recorder/PyAutoGuiRecorder.py').read_bytes())
+
+    def test_stage_survives_a_copy_without_recorder_sources(self):
+        clean=self.root/'clean'
+        shutil.copytree(ROOT/'guest_setup',clean/'guest_setup')
+        staged=script_server.stage(clean/'guest_setup',clean/'stage')
+        self.assertIn('recorder/recorder.zip',staged['files'])
+        self.assertTrue(script_server._recorder_zip_usable(clean/'stage/recorder/recorder.zip'))
+
+    def test_recorder_bundle_downloads_when_nothing_is_local(self):
+        server=script_server.make_server(Path(self.staged['directory']),port=0,bind='127.0.0.1',ttl=0)
+        thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
+        self.addCleanup(lambda:(server.shutdown(),server.server_close(),thread.join(timeout=5)))
+        url=f"http://127.0.0.1:{server.server_address[1]}/recorder/recorder.zip"
+        target=self.root/'downloaded/recorder.zip'
+        script_server.download_recorder_zip(target,url)
+        self.assertTrue(script_server._recorder_zip_usable(target))
+        # A page that is not a zip must not be staged as a bundle.
+        with self.assertRaises(RuntimeError):
+            script_server.download_recorder_zip(self.root/'bad/recorder.zip',
+                                                f"http://127.0.0.1:{server.server_address[1]}/setup.ps1")
+        self.assertFalse((self.root/'bad/recorder.zip').exists())
 
 if __name__=='__main__':
     unittest.main()

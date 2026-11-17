@@ -69,6 +69,18 @@ The smoke script never creates or shuts down a VM. Without `--vm`, only inventor
 
 Nested virtualization is a lab arrangement, not a requirement for normal users. A normal Windows host runs VirtualBox directly. macOS hardware validation is separate.
 
+## Host setup on all three systems
+
+Every host script needs Python 3.11 or newer and accepts later releases without changes, because each one asks the interpreter for `sys.version_info` instead of matching version strings, so 3.15 and 3.16 work the day they are installed.
+
+| Host | Script | Notes |
+| --- | --- | --- |
+| Linux | `scripts/remote_host_setup.sh [--backend kvm\|virtualbox] [--repo PATH]` | Also prepares a host reached over SSH; `--dry-run` prints the plan. |
+| Windows | `scripts/windows/setup-host.ps1 [-Python PATH]` | Rejects the Microsoft Store alias; accepts 3.11 through 3.15+. |
+| macOS | `scripts/macos/setup-host.sh [--python PATH] [--skip-npm]` | Finds python.org, Homebrew or `python3`; VirtualBox is optional for remote use. |
+
+Windows guests reuse any installed Python 3.11+ (`setup-win.cmd`, `guest_setup/recorder/setup.ps1`, `setup-user.py`) and install one only when none qualifies. The recorder payload is committed as `guest_setup/recorder/recorder.zip`; the guest scripts fall back to `https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/guest_setup/recorder/recorder.zip` when the bundle is not beside them.
+
 ## Reproducing the lab recordings
 
 The source suites are in `backends/virtualbox/rpas/demos`. `windows_host.robot` and `nested.robot` write a short PowerShell launcher to the prepared `VAMPRecords` host share. This avoids the Win+R command length limit; long repository paths and arguments stay in the launcher file. The Windows setup script must first be installed inside the lab VM. Source scripts and output files are separate from guest input transport.

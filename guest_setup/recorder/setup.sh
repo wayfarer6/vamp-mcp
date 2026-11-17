@@ -18,7 +18,24 @@ folder="$desktop/RPA-Recorder"
 mkdir -p "$folder/recordings"
 # Refuse to replace an existing recorder; keep user changes and recordings.
 if [ ! -f "$folder/PyAutoGuiRecorder.py" ]; then
- python3 -m zipfile -e "$media_dir/recorder.zip" "$folder"
+  # The bundle ships beside this script. When it is missing (a lone download of
+  # setup.sh on a clean host), fetch the same bundle from the project repository.
+  recorder_zip="$media_dir/recorder.zip"
+  if [ ! -f "$recorder_zip" ]; then
+    recorder_zip="$folder/recorder.zip"
+    url='https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/guest_setup/recorder/recorder.zip'
+    echo "recorder.zip is not beside setup.sh; downloading it from $url" >&2
+    if command -v curl >/dev/null 2>&1; then
+      curl -fsSL "$url" -o "$recorder_zip"
+    elif command -v wget >/dev/null 2>&1; then
+      wget -qO "$recorder_zip" "$url"
+    else
+      echo 'curl or wget is required to download the recorder bundle.' >&2
+      exit 1
+    fi
+  fi
+  python3 -m zipfile -e "$recorder_zip" "$folder"
+  [ "$recorder_zip" = "$media_dir/recorder.zip" ] || rm -f "$recorder_zip"
 fi
 cp "$media_dir/prepare-recording.py" "$media_dir/RECORDING-GUIDE.txt" "$media_dir/vamp-recorder.py" "$media_dir/RECORDER-LICENSE" "$folder/"
 python3 "$media_dir/install-display-startup.py"

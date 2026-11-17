@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- **Python 3.15+ works on Linux, macOS and Windows.** Every host and guest script asks the interpreter for `sys.version_info` instead of matching version strings, so 3.15 and later releases are accepted the day they are installed. Ubuntu/SSH `scripts/remote_host_setup.sh` no longer rejects 3.15 with "install 3.11 or newer"; `scripts/windows/setup-host.ps1` and the remote SSH server use numeric version comparison.
+- New `scripts/macos/setup-host.sh` prepares a Mac host: finds Python 3.11+ (python.org, Homebrew or `python3`), checks Node.js 22+, creates `.venv-virtualbox`, installs the host requirements and optionally builds the VirtualBox MCP adapter. It is copied into the VSIX and npm runtime.
+- Windows guests reuse any installed Python 3.11+ (`setup-win.cmd`, `setup.ps1`, `setup-user.py`) and install one through winget only when none qualifies (3.15, then 3.12), instead of force-installing Python 3.12 over a newer interpreter.
+- **The recorder payload is committed** as `guest_setup/recorder/recorder.zip` (regenerate with `scripts/build_recorder_zip.py`). Guest setup no longer stops when `third_party/pyautogui-recorder` is absent: `script_server.py`, `setup.sh`, `setup.ps1` and `setup-user.py` reuse the committed bundle and fall back to `https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/guest_setup/recorder/recorder.zip` when it is missing.
+
 ## 0.2.0
 
 - **Guest setup moves to HTTP on port 8421.** `guest_setup/` is staged and served by `scripts/script_server.py` (Python standard library) in the VSIX runtime and the npm package. Guests download the same scripts on every platform: `wget -qO- http://10.0.2.2:8421/setup.sh | sh` (Debian/Ubuntu) or `powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"` (Windows). libvirt's default NAT network uses `192.168.122.1`. Port 8421 is fixed on purpose: it is not well-known and does not collide with 80/8800-style services.

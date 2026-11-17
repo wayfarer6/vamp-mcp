@@ -191,7 +191,7 @@ powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 
 
 ## 시작하기
 
-1. 호스트에 VirtualBox 7.x와 Python 3.11+를 설치합니다.
+1. 호스트에 VirtualBox 7.x와 Python 3.11+를 설치합니다. 3.11부터 3.15+까지 그대로 쓰며, 버전 검사는 인터프리터의 `sys.version_info`로 하므로 새 버전이 나와도 스크립트를 고칠 필요가 없습니다. 터미널에서 한 번에 준비하려면 리눅스 `scripts/remote_host_setup.sh`, 윈도우 `scripts/windows/setup-host.ps1`, 맥 `scripts/macos/setup-host.sh`를 실행합니다.
 2. [Marketplace](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools) 또는 [Release의 VSIX](https://github.com/wayfarer6/vamp-mcp/releases)로 확장을 설치합니다.
 3. 명령 팔레트에서 **VAMP: Set Up Python Environment**를 실행합니다.
 4. MCP 서버 목록에서 **VAMP VirtualBox**를 시작하고 기존 VM을 조회합니다.

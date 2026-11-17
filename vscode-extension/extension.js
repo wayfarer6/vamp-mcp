@@ -102,13 +102,16 @@ function activate(context) {
     try {
       await vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'VAMP Python setup'}, async progress => {
         const configured=config().get('pythonExecutable');
-        const candidates=configured ? [[configured,[]]] : process.platform==='win32' ? [['py',['-3']],['python',[]]] : [['python3',[]],['python',[]]];
+        // Any interpreter from 3.11 upward is accepted, including 3.15 and
+        // later, because Python compares its own version tuple here.
+        const candidates=configured ? [[configured,[]]] : process.platform==='win32' ? [['py',['-3']],['python',[]],['python3',[]]] : [['python3',[]],['python',[]],['/opt/homebrew/bin/python3',[]],['/usr/local/bin/python3',[]]];
         let selected;
         for(const [command,args] of candidates) {
-          try { await run(command,[...args,'-c','import sys; assert sys.version_info >= (3,11)'],{timeout:15000}); selected=[command,args]; break; }
+          try { await run(command,[...args,'-c','import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'],{timeout:15000}); selected=[command,args]; break; }
           catch {}
         }
-        if(!selected) throw new Error('Install Python 3.11+ first, then run VAMP setup again.');
+        if(!selected) throw new Error(`Install Python 3.11 or newer (3.11 through 3.15+ all work)${configured?`; VAMP: Python Executable points at "${configured}"`:'; tune it with VAMP: Python Executable'}, then run VAMP setup again.`);
+        try { const detected=await run(selected[0],[...selected[1],'-c','import sys; print("%d.%d.%d" % sys.version_info[:3])'],{timeout:15000}); output.appendLine(`Python ${detected.stdout.trim()} (${selected[0]})`); } catch {}
         fs.mkdirSync(context.globalStorageUri.fsPath,{recursive:true});
         progress.report({message:'Creating isolated venv'});
         await run(selected[0],[...selected[1],'-m','venv',path.dirname(path.dirname(pythonPath()))],{timeout:120000});

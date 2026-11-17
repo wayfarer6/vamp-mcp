@@ -157,6 +157,49 @@ test('remote tools list, inspect, start, stop and capture against a fake virsh',
   assert.match(log, /"axis":"x","value":8192/, 'fractional x maps onto the absolute axis range');
 });
 
+test('Python 3.15 through 4.x rank above the 3.11 minimum', async () => {
+  const { compare } = await load('tools.mjs');
+  assert.ok(compare('3.15.0', '3.11.0') > 0, '3.15 is newer than 3.11');
+  assert.ok(compare('3.15', '3.11') > 0);
+  assert.ok(compare('3.14.4', '3.11.9') > 0);
+  assert.ok(compare('4.0.0', '3.11.0') > 0);
+  assert.ok(compare('3.11.0', '3.11') === 0);
+  assert.ok(compare('3.10.14', '3.11.0') < 0, '3.10 is still too old');
+  assert.ok(compare('3.2.0', '3.11.0') < 0, 'numeric, not lexical: 3.2 < 3.11');
+  // A pre-release or decorated string is read by its leading numbers, so a
+  // release candidate of a new interpreter is not called unsupported.
+  assert.ok(compare('3.15.0rc1', '3.11.0') > 0);
+  assert.ok(compare('v22.14.0', '20.0.0') > 0);
+});
+
+test('remote host setup accepts a 3.15 interpreter and rejects an older one', async () => {
+  const host = fakeHost();
+  const fakePython = version => {
+    const file = path.join(host.bin, 'python3');
+    fs.writeFileSync(file, `#!/bin/sh\ncase "$*" in\n  *"version_info[:3]"*) echo "${version}"; exit 0 ;;\nesac\nexit 0\n`, { mode: 0o755 });
+  };
+  const { resolveConfig } = await load('config.mjs');
+  const { createTools } = await load('tools.mjs');
+  const { createRunner } = await load('server.mjs');
+  const config = resolveConfig({ argv: ['--backend', 'kvm', '--workdir', host.work], env: { HOME: host.dir, PATH: process.env.PATH } });
+  const tools = createTools({ run: createRunner(), config });
+  await withPath(host.bin, async () => {
+    fakePython('3.15.0');
+    const plan = await tools.envSetup({ dry_run: true, python_venv: false });
+    const python = plan.steps.find(step => step.id === 'python');
+    assert.equal(python.status, 'ok', JSON.stringify(python));
+    assert.match(python.command, /3\.15\.0/);
+    const check = await tools.envCheck();
+    const reported = check.checks.find(item => item.id === 'python');
+    assert.equal(reported.status, 'ok');
+    assert.equal(reported.detail, '3.15.0');
+
+    fakePython('3.10.14');
+    const outdated = await tools.envSetup({ dry_run: true, python_venv: false });
+    assert.equal(outdated.steps.find(step => step.id === 'python').status, 'needs_manual');
+  });
+});
+
 test('VM arguments are validated and remote failures stay readable', async () => {
   const host = fakeHost();
   const { resolveConfig } = await load('config.mjs');
