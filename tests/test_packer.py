@@ -75,7 +75,7 @@ class PackerTests(unittest.TestCase):
         command=templates.windows_postinstall('http://host:8421','http://host:9999/complete/token')
         self.assertIn('Start-Sleep -Seconds 60',command)
         self.assertLess(command.index('& $entry'),command.index('-Method POST'))
-        self.assertLess(command.index('-Method POST'),command.index('shutdown.exe'))
+        self.assertLess(command.index('-Method POST'),command.index('shutdown.exe /s'))
 
     def test_debian_autologin_is_idempotent_and_preserves_other_sections(self):
         spec=importlib.util.spec_from_file_location('gdm_config',ROOT/'guest_setup/recorder/configure-gdm.py');module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)

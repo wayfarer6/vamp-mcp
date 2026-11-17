@@ -106,3 +106,7 @@ Write-Output "Recorder installed: $folder"
 $legacyStartup=Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup\RPA-Recorder-Setup.cmd'
 if(Test-Path -LiteralPath $legacyStartup){Remove-Item -LiteralPath $legacyStartup -Force}
 Write-Output 'Run Start-Recorder.cmd. Save recordings under recordings/. Do not record passwords.'
+
+# Final Windows configuration step, shared by VirtualBox, KVM and Hyper-V.
+& (Join-Path $PSScriptRoot 'set-resolution-registry.ps1')
+if (-not $?) { throw 'Full HD registry configuration failed' }

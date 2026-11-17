@@ -26,7 +26,7 @@ $python=$candidates | Where-Object {Test-Path -LiteralPath $_ -PathType Leaf} | 
 if(-not $python){throw 'Python from guest setup was not found. Finish VAMP guest setup first.'}
 $work=Join-Path $env:TEMP ('vamp-resolution-'+[guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $work | Out-Null
-foreach($name in @('apply-display.py','windows-display.py','gnome-display.py','session-policy.py','install-display-startup.py')){
+foreach($name in @('apply-display.py','windows-display.py','gnome-display.py','session-policy.py','set-resolution-registry.ps1','install-display-startup.py')){
     Invoke-WebRequest -UseBasicParsing -Uri "$base/recorder/$name" -OutFile (Join-Path $work $name)
 }
 & $python (Join-Path $work 'install-display-startup.py') --desktop $desktop

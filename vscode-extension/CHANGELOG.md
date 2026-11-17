@@ -2,6 +2,11 @@
 
 
 
+## 0.2.4
+
+- Overwrite Windows guest display registry sizes with 1920x1080 as the final elevated setup step for VirtualBox, KVM and Hyper-V.
+- Apply the same backed-up registry update from the Desktop Full HD reset helper.
+
 ## 0.2.3
 
 - Install Windows Guest Additions / virtio-win guest drivers during setup and resume elevated post-install setup after a driver reboot. Install English Full HD reset shortcuts on the Windows Desktop and Debian home folder. Share administrator/UAC handling across MCP and VSIX.

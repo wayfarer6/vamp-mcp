@@ -32,6 +32,10 @@ class GuestDisplayTests(unittest.TestCase):
                 self.assertEqual(registered['trigger'],'every_user_login')
                 self.assertIn('apply-display.py',Path(registered['launcher']).read_text())
                 self.assertTrue(Path(registered['script']).exists())
+                manual=Path(registered['manual_script']).read_text(encoding='utf-8-sig')
+                self.assertIn('set-resolution-registry.ps1',manual)
+                self.assertLess(manual.index('set-resolution-registry.ps1'),manual.index('apply-display.py'))
+                self.assertIn('-Verb RunAs',manual)
     def test_gnome_refuses_multi_monitor_and_checks_current_mode(self):
         gnome=load('gnome-display.py')
         mode=('mode',1920,1080,60,1,[1],{'is-current':True})

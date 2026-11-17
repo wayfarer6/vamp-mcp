@@ -17,7 +17,7 @@ def install(home=None,platform=None,python=None,desktop=None):
     else:
         base=home/'.local/share/vamp/display';startup=home/'.config/autostart'
     base.mkdir(parents=True,exist_ok=True);startup.mkdir(parents=True,exist_ok=True)
-    for name in ['apply-display.py','windows-display.py','gnome-display.py','session-policy.py']:
+    for name in ['apply-display.py','windows-display.py','gnome-display.py','session-policy.py','set-resolution-registry.ps1']:
         destination=base/name
         if destination.exists():destination.chmod(0o644)
         shutil.copyfile(Path(__file__).with_name(name),destination)
@@ -43,6 +43,7 @@ def install(home=None,platform=None,python=None,desktop=None):
           +"$p=New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())\n"
           +"if(-not $p.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){ $c=Start-Process powershell.exe -Verb RunAs -ArgumentList ('-NoProfile -ExecutionPolicy Unrestricted -File \"'+$PSCommandPath+'\"') -Wait -PassThru; exit $c.ExitCode }\n"
           +"Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force\n"
+          +f"& {quote(base/'set-resolution-registry.ps1')}\n"
           +"Write-Host 'Applying 1920x1080 to the guest display...'\n"
           +f'& {quote(python)} {quote(command)} --output {quote(base/"manual-result.json")}\n'
           +"if ($LASTEXITCODE -ne 0) { Write-Host 'The guest display driver could not apply Full HD. See the output above and check the display driver.'; exit $LASTEXITCODE }\n"
