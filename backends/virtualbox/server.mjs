@@ -5,6 +5,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { registerDisplayTools } from '../../third_party/mcp-virtualbox/dist/tools/display.js';
 import { registerInputTools } from '../../third_party/mcp-virtualbox/dist/tools/input.js';
+import { registerBootstrapTools } from '../../third_party/mcp-virtualbox/dist/tools/bootstrap.js';
 import { vboxManage, parseVMList, parseMachineReadable } from '../../third_party/mcp-virtualbox/dist/vbox.js';
 import { McpServer } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js';
 import { StdioServerTransport } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js';
@@ -172,6 +173,7 @@ server.tool('vm_start', 'Explicitly start an existing VM with detachable observa
 });
 registerDisplayTools(server);
 registerInputTools(server);
+registerBootstrapTools(server);
 server.tool('vm_create', 'Create a NEW Debian/Windows11 VM from a host ISO, start unattended installation with separate UI. PUBLIC defaults vboxuser/password123!. Returns started, not installed. Recorder setup is scripted.', {
   name:z.string().min(1).optional(), iso_path:z.string().min(1),
   memory_mb:z.number().int().optional(), cpus:z.number().int().optional(),

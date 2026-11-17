@@ -66,6 +66,10 @@
         "title": "VAMP: View VM Screen"
       },
       {
+        "command": "vamp.bootstrapGuest",
+        "title": "VAMP: Inject Keystroke Bootstrap (Win+R / Terminal)"
+      },
+      {
         "command": "vamp.setupPython",
         "title": "VAMP: Set Up Python Environment"
       },

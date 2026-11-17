@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- **Inject Bootstrap** for VirtualBox desktops: a running Windows 11 or Debian guest gets its post-install script through keyboard injection, Packer style — Win+R → `cmd` → a click that pins keyboard focus → `powershell -ExecutionPolicy Bypass` → the script, sent in 50-character chunks. Debian clicks the screen centre and types into the open terminal, with optional Ctrl+Alt+T, TTY login and custom command. Available as the **Inject Bootstrap** button on a running desktop, the `vamp.bootstrapGuest` command and the `vm_guest_bootstrap` MCP tool (`dryRun:true` returns the plan). Creating a VM offers the script injection once the guest desktop appears; nothing is typed unasked.
+- The focus click uses the VirtualBox API mouse helper (Python `vboxapi`) because `VBoxManage controlvm` has no mouse event subcommand. Without that helper the click is reported as a warning and the keystrokes are still sent.
+- Delivery is never reported as success: results carry `verified:false` and the next action is to check the guest screen or its setup log.
+
 ## 0.1.9
 
 - Require local privacy screening, AI structural-report review, an AI warning and explicit manual review before RPA ZIP export; bind approval to the exact exported bytes. Original source and recorded values are withheld from AI.

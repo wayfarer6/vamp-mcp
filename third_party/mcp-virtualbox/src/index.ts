@@ -8,6 +8,7 @@ import { registerInputTools } from "./tools/input.js";
 import { registerGuestControlTools } from "./tools/guest-control.js";
 import { registerNetworkExecTools } from "./tools/network-exec.js";
 import { registerKnowledgeTools } from "./tools/knowledge.js";
+import { registerBootstrapTools } from "./tools/bootstrap.js";
 
 const require = createRequire(import.meta.url);
 const { version } = require("../package.json");
@@ -27,6 +28,7 @@ registerInputTools(server);
 registerGuestControlTools(server);
 registerNetworkExecTools(server);
 registerKnowledgeTools(server);
+registerBootstrapTools(server);
 
 async function main() {
   const transport = new StdioServerTransport();
