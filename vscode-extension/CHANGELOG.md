@@ -2,6 +2,12 @@
 
 
 
+## 0.2.5
+
+- Persist Debian Full HD from GRUB through GDM and the user session with global monitors.xml deployment and boot restore services.
+- Enforce automatic desktop login and disable sleep, idle blanking, dimming and automatic locking.
+- Runtime tests for this Debian update were omitted at the user request.
+
 ## 0.2.4
 
 - Overwrite Windows guest display registry sizes with 1920x1080 as the final elevated setup step for VirtualBox, KVM and Hyper-V.

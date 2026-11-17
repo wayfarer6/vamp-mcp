@@ -37,8 +37,9 @@ set -eu
 export DEBIAN_FRONTEND=noninteractive
 python3 /opt/rpa-recorder-setup/recorder/configure-debian-mirrors.py
 apt-get update
-apt-get install -y build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot task-gnome-desktop xorg gnome-session-xsession
+apt-get install -y dconf-cli build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot task-gnome-desktop xorg gnome-session-xsession
 python3 /opt/rpa-recorder-setup/recorder/configure-gdm.py
+python3 /opt/rpa-recorder-setup/recorder/configure-debian-display.py prepare
 # Debian 13 uses a static gdm.service; enabling gdm3 alone does not create
 # display-manager.service when tasksel was skipped by the unattended installer.
 gdm_unit=
@@ -79,7 +80,8 @@ FINALIZE
   cat > "$target/etc/systemd/system/vamp-packer-finalize.service" <<'SERVICE'
 [Unit]
 Description=VAMP Packer post-login setup (60 second desktop wait)
-After=graphical.target network-online.target
+After=display-manager.service network-online.target vamp-display-sync.service
+Requires=vamp-display-sync.service
 Wants=network-online.target
 [Service]
 Type=oneshot

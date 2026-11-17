@@ -7,7 +7,7 @@ def select_mode(state):
     spec,modes,monitor_properties=monitors[0]
     matches=[m for m in modes if (int(m[1]),int(m[2]))==(1920,1080) and 1.0 in [float(x) for x in m[5]]]
     if not matches:raise RuntimeError('GNOME driver does not advertise 1920x1080 at scale 1; check guest display drivers')
-    return serial,spec,max(matches,key=lambda m:float(m[3])),properties
+    return serial,spec,min(matches,key=lambda m:abs(float(m[3])-60.0)),properties
 
 
 def verify(state):
@@ -37,15 +37,14 @@ def apply():
     interface=dbus.Interface(proxy,'org.gnome.Mutter.DisplayConfig')
     state=interface.GetCurrentState(timeout=15)
     serial,spec,mode,properties=select_mode(state)
-    if not verify(state):
-        configuration=dbus.Array([dbus.Struct((dbus.Int32(0),dbus.Int32(0),dbus.Double(1.0),
-          dbus.UInt32(0),dbus.Boolean(True),dbus.Array([
-            dbus.Struct((str(spec[0]),str(mode[0]),dbus.Dictionary({},signature='sv')))],signature='(ssa{sv})')))],signature='(iiduba(ssa{sv}))')
-        options=dbus.Dictionary({},signature='sv')
-        if properties.get('supports-changing-layout-mode',False) and 'layout-mode' in properties:options['layout-mode']=dbus.UInt32(properties['layout-mode'])
-        # Verify the selected monitor/mode before persistently applying.
-        interface.ApplyMonitorsConfig(serial,dbus.UInt32(0),configuration,options,timeout=15)
-        interface.ApplyMonitorsConfig(serial,dbus.UInt32(2),configuration,options,timeout=15)
+    configuration=dbus.Array([dbus.Struct((dbus.Int32(0),dbus.Int32(0),dbus.Double(1.0),
+      dbus.UInt32(0),dbus.Boolean(True),dbus.Array([
+        dbus.Struct((str(spec[0]),str(mode[0]),dbus.Dictionary({},signature='sv')))],signature='(ssa{sv})')))],signature='(iiduba(ssa{sv}))')
+    options=dbus.Dictionary({},signature='sv')
+    if properties.get('supports-changing-layout-mode',False) and 'layout-mode' in properties:options['layout-mode']=dbus.UInt32(properties['layout-mode'])
+    if not verify(state):interface.ApplyMonitorsConfig(serial,dbus.UInt32(0),configuration,options,timeout=15)
+    # Persist even when the live mode already matches, so monitors.xml exists.
+    interface.ApplyMonitorsConfig(serial,dbus.UInt32(2),configuration,options,timeout=15)
     observed=interface.GetCurrentState(timeout=15)
     verified=verify(observed)
     import os
