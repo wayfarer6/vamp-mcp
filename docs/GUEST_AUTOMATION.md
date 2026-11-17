@@ -29,14 +29,21 @@ Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 구해야
 
 공식 keyring 검증을 유지하며 설치된 릴리스를 다른 버전으로 올리지 않습니다. 변경 전 APT 설정은 작은 파일 백업으로 보존합니다. VM 스냅샷을 생성하는 것은 아닙니다. 새 VM은 post-install 단계에서 설정 후 `apt-get update`를 수행합니다.
 
-이미 설치된 VM은 일반 사용자에게 sudo 권한이 없을 수 있습니다. `su root` 후 설치 미디어의 `install-debian-root.sh vboxuser`를 실행하면 네트워크 미러·필수 패키지·사용자 레코더 설치를 순서대로 수행합니다. 미디어는 `/media/cdrom0` 또는 `/media/<user>/<label>` 등에 마운트될 수 있으므로 실제 경로를 확인하세요.
+이미 설치된 VM은 일반 사용자에게 sudo 권한이 없을 수 있습니다. `su root` 후 설치 스크립트의 `install-debian-root.sh vboxuser`를 실행하면 네트워크 미러·필수 패키지·사용자 레코더 설치를 순서대로 수행합니다.
+
+VAMP는 ISO를 xorriso로 리마스터링하지 않고, `guest_setup/`을 호스트 파이썬 HTTP 서버(8421)로 제공합니다. 게스트 root 터미널에서 다음처럼 같은 스크립트를 내려받아 실행할 수 있습니다(VirtualBox NAT 기준, libvirt 기본 NAT는 `192.168.122.1`).
 
 ```bash
-# 게스트 root 터미널. 실제 미디어 경로로 바꿉니다.
-python3 /media/cdrom0/configure-debian-mirrors.py
+# 호스트: python3 scripts/script_server.py start
+# 게스트 root 터미널
+wget -qO /tmp/vamp-setup.tar.gz http://10.0.2.2:8421/vamp-guest-setup.tar.gz
+mkdir -p /opt/vamp-setup && tar -xzf /tmp/vamp-setup.tar.gz -C /opt/vamp-setup
+python3 /opt/vamp-setup/recorder/configure-debian-mirrors.py
 apt-get update
-sh /media/cdrom0/install-debian-root.sh vboxuser
+sh /opt/vamp-setup/recorder/install-debian-root.sh vboxuser
 ```
+
+오프라인 미디어를 계속 쓸 경우에는 `/media/cdrom0` 또는 `/media/<user>/<label>` 등 실제 마운트 경로를 확인하세요.
 
 호스트에서 Robot으로 첫 로그인/터미널 설정을 처리하려면 `backends/virtualbox/rpas/debian_first_boot/run.robot`을 사용합니다. `LOGIN_REQUIRED:True`이면 Enter로 로그인 프롬프트를 띄운 뒤 **영문 Password 화면을 OCR로 확인한 경우에만** 테스트 비밀번호를 입력합니다. 터미널과 root 프롬프트도 확인하고, `VAMP_APT_OK` 단독 출력으로 성공을 판정합니다. 개인 VM 암호는 환경 변수 `VAMP_GUEST_PASSWORD`, `VAMP_ROOT_PASSWORD`를 사용하며 Robot 인자에 넣지 마세요. 이미 로그인된 화면이면 LOGIN_REQUIRED를 false로 둡니다.
 

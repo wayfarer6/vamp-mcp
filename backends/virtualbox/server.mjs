@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { registerDisplayTools } from '../../third_party/mcp-virtualbox/dist/tools/display.js';
 import { registerInputTools } from '../../third_party/mcp-virtualbox/dist/tools/input.js';
 import { registerBootstrapTools } from '../../third_party/mcp-virtualbox/dist/tools/bootstrap.js';
+import { registerScriptServerTools } from '../../third_party/mcp-virtualbox/dist/tools/script-server.js';
 import { vboxManage, parseVMList, parseMachineReadable } from '../../third_party/mcp-virtualbox/dist/vbox.js';
 import { McpServer } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/mcp.js';
 import { StdioServerTransport } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js';
@@ -13,7 +14,7 @@ import { z } from '../../third_party/mcp-virtualbox/node_modules/zod/index.js';
 import { config as vboxConfig } from '../../third_party/mcp-virtualbox/dist/types.js';
 vboxConfig.mouseHelperPath=process.env.MOUSE_HELPER_PATH || fileURLToPath(new URL('./mouse_click.py',import.meta.url));
 vboxConfig.pythonPath=process.env.PYTHON_PATH || process.env.RPA_HOST_PYTHON || (process.platform==='win32'?'python':'python3');
-const server = new McpServer({name: 'VAMP', version: '0.1.9'}, {instructions:'Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup.'});
+const server = new McpServer({name: 'VAMP', version: '0.2.0'}, {instructions:'Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup. Guest setup scripts are served over HTTP from the host Python script server on port 8421; guests install them with wget/curl (vm_script_server_start/status/stop). VAMP does not rewrite ISOs and does not use xorriso.'});
 const result = value => ({content: [{type: 'text', text: JSON.stringify(value)}]});
 async function displayAction(action,values) {
   const python=process.env.RPA_HOST_PYTHON || 'python';
@@ -174,12 +175,14 @@ server.tool('vm_start', 'Explicitly start an existing VM with detachable observa
 registerDisplayTools(server);
 registerInputTools(server);
 registerBootstrapTools(server);
-server.tool('vm_create', 'Create a NEW Debian/Windows11 VM from a host ISO, start unattended installation with separate UI. PUBLIC defaults vboxuser/password123!. Returns started, not installed. Recorder setup is scripted.', {
+registerScriptServerTools(server);
+server.tool('vm_create', 'Create a NEW Debian/Windows11 VM from a host ISO, start unattended installation with separate UI. PUBLIC defaults vboxuser/password123!. Returns started, not installed. Guest setup is served over HTTP on port 8421 (wget/curl); no ISO is rewritten and xorriso is not used.', {
   name:z.string().min(1).optional(), iso_path:z.string().min(1),
   memory_mb:z.number().int().optional(), cpus:z.number().int().optional(),
   disk_mb:z.number().int().optional(), basedir:z.string().optional(),
   image_index:z.number().int().default(1), product_key:z.string().default(''),
   guest_os:z.enum(['debian','windows11','ubuntu']).optional(), allow_manual_install:z.boolean().default(true), installation_mode:z.enum(['auto','manual']).default('auto'), windows_confirmed:z.boolean().default(false), preflight_only:z.boolean().default(false),
+  serve_scripts:z.boolean().default(true).describe('Start the host Python HTTP script server on port 8421 so the guest installs the recorder with wget/curl'),
 }, async (args) => {
   const python=process.env.RPA_HOST_PYTHON || 'python';
   const script=fileURLToPath(new URL('./provision.py',import.meta.url));

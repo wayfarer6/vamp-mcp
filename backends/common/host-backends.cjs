@@ -79,18 +79,23 @@ function hostBackends(context,{runtime,config,execute=run}){
       const existing=await virsh(['list','--all','--name']);if(existing.split(/\r?\n/).includes(name))throw Error('A VM with this name already exists.');
       const folder=path.join(storage,'kvm',name);fs.mkdirSync(path.dirname(folder),{recursive:true});fs.mkdirSync(folder);
       const disk=path.join(folder,'disk.qcow2');
-      let installer=iso_path;
+      let installer=iso_path, location=[];
       if(mode==='unattended'){
-        const python=config().get('kvmPythonExecutable') || config().get('pythonExecutable') || process.env.RPA_HOST_PYTHON || 'python3';
-        try {const result=JSON.parse(await command(python,[path.join(runtime,'scripts/build_debian_installer.py'),'--source',iso_path,'--output',path.join(folder,'installer.iso')],660000));installer=result.iso;}
-        catch(error){throw Error(`Debian installer preparation failed. No VM was started; inspect ${folder}. ${error.message}`);}
+        // No ISO rewrite: boot the stock ISO's kernel/initrd and inject the preseed into the initrd.
+        const packaged=path.join(runtime,'backends/kvm/debian-preseed.cfg');
+        if(!fs.existsSync(packaged))throw Error('Packaged Debian preseed file is missing from the VAMP runtime; choose manual installation.');
+        // virt-install injects a file into the initrd under its own name; preseed/file= needs /preseed.cfg.
+        const preseed=path.join(folder,'preseed.cfg');fs.copyFileSync(packaged,preseed);
+        location=['--location',`${iso_path},kernel=install.amd/vmlinuz,initrd=install.amd/initrd.gz`,
+          '--initrd-inject',preseed,'--extra-args','auto=true priority=critical preseed/file=/preseed.cfg console=ttyS0,115200n8 console=tty0'];
+        installer=null;
       }
       fs.writeFileSync(path.join(folder,'creation.json'),JSON.stringify({status:'preparing',name,disk,iso_path}));
       await command('qemu-img',['create','-f','qcow2',disk,`${disk_mb}M`]);
-      const args=['--connect',uri(),'--name',name,'--virt-type','kvm','--memory',String(memory_mb),'--vcpus',String(cpus),'--cpu','host-passthrough','--disk',`path=${disk},format=qcow2,bus=${guest_os==='windows11'?'sata':'virtio'}`,'--disk',`path=${installer},device=cdrom,readonly=on`,'--import','--osinfo','detect=on,require=off','--graphics','vnc,listen=127.0.0.1','--video',guest_os==='windows11'?'vga':'virtio','--input','tablet,bus=usb','--network',uri().endsWith('/session')?'user,model=e1000e':'network=default,model=virtio','--noautoconsole','--serial',`pty,log.file=${path.join(folder,'serial.log')},log.append=on`];
+      const args=['--connect',uri(),'--name',name,'--virt-type','kvm','--memory',String(memory_mb),'--vcpus',String(cpus),'--cpu','host-passthrough','--disk',`path=${disk},format=qcow2,bus=${guest_os==='windows11'?'sata':'virtio'}`,...(installer?['--disk',`path=${installer},device=cdrom,readonly=on`]:[]),...location,...(location.length?[]:['--import']),'--osinfo','detect=on,require=off','--graphics','vnc,listen=127.0.0.1','--video',guest_os==='windows11'?'vga':'virtio','--input','tablet,bus=usb','--network',uri().endsWith('/session')?'user,model=e1000e':'network=default,model=virtio','--noautoconsole','--serial',`pty,log.file=${path.join(folder,'serial.log')},log.append=on`];
       if(guest_os==='windows11')args.push('--boot','uefi,hd,cdrom','--tpm','backend.type=emulator,backend.version=2.0,model=tpm-crb');
       else args.push('--boot','hd,cdrom');
-      try{await command('virt-install',args,180000);}catch(error){throw Error(`KVM setup failed. Partial setup preserved at ${folder}. ${error.message}`);}
+      try{await command('virt-install',args,180000);}catch(error){throw Error(`KVM setup failed. Partial setup preserved at ${folder}. ${error.message}${mode==='unattended'?' Debian automatic installation reads the stock ISO with virt-install; if the host lacks that tooling, choose manual installation (xorriso is no longer used).':''}`);}
       const id=(await virsh(['domuuid',name])).trim();checkID(id);
       const state=(await virsh(['domstate',id])).trim();
       if(state!=='running')throw Error(`VM was created but did not start (state: ${state}). Setup is preserved at ${folder}`);

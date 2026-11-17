@@ -115,13 +115,29 @@ The complete Robot/vision demos run from the repository; the basic VSIX does not
 
 VAMP includes VAMP Vault (`wayfarer6.vamp-vault`) in its extension pack so Marketplace installation installs both extensions.
 
-### VM installation in 0.1.9
+### VM installation in 0.2.0
 
-VirtualBox provisioning starts headless and verifies Running state. KVM VM creation is shared between the manager and the bundled **VAMP KVM Host** MCP server (`remote_vm_create`). Debian amd64 installer ISOs can install automatically using Python and xorriso; the public sandbox login is `vboxuser` / `password123!`. Ubuntu/Windows KVM installers and Hyper-V OS installation remain manual. VM startup does not establish that OS installation, recorder setup or Vault setup completed.
+VirtualBox provisioning starts headless and verifies Running state. KVM VM creation is shared between the manager and the bundled **VAMP KVM Host** MCP server (`remote_vm_create`). Debian amd64 installer ISOs install automatically by booting the stock ISO with a preseed injected into the initrd; VAMP no longer rewrites ISOs and **xorriso is not required**. The public sandbox login is `vboxuser` / `password123!`. Ubuntu/Windows KVM installers and Hyper-V OS installation remain manual. VM startup does not establish that OS installation, recorder setup or Vault setup completed.
+
+### Guest setup over HTTP (port 8421)
+
+The recorder, vault helpers and setup scripts in `guest_setup/` are served by a Python standard-library HTTP server on the fixed port **8421** (not 80 or 8800). The manager starts it before **Inject Bootstrap** and offers **Start Script Server (8421)** / **Stop Script Server**; it also stops itself after 30 minutes. VirtualBox NAT and QEMU user networking reach the host at `10.0.2.2`; libvirt's default NAT network uses `192.168.122.1`.
+
+```bash
+# guest, Debian/Ubuntu
+wget -qO- http://10.0.2.2:8421/setup.sh | sh
+```
+
+```powershell
+# guest, Windows
+powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"
+```
+
+The server exposes only the staged setup folder (no directory listings, no dotfiles) and logs requests to the VAMP output channel. Delivery is not proof that the guest ran the script: check the guest screen or setup log. MCP tools: `vm_script_server_start`, `vm_script_server_status`, `vm_script_server_stop`.
 
 Linux: shut down KVM VMs before starting VirtualBox, and vice versa. The new checks explain conflicts such as `VERR_SVM_IN_USE` instead of reporting successful startup.
 
-한국어: 생성 후 실제 기동 상태를 확인합니다. Debian amd64 자동 설치는 Python과 xorriso가 필요하며 공개 테스트 계정은 `vboxuser` / `password123!`입니다. KVM과 VirtualBox를 동시에 실행하지 마세요. OS 설치와 게스트 녹화기·Vault 설정 완료는 별도입니다.
+한국어: 생성 후 실제 기동 상태를 확인합니다. Debian amd64 자동 설치는 순정 ISO에 preseed를 주입해 진행하며 xorriso가 필요 없습니다. 공개 테스트 계정은 `vboxuser` / `password123!`입니다. 게스트 설정 스크립트는 관리자가 8421 포트 HTTP 서버로 제공하고 게스트가 wget/`irm`으로 내려받습니다(기본 30분 후 자동 중지). KVM과 VirtualBox를 동시에 실행하지 마세요. OS 설치와 게스트 녹화기·Vault 설정 완료는 별도입니다.
 
 ## RPA privacy before export or upload / RPA 공유 전 경고
 

@@ -13,7 +13,10 @@ function harness() {
   const panel={visible:false,reveal(){},webview:{cspSource:'test:',asWebviewUri:x=>x,postMessage(m){messages.push(m);},onDidReceiveMessage(fn){receive=fn;}},onDidDispose(fn){dispose=fn;},onDidChangeViewState(){},dispose(){dispose?.();}};
   const answers={warning:undefined,confirm:'Create and Start',state:'poweroff',setup:true,missingPython:false};
   const child={stdin:{on(){},end(value){calls.push(['provision',JSON.parse(value)]);}}};
-  const execFile=(exe,args,options,callback)=>{setImmediate(()=>callback(null,JSON.stringify({status:'installation_started',installation_mode:'unattended'}),''));return child;};
+  const execFile=(exe,args,options,callback)=>{
+    if(String(args?.[0]||'').endsWith('script_server.py')){setImmediate(()=>callback(null,JSON.stringify({status:'running',port:8421,guest_urls:{virtualbox_nat:'http://10.0.2.2:8421'}}),''));return {stdin:{end(){}}};}
+    setImmediate(()=>callback(null,JSON.stringify({status:'installation_started',installation_mode:'unattended'}),''));return child;
+  };
   execFile[promisify.custom]=async(exe,args)=>{
     calls.push(args);
     if(exe==='virsh')return {stdout:answers.activeKvm&&args.includes(answers.activeKvm)?'active-kvm':''};
@@ -28,7 +31,7 @@ function harness() {
     commands:{registerCommand(name,fn){commands.set(name,fn);return {dispose(){}};},executeCommand:async()=>{}},
     window:{createWebviewPanel:()=>panel,showOpenDialog:async()=>[{fsPath:'/tmp/installer.iso'}],showInformationMessage:async(...args)=>{notices.push(args);return answers.confirm;},showErrorMessage:async(...args)=>{notices.push(args);return undefined;},showWarningMessage:async(...args)=>{warnings.push(args);return answers.warning;},showQuickPick:async items=>answers.quickPick?items.find(item=>item.label===answers.quickPick):items?.[0],withProgress:async(_options,task)=>task({report(){}})}};
   const module={exports:{}};
-  const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./guest-bootstrap'?require(path.join(root,'guest-bootstrap')):name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
+  const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./guest-bootstrap'?require(path.join(root,'guest-bootstrap')):name==='./script-server'?require(path.join(root,'script-server')):name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
   vm.runInNewContext(`(function(require,module,exports){${fs.readFileSync(path.join(root,'vm-manager.js'),'utf8')}\n})`,{setInterval,clearInterval,process,console})(req,module,module.exports);
   const api=module.exports;
   api.registerManager(context,{pythonPath:()=>__filename,runtime:'/runtime',output:{appendLine(){},show(){}},setupPython:async()=>{calls.push(['setup']);return answers.setup;}});
@@ -104,7 +107,7 @@ test('keystroke bootstrap opens Run, starts cmd, focuses and types the script',a
  assert.match(result.next_action,/not proof of execution/);
  const typed=calls.filter(call=>call[2]==='keyboardputstring').map(call=>call[3]).join('');
  assert.ok(typed.includes('powershell -ExecutionPolicy Bypass'));
- assert.ok(typed.includes('C:\\ProgramData\\RPA-Recorder-Setup\\setup-win.cmd'));
+ assert.ok(typed.includes('irm http://10.0.2.2:8421/setup.ps1 | iex'));
  assert.equal(guestOsFromType('Windows11_64'),'windows11');
  assert.equal(guestOsFromType('Debian12_64'),'debian');
 });
@@ -118,7 +121,7 @@ test('Debian bootstrap keeps the password out of the returned plan and log',asyn
   sleep:async()=>{},
   log:message=>logged.push(message),
  });
- assert.deepEqual(typed,['vboxuser','password123!','/media/cdrom/setup.sh']);
+ assert.deepEqual(typed,['vboxuser','password123!','wget -qO- http://10.0.2.2:8421/setup.sh | sh']);
  assert.ok(!JSON.stringify(result).includes('password123!'));
  assert.ok(!logged.join(' ').includes('password123!'));
 });
@@ -129,7 +132,7 @@ test('bootstrap command plans a running desktop and refuses a stopped one',async
   h.answers.state='running';
   const plan=await h.commands.get('vamp.bootstrapGuest')(id,'windows11',{dryRun:true});
   assert.equal(plan.status,'dry_run');
-  assert.equal(plan.command,'cmd.exe /c C:\\ProgramData\\RPA-Recorder-Setup\\setup-win.cmd');
+  assert.equal(plan.command,'powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"');
   assert.ok(plan.plan.some(step=>step.kind==='click'&&step.x===960&&step.y===540));
   assert.ok(!h.calls.some(call=>call[2]==='keyboardputstring'));
   h.answers.state='poweroff';

@@ -6,6 +6,29 @@ import unittest
 from mcp_vm.provision import create
 
 class ProvisionTests(unittest.TestCase):
+    def test_automated_debian_boots_the_stock_iso_without_xorriso(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);source=root/'debian.iso';source.write_text('iso')
+            class Controller:
+                config={'vms':{},'libvirt_uri':'qemu:///session'}
+                config_path=root/'config.json'
+                jobs_root=root/'jobs'
+                locks={}
+                commands=[]
+                def virsh(self,*args):return ''
+                def command(self,args,**kwargs):
+                    self.commands.append([str(a) for a in args])
+                    return subprocess.CompletedProcess(args,0,'','')
+            c=Controller()
+            result=create(c,'auto-debian',iso_path=str(source),memory_mb=2048,cpus=2,disk_gb=20,guest_os='debian')
+            install=next(command for command in c.commands if command[0]=='virt-install')
+            location=install[install.index('--location')+1]
+            self.assertEqual(location,f'{source},kernel=install.amd/vmlinuz,initrd=install.amd/initrd.gz')
+            self.assertTrue(any(str(path).endswith('preseed.cfg') for path in install))
+            self.assertNotIn('--import',install)
+            self.assertFalse(any('xorriso' in ' '.join(command) or 'remaster_debian_setup' in ' '.join(command) for command in c.commands))
+            self.assertEqual(result['status'],'installation_started')
+
     def test_nested_windows_uses_one_socket_eight_cores_and_agent(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);source=root/'source.qcow2';source.touch()

@@ -3,16 +3,29 @@
  * Packer-style guest bootstrap: after a Windows or Debian VM finishes booting,
  * inject the post-install script with pointer focus plus keystrokes.
  *
- * Windows: Win+R -> "cmd" -> Enter -> focus click -> "powershell -ExecutionPolicy Bypass" -> script.
- * Debian:  focus click -> optional TTY login -> script.
+ * Windows: Win+R -> "cmd" -> Enter -> focus click -> "powershell -ExecutionPolicy Bypass" -> HTTP setup.
+ * Debian:  focus click -> optional TTY login -> HTTP setup.
+ *
+ * Guest setup is downloaded from the host Python HTTP script server on port 8421
+ * (wget/curl); no ISO is mounted or rewritten and xorriso is not used.
  *
  * Delivery is not proof of execution: the guest may still be booting, may show a
  * different window, or may ignore the keys. Verify the guest before reporting success.
  */
 
+const SCRIPT_SERVER_PORT = 8421;
+const DEFAULT_GUEST_HOST = '10.0.2.2';
+function scriptBaseUrl(host = DEFAULT_GUEST_HOST, port = SCRIPT_SERVER_PORT) {
+  return `http://${host}:${port}`;
+}
+function defaultCommand(os, baseUrl = scriptBaseUrl()) {
+  return os === 'windows11'
+    ? `powershell -ExecutionPolicy Bypass -Command "irm ${baseUrl}/setup.ps1 | iex"`
+    : `wget -qO- ${baseUrl}/setup.sh | sh`;
+}
 const DEFAULT_COMMANDS = {
-  windows11: 'cmd.exe /c C:\\ProgramData\\RPA-Recorder-Setup\\setup-win.cmd',
-  debian: '/media/cdrom/setup.sh',
+  windows11: defaultCommand('windows11'),
+  debian: defaultCommand('debian'),
 };
 const WINDOWS_SHELL_COMMAND = 'powershell -ExecutionPolicy Bypass';
 const ENTER = [0x1c, 0x9c];
@@ -33,7 +46,8 @@ function clickStep(x, y) {
 
 function planBootstrap(options) {
   const guestOs = options.os === 'debian' ? 'debian' : 'windows11';
-  const command = String(options.command || '').trim() || DEFAULT_COMMANDS[guestOs];
+  const baseUrl = String(options.scriptServerUrl || scriptBaseUrl()).replace(/\/+$/, '');
+  const command = String(options.command || '').trim() || defaultCommand(guestOs, baseUrl);
   const bootWaitSec = Math.max(0, Number(options.bootWaitSec ?? 30));
   const focusClick = options.focusClick !== false;
   const clickX = Number(options.clickX ?? 960);
@@ -132,4 +146,4 @@ async function runGuestBootstrap(options, deps = {}) {
   return result;
 }
 
-module.exports = {DEFAULT_COMMANDS, WINDOWS_SHELL_COMMAND, ENTER, RUN_DIALOG, OPEN_TERMINAL, guestOsFromType, planBootstrap, runGuestBootstrap, redactSteps};
+module.exports = {SCRIPT_SERVER_PORT, DEFAULT_GUEST_HOST, scriptBaseUrl, defaultCommand, DEFAULT_COMMANDS, WINDOWS_SHELL_COMMAND, ENTER, RUN_DIALOG, OPEN_TERMINAL, guestOsFromType, planBootstrap, runGuestBootstrap, redactSteps};

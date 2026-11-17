@@ -4,12 +4,32 @@ import { execFile } from "node:child_process";
 import { vboxManage, formatError } from "../vbox.js";
 import { resolveScancodes } from "../scancodes.js";
 import { config } from "../types.js";
+import { SCRIPT_SERVER_PORT, startScriptServer, type ScriptServerInfo } from "./script-server.js";
+
+export { SCRIPT_SERVER_PORT };
 
 export type GuestOs = "windows11" | "debian";
 
+/** VirtualBox NAT and QEMU user networking both expose the host as 10.0.2.2. */
+export const DEFAULT_GUEST_HOST = "10.0.2.2";
+
+export function scriptBaseUrl(host: string = DEFAULT_GUEST_HOST, port: number = SCRIPT_SERVER_PORT): string {
+  return `http://${host}:${port}`;
+}
+
+/**
+ * Guest setup is downloaded from the host Python HTTP server instead of a mounted or
+ * rewritten ISO, so the same scripts work for every platform. xorriso is not used.
+ */
+export function defaultBootstrapCommand(guestOs: GuestOs, baseUrl: string = scriptBaseUrl()): string {
+  return guestOs === "windows11"
+    ? `powershell -ExecutionPolicy Bypass -Command "irm ${baseUrl}/setup.ps1 | iex"`
+    : `wget -qO- ${baseUrl}/setup.sh | sh`;
+}
+
 export const DEFAULT_BOOTSTRAP_COMMANDS: Record<GuestOs, string> = {
-  windows11: "cmd.exe /c C:\\ProgramData\\RPA-Recorder-Setup\\setup-win.cmd",
-  debian: "/media/cdrom/setup.sh",
+  windows11: defaultBootstrapCommand("windows11"),
+  debian: defaultBootstrapCommand("debian"),
 };
 
 /** Key combinations used by the Packer-style sequence. */
@@ -41,6 +61,10 @@ export interface BootstrapOptions {
   password?: string;
   chunkSize?: number;
   keyDelayMs?: number;
+  /** Start the host HTTP script server before typing when the default HTTP command is used. Default true. */
+  serveScripts?: boolean;
+  /** Base URL the guest uses, e.g. http://192.168.122.1:8421 on libvirt's default network. */
+  scriptServerUrl?: string;
 }
 
 export type BootstrapStep =
@@ -56,6 +80,8 @@ export interface BootstrapRuntime {
   click?: (x: number, y: number) => Promise<void>;
   sleep?: (ms: number) => Promise<void>;
   log?: (message: string) => void;
+  /** Start the script server. Defaults to scripts/script_server.py start on port 8421. */
+  ensureScriptServer?: () => Promise<ScriptServerInfo>;
 }
 
 export interface BootstrapResult {
@@ -68,6 +94,8 @@ export interface BootstrapResult {
   warnings: string[];
   /** Keystroke and pointer delivery is not proof that the guest script ran. */
   verified: boolean;
+  /** Host HTTP server that serves the setup the guest downloads. */
+  scriptServer?: ScriptServerInfo;
   error?: string;
   next_action?: string;
 }
@@ -136,7 +164,9 @@ function mouseHelperClick(vm: string, x: number, y: number): Promise<void> {
 }
 
 export async function runBootstrap(options: BootstrapOptions, runtime: BootstrapRuntime = {}): Promise<BootstrapResult> {
-  const command = (options.command ?? "").trim() || DEFAULT_BOOTSTRAP_COMMANDS[options.guestOs];
+  const baseUrl = (options.scriptServerUrl || scriptBaseUrl()).replace(/\/+$/, "");
+  const customCommand = (options.command ?? "").trim();
+  const command = customCommand || defaultBootstrapCommand(options.guestOs, baseUrl);
   const plan = planBootstrap({ ...options, command });
   const vm = options.vm;
   const vbox = runtime.vbox ?? ((args: string[]) => vboxManage(...args));
@@ -157,8 +187,27 @@ export async function runBootstrap(options: BootstrapOptions, runtime: Bootstrap
     verified: false,
   };
   if (options.dryRun) {
-    result.next_action = "Review the ordered steps, then call again with dryRun=false to inject them.";
+    result.next_action = `Review the ordered steps, then call again with dryRun=false to inject them. Guest setup is downloaded from ${baseUrl}.`;
     return result;
+  }
+
+  if (options.serveScripts !== false && !customCommand) {
+    try {
+      const ensure = runtime.ensureScriptServer ?? (() => startScriptServer({ ttlSeconds: 1800 }));
+      const server = await ensure();
+      result.scriptServer = server;
+      if (server.status !== "running") {
+        result.status = "failed";
+        result.error = `The guest setup HTTP server is not running on port ${SCRIPT_SERVER_PORT}: ${server.error ?? server.status}`;
+        result.next_action = "Start it with vm_script_server_start (or python3 scripts/script_server.py start), then inject again. Nothing was typed.";
+        return result;
+      }
+    } catch (error) {
+      result.status = "failed";
+      result.error = `Could not start the guest setup HTTP server: ${formatError(error)}`;
+      result.next_action = "Start it with vm_script_server_start (or python3 scripts/script_server.py start), then inject again. Nothing was typed.";
+      return result;
+    }
   }
 
   for (const step of plan) {
@@ -196,7 +245,7 @@ export async function runBootstrap(options: BootstrapOptions, runtime: Bootstrap
   }
 
   result.status = "completed";
-  result.next_action = "Delivery is not proof of execution. Screenshot the guest or read its setup log before treating the recorder or script as installed.";
+  result.next_action = `Delivery is not proof of execution. Screenshot the guest or read its setup log before treating the recorder or script as installed. Setup was served from ${baseUrl}.`;
   return result;
 }
 
@@ -207,11 +256,11 @@ function sanitizeVm(value: string): string {
 export function registerBootstrapTools(server: McpServer) {
   server.tool(
     "vm_guest_bootstrap",
-    "Bootstrap a newly installed Windows or Debian VM using keystroke injection (Packer style). Opens the Run dialog (Win+R) or focuses the terminal, launches PowerShell/shell, and executes the bootstrap script. Send keystrokes and pointer events only; success means the keys were delivered, not that the guest ran the script.",
+    `Bootstrap a newly installed Windows or Debian VM using keystroke injection (Packer style). Opens the Run dialog (Win+R) or focuses the terminal, launches PowerShell/shell, and runs the guest setup downloaded from the host HTTP script server on port ${SCRIPT_SERVER_PORT} (wget/curl; xorriso is not used). Send keystrokes and pointer events only; success means the keys were delivered, not that the guest ran the script.`,
     {
       vm: z.string().describe("VM name or UUID"),
       os: z.enum(["windows11", "debian"]).default("windows11").describe("Guest OS type"),
-      command: z.string().optional().describe(`Command/script path to execute in guest. Default for windows11: "${DEFAULT_BOOTSTRAP_COMMANDS.windows11}", for debian: "${DEFAULT_BOOTSTRAP_COMMANDS.debian}".`),
+      command: z.string().optional().describe(`Command to execute in the guest. Defaults to the HTTP setup command: windows11 "${DEFAULT_BOOTSTRAP_COMMANDS.windows11}", debian "${DEFAULT_BOOTSTRAP_COMMANDS.debian}".`),
       bootWaitSec: z.number().default(30).describe("Seconds to wait after boot before injecting keys"),
       clickX: z.number().default(960).describe("X coordinate for focus click"),
       clickY: z.number().default(540).describe("Y coordinate for focus click"),
@@ -222,8 +271,10 @@ export function registerBootstrapTools(server: McpServer) {
       password: z.string().optional().describe("Debian only: TTY password, typed after the login name. Never echoed back in the result"),
       chunkSize: z.number().default(50).describe("Characters per keyboardputstring call. Smaller is safer; the guest keyboard buffer drops characters if overrun"),
       keyDelayMs: z.number().default(30).describe("Delay in ms between chunks"),
+      serveScripts: z.boolean().default(true).describe(`Start the host HTTP script server on port ${SCRIPT_SERVER_PORT} before typing the default setup command`),
+      scriptServerUrl: z.string().optional().describe(`Base URL the guest downloads from. Default http://10.0.2.2:${SCRIPT_SERVER_PORT}; use http://192.168.122.1:${SCRIPT_SERVER_PORT} on libvirt's default NAT network`),
     },
-    async ({ vm, os, command, bootWaitSec, clickX, clickY, dryRun, focusClick, openTerminal, username, password, chunkSize, keyDelayMs }) => {
+    async ({ vm, os, command, bootWaitSec, clickX, clickY, dryRun, focusClick, openTerminal, username, password, chunkSize, keyDelayMs, serveScripts, scriptServerUrl }) => {
       const result = await runBootstrap({
         vm: sanitizeVm(vm),
         guestOs: os ?? "windows11",
@@ -238,6 +289,8 @@ export function registerBootstrapTools(server: McpServer) {
         password,
         chunkSize: chunkSize ?? 50,
         keyDelayMs: keyDelayMs ?? 30,
+        serveScripts: serveScripts ?? true,
+        scriptServerUrl,
       });
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],

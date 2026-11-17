@@ -18,6 +18,8 @@ import {
   redactPlan,
   DEFAULT_BOOTSTRAP_COMMANDS,
   WINDOWS_SHELL_COMMAND,
+  SCRIPT_SERVER_PORT,
+  defaultBootstrapCommand,
   type BootstrapOptions,
 } from "./bootstrap.js";
 
@@ -53,6 +55,7 @@ function options(overrides: Partial<BootstrapOptions> = {}): BootstrapOptions {
     clickY: 540,
     dryRun: false,
     focusClick: true,
+    serveScripts: false,
     ...overrides,
   };
 }
@@ -81,11 +84,12 @@ describe("vm_guest_bootstrap registration", () => {
     expect(mockVboxManage).not.toHaveBeenCalled();
   });
 
-  it("defaults to windows11 and the recorder setup script", async () => {
+  it("defaults to windows11 and the HTTP setup command on port 8421", async () => {
     const result = await callTool("vm_guest_bootstrap", { vm: "TestVM", bootWaitSec: 0, dryRun: true });
     const parsed = JSON.parse(result.content[0].text);
     expect(parsed.os).toBe("windows11");
-    expect(parsed.command).toBe("cmd.exe /c C:\\ProgramData\\RPA-Recorder-Setup\\setup-win.cmd");
+    expect(parsed.command).toBe('powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"');
+    expect(parsed.command).not.toContain("ProgramData");
   });
 
   it("strips a trailing dot that Windows resolves to the local machine", async () => {
@@ -141,7 +145,7 @@ describe("debian sequence", () => {
     const codes = mockVboxManage.mock.calls.filter(call => call[2] === "keyboardputscancode");
     // Only Enter is sent: no Win+R.
     expect(codes).toEqual([["controlvm", "TestVM", "keyboardputscancode", "1c", "9c"]]);
-    expect(mockVboxManage).toHaveBeenCalledWith("controlvm", "TestVM", "keyboardputstring", "/media/cdrom/setup.sh");
+    expect(mockVboxManage).toHaveBeenCalledWith("controlvm", "TestVM", "keyboardputstring", "wget -qO- http://10.0.2.2:8421/setup.sh | sh");
   });
 
   it("types the TTY login before the command and never returns the password", async () => {
@@ -150,7 +154,7 @@ describe("debian sequence", () => {
       { sleep: noSleep, click: noClick },
     );
     const typed = mockVboxManage.mock.calls.filter(call => call[2] === "keyboardputstring").map(call => call[3]);
-    expect(typed).toEqual(["vboxuser", "password123!", "/media/cdrom/setup.sh"]);
+    expect(typed).toEqual(["vboxuser", "password123!", "wget -qO- http://10.0.2.2:8421/setup.sh | sh"]);
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("password123!");
     expect(serialized).toContain("********");
@@ -164,6 +168,46 @@ describe("debian sequence", () => {
   it("uses the click point that a scaled 1920x1080 screen needs", () => {
     const plan = planBootstrap({ ...options({ guestOs: "debian", clickX: 640, clickY: 400 }), command: "/media/cdrom/setup.sh" });
     expect(plan.find(step => step.kind === "click")).toMatchObject({ x: 640, y: 400 });
+  });
+});
+
+describe("HTTP guest setup", () => {
+  it("starts the host script server before typing the default command", async () => {
+    const ensureScriptServer = vi.fn(async () => ({ status: "running", port: 8421, pid: 7 }));
+    const result = await runBootstrap(options({ serveScripts: true }), { sleep: noSleep, click: noClick, ensureScriptServer });
+    expect(ensureScriptServer).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe("completed");
+    expect(result.scriptServer).toMatchObject({ status: "running", port: 8421 });
+    expect(result.command).toContain(`http://10.0.2.2:${SCRIPT_SERVER_PORT}/setup.ps1`);
+  });
+
+  it("types nothing when the script server cannot start", async () => {
+    const result = await runBootstrap(options({ serveScripts: true }), {
+      sleep: noSleep,
+      click: noClick,
+      ensureScriptServer: async () => ({ status: "port_in_use", port: 8421, error: "Port 8421 is already used" }),
+    });
+    expect(result.status).toBe("failed");
+    expect(result.error).toContain("8421");
+    expect(mockVboxManage).not.toHaveBeenCalled();
+  });
+
+  it("does not start a server for an explicit command", async () => {
+    const ensureScriptServer = vi.fn(async () => ({ status: "running", port: 8421 }));
+    await runBootstrap(options({ serveScripts: true, command: "powershell -NoProfile -File C:\\setup\\all.ps1" }), {
+      sleep: noSleep,
+      click: noClick,
+      ensureScriptServer,
+    });
+    expect(ensureScriptServer).not.toHaveBeenCalled();
+  });
+
+  it("uses a guest base URL for the libvirt default network", () => {
+    const plan = planBootstrap({
+      ...options({ guestOs: "debian", scriptServerUrl: "http://192.168.122.1:8421/" }),
+      command: defaultBootstrapCommand("debian", "http://192.168.122.1:8421"),
+    });
+    expect(plan.at(-1)).toMatchObject({ text: "wget -qO- http://192.168.122.1:8421/setup.sh | sh" });
   });
 });
 

@@ -108,19 +108,19 @@ Use the MCP servers directly from VS Code, Codex, or another stdio MCP client wi
 Install both packages:
 
 ```bash
-npm install -g vamp-mcp@0.1.9 vamp-mcp-vault@0.1.6
+npm install -g vamp-mcp@0.2.0 vamp-mcp-vault@0.1.6
 ```
 
 Register them with Codex:
 
 ```bash
-codex mcp add vamp -- npx -y vamp-mcp@0.1.9 virtualbox
+codex mcp add vamp -- npx -y vamp-mcp@0.2.0 virtualbox
 codex mcp add vamp-vault -- npx -y vamp-mcp-vault@0.1.6
 ```
 
 For KVM, replace `virtualbox` with `kvm`. For the reviewed RPA library, use `library` and set `VAMP_RPA_REGISTRY` to your catalog directory. In VS Code, use **MCP: Add Server → Command (stdio)** with the matching `npx` command, or copy the configuration examples below.
 
-npm installation does not automatically register every client, install a hypervisor/Python/KeePassXC/VeraCrypt, create a VM, or unlock a vault. Prepare those dependencies separately. Hyper-V is excluded from this npm release. The npm packages do not include the graphical VM manager or live VS Code viewer. VirtualBox VM creation uses the same provisioner as the extension; unattended OS installation requires a compatible ISO. The npm KVM server exposes `remote_vm_create`, using the same lifecycle code as the VS Code manager. Debian amd64 automatic installation needs Python and xorriso; Ubuntu/Windows remain manual. Recorder installation media can be built separately; building media does not install it inside a guest.
+npm installation does not automatically register every client, install a hypervisor/Python/KeePassXC/VeraCrypt, create a VM, or unlock a vault. Prepare those dependencies separately. Hyper-V is excluded from this npm release. The npm packages do not include the graphical VM manager or live VS Code viewer. VirtualBox VM creation uses the same provisioner as the extension; unattended OS installation requires a compatible ISO. The npm KVM server exposes `remote_vm_create`, using the same lifecycle code as the VS Code manager. Debian automatic installation boots the stock ISO and passes a preseed to the kernel/initrd, so xorriso is not needed; Ubuntu/Windows remain manual. Guest setup scripts are served by a host Python HTTP server on port 8421 and downloaded in the guest with wget/curl (`vm_script_server_start`, `vm_script_server_status`, `vm_script_server_stop`). Serving or building media does not install anything inside a guest.
 
 [VS Code and Codex configuration](npm-package/README.md) · [Vault configuration, unlock and approval](npm-packages/vault/README.md)
 
@@ -131,26 +131,26 @@ npm installation does not automatically register every client, install a hypervi
 VS Code 확장 없이 MCP 서버만 사용하려면 npm으로 설치할 수 있습니다. Node.js 22 이상이 필요합니다. 패키지는 **VAMP와 Vault 두 개**이며, VirtualBox와 KVM은 VAMP 안에서 선택합니다.
 
 ```bash
-npm install -g vamp-mcp@0.1.9 vamp-mcp-vault@0.1.6
+npm install -g vamp-mcp@0.2.0 vamp-mcp-vault@0.1.6
 ```
 
 전역 설치 없이 실행할 수도 있습니다. 아래 명령은 MCP 클라이언트에 등록해서 사용하며, 단독 실행하면 표준 입력에서 MCP 요청을 기다립니다.
 
 ```bash
-npx -y vamp-mcp@0.1.9 virtualbox
-npx -y vamp-mcp@0.1.9 kvm
-npx -y vamp-mcp@0.1.9 library
+npx -y vamp-mcp@0.2.0 virtualbox
+npx -y vamp-mcp@0.2.0 kvm
+npx -y vamp-mcp@0.2.0 library
 npx -y vamp-mcp-vault@0.1.6
 ```
 
 Codex CLI 등록 예시:
 
 ```bash
-codex mcp add vamp -- npx -y vamp-mcp@0.1.9 virtualbox
+codex mcp add vamp -- npx -y vamp-mcp@0.2.0 virtualbox
 codex mcp add vamp-vault -- npx -y vamp-mcp-vault@0.1.6
 ```
 
-KVM은 첫 명령의 `virtualbox`를 `kvm`으로 바꿉니다. npm 설치가 모든 클라이언트에 자동 등록해 주지는 않습니다. VirtualBox·KVM/libvirt·Python·KeePassXC·VeraCrypt와 사용할 VM은 별도로 준비해야 합니다. Vault는 DB 경로와 로컬 잠금 해제 수단을 설정해야 하며, npm 설치만으로 VS Code의 승인창이나 비밀 저장소에 자동 연결되지 않습니다. Hyper-V는 이번 npm 배포에서 제외합니다. VirtualBox VM 생성은 확장과 같은 설치기를 사용하며 호환 ISO만 무인 설치합니다. npm KVM 서버의 `remote_vm_create`는 확장과 같은 생성 코드를 사용합니다. Debian amd64 자동 설치는 Python과 xorriso가 필요하며 Ubuntu·Windows는 수동 설치입니다. 녹화기 설치 미디어 생성은 게스트 내부 설치 완료를 뜻하지 않습니다.
+KVM은 첫 명령의 `virtualbox`를 `kvm`으로 바꿉니다. npm 설치가 모든 클라이언트에 자동 등록해 주지는 않습니다. VirtualBox·KVM/libvirt·Python·KeePassXC·VeraCrypt와 사용할 VM은 별도로 준비해야 합니다. Vault는 DB 경로와 로컬 잠금 해제 수단을 설정해야 하며, npm 설치만으로 VS Code의 승인창이나 비밀 저장소에 자동 연결되지 않습니다. Hyper-V는 이번 npm 배포에서 제외합니다. VirtualBox VM 생성은 확장과 같은 설치기를 사용하며 호환 ISO만 무인 설치합니다. npm KVM 서버의 `remote_vm_create`는 확장과 같은 생성 코드를 사용합니다. Debian 자동 설치도 순정 ISO를 그대로 부팅하고 preseed를 커널/initrd로 전달하므로 xorriso가 필요 없습니다. 게스트 설정 스크립트는 호스트 파이썬 HTTP 서버(포트 8421)가 제공하고 게스트가 wget/curl로 내려받습니다. ISO 리마스터링이나 설치 미디어 생성은 게스트 내부 설치 완료를 뜻하지 않습니다.
 
 [VS Code·Codex 설정과 Python 준비](npm-package/README.md) · [Vault 설정·잠금 해제·승인 방식](npm-packages/vault/README.md)
 
@@ -158,9 +158,36 @@ KVM은 첫 명령의 `virtualbox`를 `kvm`으로 바꿉니다. npm 설치가 모
 
 | Backend | OS installation / OS 설치 | Guest tools / 게스트 도구 |
 | --- | --- | --- |
-| KVM | Debian amd64: automatic in 0.1.9; Ubuntu/Windows: manual / Debian 자동, 나머지 수동 | Recorder/Vault setup is separate / 녹화기·Vault 별도 |
-| VirtualBox | Supported ISOs: native unattended; Debian fallback: preseed / 호환 ISO 무인 설치·Debian 대체 설치기 | Native unattended hooks and prepared recorder media differ; verify completion / 설치 경로별 후처리·완료 확인 필요 |
+| KVM | Debian amd64: automatic from the stock ISO with an injected preseed; Ubuntu/Windows: manual / Debian 자동(순정 ISO+preseed 주입), 나머지 수동 | Guest setup is downloaded over HTTP (port 8421); verify completion / 게스트 설정은 HTTP(8421)로 내려받으며 완료는 별도 확인 |
+| VirtualBox | Supported ISOs: native unattended; others: manual stock installer / 호환 ISO 무인 설치, 그 외 순정 ISO 수동 설치 | Post-install hook downloads setup from the host HTTP server; verify completion / 후처리 훅이 HTTP에서 설정을 받으며 완료는 별도 확인 |
 | Hyper-V | VM/ISO preparation; manual OS installation in VMConnect / VM 생성·ISO 연결 후 OS 수동 설치 | Separate scripts / 별도 스크립트 |
+
+## Guest setup over HTTP (port 8421) / 게스트 설정 HTTP 배포
+
+VAMP no longer rewrites ISO images with `xorriso`. The recorder, vault helpers and setup scripts live in `guest_setup/` and are served by a Python standard-library HTTP server on the fixed port **8421** (a non-well-known port chosen to avoid 80/8800-style collisions). Every platform downloads the same files, so there is no per-OS media to build.
+
+```bash
+python3 scripts/script_server.py start     # stage guest_setup/ and serve it on 0.0.0.0:8421
+python3 scripts/script_server.py status
+python3 scripts/script_server.py stop
+```
+
+In the guest, the host is `10.0.2.2` under VirtualBox NAT and QEMU user networking, and `192.168.122.1` on libvirt's default NAT network:
+
+```bash
+# Debian / Ubuntu
+wget -qO- http://10.0.2.2:8421/setup.sh | sh
+curl -fsSL http://10.0.2.2:8421/setup.sh | sh
+```
+
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"
+```
+
+`setup.sh` / `setup.ps1` download `vamp-guest-setup.tar.gz` / `.zip` into a temporary folder and run the recorder setup. Add `--all` on Linux (`... | sh -s -- --all`) or use `setup-all.sh` / `setup-all.ps1` to include the Vault helpers. MCP tools: `vm_script_server_start`, `vm_script_server_status`, `vm_script_server_stop`; `vm_guest_bootstrap` starts the server and types the wget/`irm` command. The server serves only the staged folder (no listings), stops after 30 minutes by default, and does not install anything by itself — check the guest screen or setup log.
+
+한국어: `guest_setup/` 폴더를 파이썬 표준 라이브러리 HTTP 서버로 8421 포트에 열고, 게스트가 wget/curl로 같은 스크립트를 내려받습니다. 80·8800처럼 잘 쓰는 포트를 피하려고 8421을 고정 사용합니다. ISO를 xorriso로 리마스터링하지 않으므로 플랫폼별 설치 미디어가 필요 없습니다. MCP는 `vm_script_server_start/status/stop`을 제공하고, `vm_guest_bootstrap`은 서버를 먼저 띄운 뒤 게스트에 wget/`irm` 명령을 입력합니다. 서버는 준비된 폴더만 제공하며(디렉터리 목록 없음) 기본 30분 후 스스로 중지합니다. 스크립트 전달은 설치 완료를 뜻하지 않으므로 게스트 화면이나 설정 로그로 확인해야 합니다.
 
 ## 시작하기
 

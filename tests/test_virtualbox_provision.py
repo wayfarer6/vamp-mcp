@@ -30,8 +30,8 @@ class ProvisioningTests(unittest.TestCase):
         return subprocess.CompletedProcess(args,0,output,'')
     def create(self):
         with patch.object(provision.subprocess,'run',self.command):
-            return provision.create(iso_path=str(self.iso),name='test-vm',basedir=str(self.root/'vms'),windows_confirmed=self.os_type=='Windows11_64')
-    def test_unattended_request_and_real_recorder_media(self):
+            return provision.create(iso_path=str(self.iso),name='test-vm',basedir=str(self.root/'vms'),windows_confirmed=self.os_type=='Windows11_64',serve_scripts=False)
+    def test_unattended_install_downloads_guest_setup_over_http(self):
         result=self.create()
         self.assertEqual(result['status'],'installation_started')
         self.assertFalse(result['installation_verified'])
@@ -41,12 +41,12 @@ class ProvisioningTests(unittest.TestCase):
         self.assertTrue(result['startup_verified'])
         self.assertEqual(install[install.index('--user')+1],'vboxuser')
         self.assertEqual(install[install.index('--user-password')+1],'password123!')
-        import pycdlib
-        iso=pycdlib.PyCdlib();iso.open(str(self.root/'vms/test-vm/recorder-setup.iso'))
-        try:
-            buf=io.BytesIO();iso.get_file_from_iso_fp(buf,joliet_path='/postdeb.sh')
-            self.assertIn(b'runuser -u vboxuser',buf.getvalue())
-        finally:iso.close()
+        hook=install[install.index('--post-install-command')+1]
+        self.assertIn('http://10.0.2.2:8421/postdeb.sh',hook)
+        self.assertNotIn('xorriso',json.dumps(result))
+        # Guest setup is fetched over HTTP; no recorder media ISO is built or attached.
+        self.assertFalse((self.root/'vms/test-vm/recorder-setup.iso').exists())
+        self.assertFalse(any(args[0]=='storageattach' and 'dvddrive' in args for args in self.calls))
     def test_existing_vm_is_not_modified(self):
         self.listed='"test-vm" {1234}\n'
         with self.assertRaisesRegex(ValueError,'already exists'):self.create()
@@ -60,11 +60,13 @@ class ProvisioningTests(unittest.TestCase):
         modify=next(args for args in self.calls if args[0]=='modifyvm')
         self.assertIn('--tpm-type',modify)
         install=next(args for args in self.calls if args[:2]==['unattended','install'] and '--help' not in args)
-        self.assertIn('postwin.cmd',install[install.index('--post-install-command')+1])
+        hook=install[install.index('--post-install-command')+1]
+        self.assertIn('http://10.0.2.2:8421/postwin.ps1',hook)
+        self.assertIn('--image-index',install)
 
     def test_preflight_does_not_create_vm_or_directory(self):
         with patch.object(provision.subprocess,'run',self.command):
-            result=provision.create(iso_path=str(self.iso),name='preflight',basedir=str(self.root/'never-create'),preflight_only=True)
+            result=provision.create(iso_path=str(self.iso),name='preflight',basedir=str(self.root/'never-create'),preflight_only=True,serve_scripts=False)
         self.assertEqual(result['status'],'preflight_ready')
         self.assertFalse((self.root/'never-create').exists())
         self.assertFalse(any(args[0]=='createvm' for args in self.calls))
@@ -72,14 +74,14 @@ class ProvisioningTests(unittest.TestCase):
     def test_windows_requires_explicit_choice_before_creating(self):
         self.os_type='Windows11_64'
         with patch.object(provision.subprocess,'run',self.command):
-            result=provision.create(iso_path=str(self.iso),name='windows-confirm',basedir=str(self.root/'never-create'))
+            result=provision.create(iso_path=str(self.iso),name='windows-confirm',basedir=str(self.root/'never-create'),serve_scripts=False)
         self.assertEqual(result['status'],'needs_windows_confirmation')
         self.assertFalse(any(args[0]=='createvm' for args in self.calls))
 
     def test_manual_fallback_starts_iso_without_unattended_or_public_credentials(self):
         self.supported=False
         with patch.object(provision.subprocess,'run',self.command):
-            result=provision.create(iso_path=str(self.iso),name='manual',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,installation_mode='manual')
+            result=provision.create(iso_path=str(self.iso),name='manual',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,installation_mode='manual',serve_scripts=False)
         self.assertEqual(result['installation_mode'],'manual')
         self.assertFalse(result['credentials']['public_sandbox_credentials'])
         self.assertFalse(result['installation_verified'])
@@ -93,7 +95,7 @@ class ProvisioningTests(unittest.TestCase):
                 return subprocess.CompletedProcess(args,1,'','NS_ERROR_NOT_IMPLEMENTED')
             return self.command(args,**kwargs)
         with patch.object(provision.subprocess,'run',command):
-            result=provision.create(iso_path=str(self.iso),name='fallback',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,installation_mode='manual')
+            result=provision.create(iso_path=str(self.iso),name='fallback',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,installation_mode='manual',serve_scripts=False)
         self.assertEqual(result['installation_mode'],'manual')
 
     def test_successful_cli_without_running_vm_is_not_reported_as_started(self):
@@ -103,25 +105,24 @@ class ProvisioningTests(unittest.TestCase):
             return result
         with patch.object(provision.subprocess,'run',command):
             with self.assertRaisesRegex(RuntimeError,'startup was not verified'):
-                provision.create(iso_path=str(self.iso),name='not-started',basedir=str(self.root/'vms'))
+                provision.create(iso_path=str(self.iso),name='not-started',basedir=str(self.root/'vms'),serve_scripts=False)
         journal=json.loads((self.root/'vms/not-started/vamp-install.json').read_text())
         self.assertEqual(journal['status'],'failed')
         self.assertTrue(journal['partial_vm_preserved'])
 
-    def test_debian_detection_fallback_uses_preseed_installer_and_verified_start(self):
+    def test_unsupported_debian_iso_boots_stock_installer_without_xorriso(self):
         self.supported=False
-        prepared=self.root/'prepared.iso';prepared.write_bytes(b'prepared')
-        with patch.object(provision.subprocess,'run',self.command),patch.object(provision,'build_debian_installer',return_value={'iso':str(prepared)}) as builder:
-            result=provision.create(iso_path=str(self.iso),name='auto-debian',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True)
-        builder.assert_called_once()
-        self.assertEqual(result['installation_mode'],'unattended')
+        with patch.object(provision.subprocess,'run',self.command):
+            result=provision.create(iso_path=str(self.iso),name='stock-debian',basedir=str(self.root/'vms'),guest_os='debian',allow_manual_install=True,serve_scripts=False)
+        self.assertEqual(result['installation_mode'],'manual')
         self.assertTrue(result['startup_verified'])
-        self.assertTrue(result['credentials']['public_sandbox_credentials'])
-        self.assertFalse(result['recorder_media_attached'])
+        self.assertFalse(result['credentials']['public_sandbox_credentials'])
+        # The stock ISO is attached as-is; nothing is remastered.
         attachments=[call for call in self.calls if call[0]=='storageattach' and 'dvddrive' in call]
         self.assertEqual(len(attachments),1)
-        self.assertIn(str(prepared),attachments[0])
-        self.assertTrue(any(str(prepared) in call for call in self.calls))
+        self.assertIn(str(self.iso),attachments[0])
+        self.assertIn('8421',result['action_required'])
+        self.assertNotIn('xorriso',json.dumps(result))
 
     def test_active_kvm_blocks_virtualbox_before_creating_any_vm_files(self):
         def command(args,**kwargs):
@@ -129,5 +130,25 @@ class ProvisioningTests(unittest.TestCase):
             return self.command(args,**kwargs)
         with patch.object(provision.subprocess,'run',command):
             with self.assertRaisesRegex(RuntimeError,'KVM VM is active'):
-                provision.create(iso_path=str(self.iso),name='blocked',basedir=str(self.root/'vms'))
+                provision.create(iso_path=str(self.iso),name='blocked',basedir=str(self.root/'vms'),serve_scripts=False)
         self.assertFalse((self.root/'vms/blocked').exists())
+
+    def test_unattended_install_starts_the_port_8421_script_server(self):
+        served={'status':'running','port':8421,'guest_urls':{'virtualbox_nat':'http://10.0.2.2:8421'}}
+        with patch.object(provision.subprocess,'run',self.command), \
+             patch.object(provision,'start_script_server',return_value=served) as server:
+            result=provision.create(iso_path=str(self.iso),name='served',basedir=str(self.root/'vms'),serve_scripts=True,script_server_ttl=900)
+        server.assert_called_once_with(port=8421,ttl=900)
+        self.assertEqual(result['script_server'],served)
+        install=next(args for args in self.calls if args[:2]==['unattended','install'] and '--help' not in args)
+        self.assertIn('http://10.0.2.2:8421',install[install.index('--post-install-command')+1])
+        self.assertEqual(result['guest_setup_transport'],'http://10.0.2.2:8421 (host Python script server)')
+
+    def test_script_server_failure_is_recorded_without_blocking_vm_creation(self):
+        with patch.object(provision.subprocess,'run',self.command), \
+             patch.object(provision,'start_script_server',side_effect=OSError('python3 missing')):
+            result=provision.create(iso_path=str(self.iso),name='no-server',basedir=str(self.root/'vms'),serve_scripts=True)
+        self.assertEqual(result['status'],'installation_started')
+        self.assertEqual(result['script_server']['status'],'failed')
+        self.assertIn('python3 missing',result['script_server_warning'])
+        self.assertIn('script_server.py start',result['script_server_warning'])

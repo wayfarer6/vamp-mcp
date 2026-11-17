@@ -63,6 +63,13 @@ Fresh, local receipts are collected with `scripts/collect_nested_evidence.py` in
 - The VSIX passed isolated VS Code installation. The README now states accurately that the master password reaches the selected remote host through encrypted SSH stdin, while local approval and storage remain on this computer.
 - Remote SSH tests use a stand-in transport; physical Windows hardware and native Windows volume mounting were not repeated in this 0.1.4 run. [Receipt](media/vault-014-validation.json).
 
+## VAMP 0.2.0 HTTP guest setup and xorriso removal — 2026-11-17
+
+- `scripts/script_server.py` stages `guest_setup/` (recorder, vault, kvm helpers, recorder.zip, tar.gz and zip bundles) and serves it on the fixed port 8421. Local checks: staging manifest, bundle contents, `/healthz`, `/setup.sh`, `/` manifest, directory-listing 404, `../` traversal 404, start/status/stop round trip.
+- The bundled VSIX runtime answered MCP `vm_script_server_start`/`status`/`stop` and served `setup.sh` over HTTP; `vm_guest_bootstrap` dry-run planned `wget -qO- http://10.0.2.2:8421/setup.sh | sh` and `powershell -ExecutionPolicy Bypass -Command "irm http://10.0.2.2:8421/setup.ps1 | iex"`.
+- xorriso is no longer invoked. `scripts/build_debian_installer.py`, `scripts/remaster_debian_setup.py` and `scripts/build_nested_debian_media.py` raise a guidance error instead. VirtualBox unattended hooks and KVM creation plans were checked with stand-in command runners only: **no real VM, guest install or guest script execution was performed in this environment**. Debian automatic installation through virt-install's ISO `--location`/`--initrd-inject` path and the HTTP post-install hooks remain to be verified on a real host/guest.
+- Test counts: `third_party/mcp-virtualbox` vitest 129 passed; `vscode-extension` node --test 57 passed; Python `tests.test_script_server` 5 passed and `tests.test_virtualbox_provision` 13 passed. Python modules that need `qemu-img`, `robot` or `gi` were not runnable on this host.
+
 ## VAMP 0.1.9 provisioning and private RPA export — 2026-11-17
 
 - KVM MCP `remote_vm_create` created a separate Debian 13.7 amd64 test VM. The unattended installer completion marker, reboot and Openbox/xterm desktop were observed. Test KVM was then shut down normally.

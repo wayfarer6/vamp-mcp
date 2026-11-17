@@ -14,14 +14,15 @@ import uuid
 ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT/'scripts'))
 sys.path.insert(0,str(Path(__file__).resolve().parent))
-from build_recorder_media import build
-from build_debian_installer import build as build_debian_installer
+from script_server import SCRIPT_SERVER_PORT, guest_commands, start as start_script_server
 
 PUBLIC_CREDENTIALS={'username':'vboxuser','password':'password123!','public_sandbox_credentials':True}
 
+
 def parse(text):
     return {m[1].strip():m[2].strip() for line in text.splitlines()
-            if (m:=re.match(r'([^=]+)="?(.*?)"?$',line.strip()))}
+            if (m:=re.match(r'([^=]+)=\"?(.*?)\"?$',line.strip()))}
+
 
 def executable():
     if os.environ.get('VBOXMANAGE_PATH'): return os.environ['VBOXMANAGE_PATH']
@@ -29,6 +30,7 @@ def executable():
         candidate=Path(os.environ.get('PROGRAMFILES','C:/Program Files'))/'Oracle/VirtualBox/VBoxManage.exe'
         if candidate.is_file():return str(candidate)
     return shutil.which('VBoxManage') or 'VBoxManage'
+
 
 def assert_no_active_kvm():
     if not sys.platform.startswith('linux'):return
@@ -39,14 +41,23 @@ def assert_no_active_kvm():
         if result.returncode==0 and result.stdout.strip():
             raise RuntimeError('A KVM VM is active. Shut it down before starting VirtualBox; simultaneous execution can cause VERR_SVM_IN_USE.')
 
-def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False,allow_manual_install=False,installation_mode="auto"):
+
+def post_install_command(guest_os, base_url):
+    """Post-install hook fetched from the host script server; no ISO is rewritten or mounted."""
+    if guest_os=='windows11':
+        return f'powershell -ExecutionPolicy Bypass -Command "irm {base_url}/postwin.ps1 | iex"'
+    return f'wget -qO /tmp/vamp-postdeb.sh {base_url}/postdeb.sh && sh /tmp/vamp-postdeb.sh'
+
+
+def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None,image_index=1,product_key='',windows_confirmed=False,guest_os=None,preflight_only=False,allow_manual_install=False,installation_mode="auto",serve_scripts=True,script_server_ttl=3600):
     if installation_mode not in ('auto','manual'):raise ValueError('installation_mode must be auto or manual')
     name=name or ('VAMP-'+uuid.uuid4().hex[:8])
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_-]{0,63}',name):raise ValueError('Use 1-64 letters/digits/underscore/hyphen for name')
     iso=Path(iso_path).expanduser().resolve(strict=True)
     if not iso.is_file():raise ValueError('ISO path must be a readable local file on the VM host')
     journal={'status':'preparing','vm':name,'credentials':PUBLIC_CREDENTIALS,'events':[],
-             'installation_verified':False,'recorder_installed_verified':False}
+             'installation_verified':False,'recorder_installed_verified':False,
+             'guest_setup_transport':f'http://10.0.2.2:{SCRIPT_SERVER_PORT} (host Python script server)'}
     folder=Path(basedir or Path.home()/'VirtualBox VMs').expanduser().resolve()/name
     def run(*args,timeout=120):
         proc=subprocess.run([executable(),*map(str,args)],capture_output=True,text=True,timeout=timeout)
@@ -69,7 +80,6 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         raise ValueError('VirtualBox reports this ISO does not support unattended installation')
     selected='windows11' if os_type=='Windows11_64' else ('ubuntu' if os_type.startswith('Ubuntu') else 'debian')
     if guest_os and guest_os!=selected:raise ValueError('Selected guest OS does not match detected ISO')
-    custom_debian=not unattended_supported and selected=='debian' and installation_mode!='manual'
     profile=json.loads(Path(__file__).with_name('profiles.json').read_text())['profiles'][selected]
     memory_mb=memory_mb if memory_mb is not None else profile['memory_mb']
     cpus=cpus if cpus is not None else profile['cpus']
@@ -80,7 +90,8 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         return {'status':'preflight_ready','vm_created':False,'guest_os':selected,
                 'resource_profile':{'memory_mb':memory_mb,'cpus':cpus,'disk_mb':disk_mb},
                 'windows_confirmation_required':selected=='windows11' and not windows_confirmed,
-                'installation_mode':'unattended' if unattended_supported or custom_debian else 'manual',
+                'installation_mode':'unattended' if unattended_supported else 'manual',
+                'guest_setup':{'transport':'http','port':SCRIPT_SERVER_PORT,'commands':guest_commands(SCRIPT_SERVER_PORT)},
                 'credentials':PUBLIC_CREDENTIALS,'iso':str(iso)}
     if selected=='windows11' and not windows_confirmed:
         return {'status':'needs_windows_confirmation','no_vm_created':True,'profile':profile,
@@ -114,12 +125,18 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
     def record(stage):
         journal['events'].append(stage)
         journal_path.write_text(json.dumps(journal,indent=2)+'\n')
+    script_server=None
+    if serve_scripts and not os.environ.get('VAMP_SCRIPT_SERVER_DISABLE'):
+        try:
+            script_server=start_script_server(port=SCRIPT_SERVER_PORT,ttl=script_server_ttl)
+        except Exception as exc:
+            script_server={'status':'failed','port':SCRIPT_SERVER_PORT,'error':str(exc)}
+        journal['script_server']=script_server
+        if script_server.get('status')!='running':
+            journal['script_server_warning']=('Guest setup scripts are not being served. Start them with '
+                f'"python3 scripts/script_server.py start" before the guest runs its post-install step ({script_server.get("error","unknown error")}).')
+    base_url=(script_server or {}).get('guest_urls',{}).get('virtualbox_nat') or f'http://10.0.2.2:{SCRIPT_SERVER_PORT}'
     try:
-        media=build(folder/'recorder-setup.iso')
-        record('recorder-media-built')
-        if custom_debian:
-            iso=Path(build_debian_installer(iso,folder/'debian-installer.iso')['iso'])
-            record('debian-installer-prepared')
         run('createvm','--name',name,'--ostype',os_type,'--register','--basefolder',folder.parent)
         record('vm-created')
         from display import preferences
@@ -127,11 +144,8 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         from shares import prepare
         journal['recording_share']=prepare(name,run)
         options=['modifyvm',name,'--memory',memory_mb,'--cpus',cpus,'--vram',128,
-                 '--mouse','usbtablet','--nic1','nat','--boot1','disk' if custom_debian else 'dvd','--boot2','dvd' if custom_debian else 'disk',
+                 '--mouse','usbtablet','--nic1','nat','--boot1','dvd','--boot2','disk',
                  '--graphicscontroller','vboxsvga' if os_type=='Windows11_64' else 'vmsvga']
-        if custom_debian:
-            journal['serial_log']=str(folder/'serial.log')
-            options+=['--uart1','0x3F8',4,'--uartmode1','file',folder/'serial.log']
         if os_type=='Windows11_64':options+=['--firmware','efi','--tpm-type','2.0','--ioapic','on']
         run(*options)
         disk=folder/(name+'.vdi')
@@ -142,31 +156,29 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         if not unattended_supported:
             run('storageattach',name,'--storagectl','SATA','--port','1','--device','0','--type','dvddrive','--medium',iso)
             start_verified()
-            journal.update(status='installation_started',installation_mode='unattended' if custom_debian else 'manual',os_type=os_type,
+            journal.update(status='installation_started',installation_mode='manual',os_type=os_type,
                            frontend='headless',journal=str(journal_path),
-                           credentials=PUBLIC_CREDENTIALS if custom_debian else {'public_sandbox_credentials':False,'account_setup':'Choose your account in the OS installer'},
-                           action_required='Debian unattended installation started with a single installation DVD. Recorder media was built but is not attached; install it after the OS is ready.' if custom_debian else 'This ISO needs manual installation. Follow the installer in the VM screen. Choose your own guest account; automatic recorder setup has not run.')
-            if custom_debian:journal.update(recorder_media=media['iso'],recorder_media_attached=False)
-            record('unattended-installation-started' if custom_debian else 'manual-installation-started')
+                           credentials={'public_sandbox_credentials':False,'account_setup':'Choose your account in the OS installer'},
+                           action_required=(f'This ISO needs a manual installation: complete the stock installer in the VM screen, '
+                                            f'choose your own guest account, then run the guest setup command from '
+                                            f'http://10.0.2.2:{SCRIPT_SERVER_PORT}/ (for example '
+                                            f'"wget -qO- {base_url}/setup.sh | sh"). No ISO was rewritten and no automatic account or recorder setup ran.'))
+            record('manual-installation-started')
             return journal
-        # Recorder media stays on a dedicated DVD; unattended owns its own installer/auxiliary slots.
-        run('storageattach',name,'--storagectl','SATA','--port','3','--device','0','--type','dvddrive','--medium',media['iso'])
         if os_type=='Windows11_64':
             from display import insert_additions
             journal['guest_additions']=insert_additions(name,run=run)
-            hook='cmd.exe /c "for %%D in (D E F G H I J K L M N O P) do @if exist %%D:\\postwin.cmd call %%D:\\postwin.cmd"'
-        else:
-            hook="sh -c 'mkdir -p /tmp/vamp-recorder; for d in /dev/sr*; do mount -o ro \"$d\" /tmp/vamp-recorder 2>/dev/null || continue; if [ -f /tmp/vamp-recorder/postdeb.sh ]; then sh /tmp/vamp-recorder/postdeb.sh; exit $?; fi; umount /tmp/vamp-recorder; done; exit 1'"
-        args=['unattended','install',name,'--iso',iso,'--user','vboxuser',password_flag,'password123!',
+        install_args=['unattended','install',name,'--iso',iso,'--user','vboxuser',password_flag,'password123!',
               '--full-user-name','VAMP Sandbox User','--hostname',name.lower()+'.vamp.local',
-              '--no-install-additions','--post-install-command',hook]
+              '--no-install-additions','--post-install-command',post_install_command(selected,base_url)]
         if os_type=='Windows11_64':
-            args+=['--image-index',image_index]
-            if product_key:args+=['--key',product_key]
-        run(*args,timeout=300)
+            install_args+=['--image-index',image_index]
+            if product_key:install_args+=['--key',product_key]
+        run(*install_args,timeout=300)
         start_verified()
         journal.update(status='installation_started',installation_mode='unattended',os_type=os_type,frontend='headless',
-                       recorder_setup='Debian postinstall; Windows first desktop login',
+                       recorder_setup=f'First login downloads the setup bundle from the host script server on port {SCRIPT_SERVER_PORT}',
+                       guest_setup_command=f'wget -qO- {base_url}/setup.sh | sh' if selected!='windows11' else f'irm {base_url}/setup.ps1 | iex',
                        requires_ai_loop=False,journal=str(journal_path))
         record('unattended-installation-started')
         return journal
@@ -174,6 +186,7 @@ def create(iso_path,name=None,memory_mb=None,cpus=None,disk_mb=None,basedir=None
         journal.update(status='failed',error=str(exc),partial_vm_preserved=True)
         record('failed')
         raise RuntimeError(f'{exc}; partial setup preserved at {folder}') from exc
+
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)

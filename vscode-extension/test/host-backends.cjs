@@ -22,15 +22,23 @@ test('KVM inventory covers unconfigured guests and never deletes their storage',
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 
-test('KVM creation prepares Debian media, starts from ISO, and verifies Running',async()=>{
+test('KVM creation boots the stock Debian ISO with an injected preseed and starts Running',async()=>{
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'vamp-create-'));const calls=[];
  try {
  const iso=path.join(root,'Debian installer.iso');fs.writeFileSync(iso,'test');
- const execute=async(exe,args)=>{calls.push([exe,...args]);if(args.includes('build_debian_installer.py')||args.some(a=>String(a).endsWith('/build_debian_installer.py')))return {stdout:JSON.stringify({iso:path.join(root,'prepared.iso')})};if(args.includes('domuuid'))return {stdout:id};if(args.includes('domstate'))return {stdout:'running'};return {stdout:''};};
+ fs.mkdirSync(path.join(root,'backends/kvm'),{recursive:true});
+ const preseed=path.join(root,'backends/kvm/debian-preseed.cfg');fs.writeFileSync(preseed,'d-i preseed/late_command string true\n');
+ const execute=async(exe,args)=>{calls.push([exe,...args]);if(args.includes('domuuid'))return {stdout:id};if(args.includes('domstate'))return {stdout:'running'};return {stdout:''};};
  const backend=hostBackends({globalStorageUri:{fsPath:root}},{runtime:root,config:()=>({get:()=>undefined}),execute});
  const result=await backend.create('kvm',{name:'Debian-Test',iso_path:iso,guest_os:'debian',memory_mb:2048,cpus:2,disk_mb:32768});
  assert.equal(result.installation_mode,'unattended');assert.equal(result.startup_verified,true);assert.equal(result.installation_verified,false);
- const command=calls.find(call=>call[0]==='virt-install');assert.ok(command.includes(`path=${path.join(root,'prepared.iso')},device=cdrom,readonly=on`));assert.equal(command[command.indexOf('--boot')+1],'hd,cdrom');assert.equal(result.credentials.username,'vboxuser');
+ const command=calls.find(call=>call[0]==='virt-install');
+ const location=command[command.indexOf('--location')+1];
+ assert.equal(location,`${iso},kernel=install.amd/vmlinuz,initrd=install.amd/initrd.gz`);
+ assert.ok(command.includes('--initrd-inject'));const injected=command[command.indexOf('--initrd-inject')+1];assert.ok(injected.endsWith(path.join('kvm','Debian-Test','preseed.cfg')));assert.equal(fs.readFileSync(injected,'utf8'),fs.readFileSync(preseed,'utf8'));
+ assert.ok(!command.some(arg=>String(arg).includes('device=cdrom')),'the stock ISO is read as a location, not attached as a rewritten CD');
+ assert.ok(!calls.some(call=>String(call).includes('build_debian_installer')||String(call).includes('xorriso')),'xorriso is never used');
+ assert.equal(command[command.indexOf('--boot')+1],'hd,cdrom');assert.equal(result.credentials.username,'vboxuser');
  await assert.rejects(backend.create('kvm',{name:'Debian-Test',iso_path:iso,guest_os:'debian',memory_mb:2048,cpus:2,disk_mb:32768}),/EEXIST/);
  }finally{fs.rmSync(root,{recursive:true,force:true});}
 });

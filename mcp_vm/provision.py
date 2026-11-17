@@ -2,6 +2,7 @@
 import json
 from pathlib import Path
 import re
+import shutil
 import subprocess
 
 
@@ -27,24 +28,19 @@ def create(controller, name, image_path='', iso_path='', seed_iso_path='', memor
     if seed and not seed.is_file():
         raise ValueError('Seed ISO must be a file')
     automated_debian = bool(iso_path and guest_os == 'debian' and not preseed_path)
+    packaged_preseed = None
     if automated_debian:
         from rpa_package import ROOT
-        preseed_path = str(ROOT/'backends/kvm/rpas/validation/preseed.cfg')
-        if seed is None:
-            from scripts.build_kvm_setup_media import build
-            import os
-            bin_dir = Path(os.environ.get('VAMP_SETUP_BIN_DIR', ROOT/'artifacts/kvm-setup/bin')).resolve()
-            prepared = controller.command(['node', ROOT/'scripts/prepare_guest_cli.mjs', bin_dir], timeout=600)
-            if prepared.returncode:
-                raise RuntimeError('Guest CLI preparation failed: '+prepared.stderr[-300:])
-            media = build(ROOT/'artifacts/kvm-setup/guest-setup.iso', bin_dir)
-            seed = Path(media['iso'])
+        # Stock ISO plus an initrd-injected preseed: no ISO rewrite, so xorriso is not needed.
+        packaged_preseed = ROOT/'backends/kvm/debian-preseed.cfg'
+        if not packaged_preseed.is_file():
+            raise ValueError('Packaged Debian preseed file is missing')
+        preseed_path = str(packaged_preseed)
     directory = controller.jobs_root.parent / 'vms' / name
     directory.mkdir(parents=True, exist_ok=False)
     if automated_debian:
-        from scripts.remaster_debian_setup import build as remaster
-        source = Path(remaster(source, seed, directory/'installer.iso'))
-        seed = None
+        # virt-install injects the file under its own name, so the preseed must be preseed.cfg.
+        preseed_path = str(shutil.copy2(packaged_preseed, directory/'preseed.cfg'))
     if iso_path and guest_os == 'windows11' and seed is None:
         from rpa_package import ROOT
         from scripts.prepare_windows_installers import prepare

@@ -1,48 +1,34 @@
 #!/usr/bin/env python3
-"""Create an unattended Debian amd64 BIOS installer without modifying the source ISO."""
+"""Removed: VAMP no longer rewrites Debian installer ISOs with xorriso.
+
+Building a preseeded installer ISO required `xorriso` on the host and produced a
+separate media image per platform. VAMP now boots the stock ISO and serves the
+guest setup scripts from a Python HTTP server on port 8421, so the guest installs
+the recorder with wget/curl (Windows: `irm .../setup.ps1 | iex`).
+
+    python3 scripts/script_server.py start
+    wget -qO- http://10.0.2.2:8421/setup.sh | sh
+
+This module is kept only so older callers fail loudly instead of invoking a
+removed tool.
+"""
+from __future__ import annotations
 import argparse
-import json
-from pathlib import Path
-import subprocess
+import sys
 
-ROOT = Path(__file__).resolve().parents[1]
-CREDENTIALS = {'username': 'vboxuser', 'password': 'password123!', 'public_sandbox_credentials': True}
+MESSAGE = ('xorriso-based Debian installer media has been removed from VAMP. '
+           'Boot the stock ISO (choose manual installation when VirtualBox cannot install unattended) '
+           'and serve guest setup over HTTP: python3 scripts/script_server.py start, then '
+           'wget -qO- http://10.0.2.2:8421/setup.sh | sh inside the guest.')
 
 
-def build(source, output):
-    source = Path(source).expanduser().resolve(strict=True)
-    output = Path(output).expanduser().resolve()
-    if not source.is_file() or source == output or output.exists():
-        raise ValueError('Choose a readable source ISO and a new output path')
-    preseed = ROOT / 'backends/kvm/debian-preseed.cfg'
-    if not preseed.is_file():
-        raise ValueError('Packaged Debian preseed file is missing')
-    def run(args):
-        try:
-            result = subprocess.run(['xorriso', *map(str, args)], capture_output=True, text=True, timeout=600)
-        except FileNotFoundError as error:
-            raise RuntimeError('Install xorriso on the VM host for Debian automatic installation, or choose manual installation') from error
-        if result.returncode:
-            raise RuntimeError('Debian installer preparation failed: ' + result.stderr[-1500:])
-        return result
-    # Fail before creating a VM/disk if this is not the supported Debian installer layout.
-    run(['-indev', source, '-ls', '/install.amd/vmlinuz', '/install.amd/initrd.gz', '/isolinux/isolinux.bin'])
-    output.parent.mkdir(parents=True, exist_ok=True)
-    menu = output.with_suffix('.isolinux.cfg')
-    menu.write_text('default vamp\nprompt 0\ntimeout 10\nlabel vamp\n  kernel /install.amd/vmlinuz\n  append initrd=/install.amd/initrd.gz auto=true priority=critical preseed/file=/cdrom/preseed.cfg console=tty0 --- quiet\n')
-    result = run(['-indev', source, '-outdev', output, '-boot_image', 'any', 'replay',
-                  '-map', preseed, '/preseed.cfg', '-map', menu, '/isolinux/isolinux.cfg'])
-    output.with_suffix('.build.log').write_text(result.stdout + '\n' + result.stderr)
-    return {'status': 'media_built', 'iso': str(output), 'credentials': CREDENTIALS,
-            'installation_verified': False, 'recorder_installed_verified': False}
+def build(*_args, **_kwargs):
+    raise RuntimeError(MESSAGE)
 
 
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--source', required=True)
-    parser.add_argument('--output', required=True)
+    parser = argparse.ArgumentParser(description='Removed: use scripts/script_server.py instead.')
+    parser.add_argument('--source')
+    parser.add_argument('--output')
     args = parser.parse_args()
-    try:
-        print(json.dumps(build(args.source, args.output)))
-    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
-        parser.exit(1, str(error) + '\n')
+    parser.exit(2, MESSAGE + '\n')
