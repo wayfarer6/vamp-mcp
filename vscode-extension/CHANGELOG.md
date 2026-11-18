@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 (unreleased)
+
+- Add a Containers panel and separate Podman MCP server for named rootless SSH connections.
+- Add optional read-only Windows Podman/WSL discovery and an English manual setup guide. No system features or Podman machines are enabled or created by discovery.
+- Add a source-only headless Debian Packer profile and matching VirtualBox/libvirt Vagrant handoff. Building and booting its boxes requires separate provider validation.
+- Validation is limited to isolated unit and static checks; no official package or VM is validated by these source changes.
+
 ## 0.2.6
 
 - Add a Vagrant lifecycle adapter (`backends/vagrant`) that follows the shared desktop interface: projects under `~/.vamp/vagrant`, a generated Vagrantfile with the SSH communicator, script server 8421 / VNC 5900 / RDP 3389 forwarding, synced folders and virtualbox, libvirt, hyperv, qemu and parallels provider blocks.

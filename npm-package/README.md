@@ -65,6 +65,14 @@ For KVM, change the final argument from `virtualbox` to `kvm`. This uses the exi
 
 For the RPA library, register `library` instead and set `VAMP_RPA_REGISTRY` to your saved VAMP catalog directory. Its default is `~/.vamp/rpa-catalog`; an existing VS Code catalog must be selected explicitly. The library searches and replays reviewed definitions; it does not provide the extension's authoring UI. Replay needs its Python dependencies and a reviewed, compatible RPA. Actions completing does not prove application success; verify the expected outcome.
 
+## Podman containers
+
+The container MCP server manages **existing containers** over an explicitly chosen, named rootless SSH connection. It is separate from the VM MCP servers. When using a package built with this backend, register its installed `vamp-mcp` binary and pass `podman` as the only argument. In the matching VS Code extension select **Open Containers** or enable the **VAMP Containers (Podman)** MCP server.
+
+Install the Podman CLI in a standard location on the machine running VAMP, and run a rootless Podman service on the Debian VM or Linux server. Configure the named SSH connection in Podman with an absolute local identity path before using VAMP. Podman Desktop is optional. VAMP does not enable WSL or Hyper-V, create a VM, install Podman, or change the default Podman connection. A VirtualBox guest needs only its existing hypervisor and an SSH route such as host-only networking or localhost NAT port forwarding.
+
+Use a dedicated, least-privileged remote account and SSH host verification. Do not expose the Podman socket on unauthenticated TCP or give its credentials to containers. For operation and troubleshooting, see the bundled `runtime/skills/vamp-podman/SKILL.md`. Users opting into WSL can follow the separate manual guide at `runtime/skills/vamp-podman/CONTAINERS_WSL.md`.
+
 ## Remote host example
 
 Install this package on the VM host, then configure an MCP client to run:

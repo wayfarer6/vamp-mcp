@@ -10,17 +10,18 @@ if (command==='--version' || command==='-v') {
   console.log(JSON.parse(readFileSync(path.join(here,'../package.json'),'utf8')).version);
 } else if (command==='--help' || command==='-h') {
   console.log(`VAMP MCP — independent stdio servers
-Usage: vamp-mcp [virtualbox|kvm|library|remote] [remote options]
+Usage: vamp-mcp [virtualbox|kvm|library|remote|podman] [remote options]
   virtualbox   Local VM MCP with Packer (VirtualBox default); needs Python 3.11+
   kvm          KVM/libvirt control and Packer OS/post-install setup on Ubuntu
   library      Reviewed RPA search/replay; VAMP_RPA_REGISTRY selects saved RPAs
   remote       KVM/VirtualBox host MCP; pass --backend kvm or --backend virtualbox
+  podman       Containers on an existing named rootless Podman SSH connection
   --version    Package version
 Python: RPA_HOST_PYTHON (defaults to python3, or python on Windows).
 Remote controls the host running this process; use SSH to run it on another host.
 No VM, OS, hypervisor, Python environment or Vault is installed automatically.`);
 } else {
-  const entries={virtualbox:'virtualbox',library:'library',kvm:'remote_ssh',remote:'remote_ssh'};
+  const entries={virtualbox:'virtualbox',library:'library',kvm:'remote_ssh',remote:'remote_ssh',podman:'podman'};
   if (!Object.hasOwn(entries,command) || (!['remote','kvm'].includes(command) && args.length)) {
     console.error('Invalid command or arguments. Run vamp-mcp --help.');
     process.exitCode=2;
@@ -30,10 +31,8 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     process.env.VAMP_RPA_REGISTRY ||= path.join(os.homedir(),'.vamp','rpa-catalog');
     process.env.VAMP_REMOTE_REPO ||= runtime;
     process.env.VAMP_REMOTE_PYTHON ||= process.env.RPA_HOST_PYTHON;
-    // Every VAMP server warms the local OCR/YOLO workers in the background so
-    // the first verification does not wait for a model load. The call never
-    // blocks stdio: the workers are detached from this process.
-    try {
+    // Container management does not use desktop vision services.
+    if (command !== 'podman') try {
       const vision = (await import(pathToFileURL(path.join(runtime, 'backends/common/vision-preload.cjs')).href)).default;
       const report = vision.ensureVisionServices({runtime, logger: message => process.stderr.write(message + '\n')});
       if (report.status === 'started') process.stderr.write(`vamp-mcp: vision workers starting (pid ${report.pid})\n`);

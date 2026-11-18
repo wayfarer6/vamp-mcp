@@ -17,6 +17,20 @@ function activate(context) {
     process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   const runtime = context.asAbsolutePath('dist/runtime');
   const output = vscode.window.createOutputChannel('VAMP');
+  const containersSource=path.join(__dirname,'src/containers-panel.cjs');
+  const containersUI=require(fs.existsSync(containersSource)?containersSource:'./dist/containers_panel.cjs');
+  containersUI.registerContainers(context,{vscode,output,createBackend:()=>{
+    const development=path.join(__dirname,'../backends/podman/adapter.cjs');
+    const adapter=require(fs.existsSync(development)?development:path.join(runtime,'backends/podman/adapter.cjs')).createPodmanAdapter();
+    return {connections:()=>adapter.connections(),status:name=>adapter.check(name),list:name=>adapter.list(name),
+      start:(name,id,binding)=>adapter.start(name,id,binding),stop:(name,id,binding)=>adapter.stop(name,id,binding),logs:(name,id,binding)=>adapter.logs(name,id,100,binding),detectLocal:()=>adapter.detectLocal()};
+  }});
+  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.podman',{
+    provideMcpServerDefinitions(){
+      return [new vscode.McpStdioServerDefinition('VAMP Podman',process.execPath,
+        [path.join(runtime,'backends/podman/server.mjs')],{ELECTRON_RUN_AS_NODE:'1'},version)];
+    }
+  }));
   context.subscriptions.push(output, changes);
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
     if(e.affectsConfiguration('vamp')) changes.fire();
@@ -158,9 +172,9 @@ function activate(context) {
     resolveWebviewView(view){
       view.webview.options={enableScripts:true,localResourceRoots:[vscode.Uri.joinPath(context.extensionUri,'assets')]};
       const logo=view.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri,'assets/sidebar-brand.png'));
-      view.webview.html=require('./vm-manager').sidebarHTML(String(logo),view.webview.cspSource);
+      view.webview.html=containersUI.withContainersSidebar(require('./vm-manager').sidebarHTML(String(logo),view.webview.cspSource));
       view.webview.onDidReceiveMessage(async message=>{
-        const command={library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',screen:'vamp.openVmScreen',guide:'vamp.openGuide',remote:'vamp.remote.openManager'}[message?.type];
+        const command={library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',containers:'vamp.openContainers',screen:'vamp.openVmScreen',guide:'vamp.openGuide',remote:'vamp.remote.openManager'}[message?.type];
         if(command){try{await vscode.commands.executeCommand(command);}catch(error){output.appendLine(error.message);}}
       });
     }

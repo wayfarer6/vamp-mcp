@@ -1,0 +1,134 @@
+"""Render-only sibling profile. Never imports/executes the desktop Packer runner."""
+import base64
+import json
+from pathlib import Path
+import re
+
+HERE = Path(__file__).resolve().parent
+
+
+def public_key(value):
+    """Accept a plain public key only, without authorized_keys options or comments."""
+    parts = str(value).strip().split()
+    if len(parts) != 2 or parts[0] not in ('ssh-ed25519', 'ssh-rsa'):
+        raise ValueError('Supply a plain SSH public key (type and base64 only)')
+    try:
+        raw = base64.b64decode(parts[1], validate=True)
+        length = int.from_bytes(raw[:4], 'big')
+        if raw[4:4 + length].decode('ascii') != parts[0] or len(raw) < length + 12:
+            raise ValueError('Invalid SSH public key')
+    except (ValueError, UnicodeError) as exc:
+        raise ValueError('Invalid SSH public key') from exc
+    return ' '.join(parts)
+
+
+def render_profile(output_dir, *, provider, iso_url, iso_checksum,
+                   build_public_key, ssh_private_key_file, deployment_public_key):
+    """Write inputs only. Caller separately authorizes any init/build/deployment.
+
+    Keys are caller-generated. The build private-key path is an external host
+    reference, never read/copied. Do not share an output directory or resulting
+    deployment-key-specific box with an unrelated recipient.
+    """
+    if provider not in ('virtualbox', 'kvm'):
+        raise ValueError('Supported build providers: virtualbox, kvm')
+    if not re.fullmatch(r'sha256:[a-fA-F0-9]{64}', iso_checksum):
+        raise ValueError('A verified Debian ISO SHA256 checksum is required')
+    if not str(iso_url).startswith('https://'):
+        raise ValueError('Use an official Debian HTTPS ISO URL')
+    build_key, deploy_key = public_key(build_public_key), public_key(deployment_public_key)
+    if build_key == deploy_key:
+        raise ValueError('Build and deployment public keys must be distinct')
+    key_path = str(ssh_private_key_file)
+    if not key_path or any(c in key_path for c in '\r\n\x00'):
+        raise ValueError('An external build private-key path is required')
+    folder = Path(output_dir)
+    folder.mkdir(parents=True, exist_ok=False, mode=0o700)
+    (folder / 'http').mkdir()
+    encoded_key = base64.b64encode((build_key + '\n').encode()).decode()
+    late = ("in-target install -d -o vamp -g vamp -m 700 /home/vamp/.ssh; "
+            f"echo {encoded_key} | base64 -d > /target/home/vamp/.ssh/authorized_keys; "
+            "in-target chown vamp:vamp /home/vamp/.ssh/authorized_keys; "
+            "in-target chmod 600 /home/vamp/.ssh/authorized_keys; "
+            "echo 'vamp ALL=(root) NOPASSWD: ALL' > /target/etc/sudoers.d/vamp-build; "
+            "in-target chmod 440 /etc/sudoers.d/vamp-build; "
+            "touch /target/etc/vamp-podman-build")
+    preseed = '''d-i debian-installer/locale string en_US.UTF-8
+d-i keyboard-configuration/xkb-keymap select us
+d-i netcfg/choose_interface select auto
+d-i netcfg/get_hostname string vamp-podman
+d-i netcfg/get_domain string local
+d-i mirror/country string manual
+d-i mirror/http/hostname string deb.debian.org
+d-i mirror/http/directory string /debian
+d-i mirror/http/proxy string
+d-i passwd/root-login boolean false
+d-i passwd/user-fullname string VAMP Podman
+d-i passwd/username string vamp
+d-i passwd/user-password-crypted password !
+d-i user-setup/encrypt-home boolean false
+d-i clock-setup/utc boolean true
+d-i time/zone string UTC
+d-i partman-auto/method string regular
+d-i partman-auto/choose_recipe select atomic
+d-i partman/confirm_write_new_label boolean true
+d-i partman/choose_partition select finish
+d-i partman/confirm boolean true
+d-i partman/confirm_nooverwrite boolean true
+tasksel tasksel/first multiselect standard, ssh-server
+d-i pkgsel/include string openssh-server sudo ca-certificates
+d-i pkgsel/install-language-support boolean false
+d-i pkgsel/upgrade select none
+d-i popularity-contest/participate boolean false
+d-i grub-installer/only_debian boolean true
+d-i grub-installer/bootdev string default
+d-i finish-install/reboot_in_progress note
+'''
+    (folder / 'http/preseed.cfg').write_text(preseed + 'd-i preseed/late_command string ' + late + '\n')
+    (folder / 'provision.sh').write_text((HERE / 'provision.sh').read_text())
+    (folder / 'deployment.pub').write_text(deploy_key + '\n')
+    builder, plugin, box_provider = ('virtualbox-iso', 'virtualbox', 'virtualbox') if provider == 'virtualbox' else ('qemu', 'qemu', 'libvirt')
+    values = dict(iso_url=iso_url, iso_checksum=iso_checksum, ssh_username='vamp',
+                  ssh_private_key_file=key_path, ssh_timeout='40m', headless=True,
+                  cpus=2, memory=2048, disk_size=32768, boot_wait='5s',
+                  shutdown_command='sudo /usr/local/sbin/vamp-finalize-image',
+                  shutdown_timeout='5m')
+    if provider == 'virtualbox':
+        values.update(guest_os_type='Debian_64', guest_additions_mode='disable')
+    else:
+        values.update(accelerator='kvm', format='qcow2', disk_interface='virtio', net_device='virtio-net')
+    # JSON quoting with HCL interpolation escaping for all caller-controlled data.
+    def quote(value):
+        if isinstance(value, str): value = value.replace('${', '$${').replace('%{', '%%{')
+        return json.dumps(value)
+    hcl = ('packer {\n required_plugins {\n'
+           f'  {plugin} = {{ source = "github.com/hashicorp/{plugin}", version = ">= 1.1.0" }}\n'
+           '  vagrant = { source = "github.com/hashicorp/vagrant", version = ">= 1.1.0" }\n }\n}\n'
+           f'source "{builder}" "podman" {{\n')
+    hcl += ''.join(f' {key} = {quote(value)}\n' for key, value in values.items())
+    hcl += ' http_directory = "${path.root}/http"\n output_directory = "${path.root}/output"\n'
+    hcl += ' boot_command = ["<esc><wait>", "auto priority=critical url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg <enter>"]\n}\n'
+    hcl += f'''build {{
+ sources = ["source.{builder}.podman"]
+ provisioner "file" {{
+  source = "${{path.root}}/deployment.pub"
+  destination = "/tmp/vamp-deployment.pub"
+ }}
+ provisioner "shell" {{
+  script = "${{path.root}}/provision.sh"
+  execute_command = "sudo -n sh '{{{{.Path}}}}'"
+ }}
+ post-processor "vagrant" {{
+  output = "${{path.root}}/debian-podman-{box_provider}.box"
+  provider_override = "{box_provider}"
+ }}
+}}
+'''
+    (folder / 'podman.pkr.hcl').write_text(hcl)
+    result = {'status': 'source_only_unverified', 'profile': 'debian-podman-headless',
+              'provider': box_provider, 'guest_user': 'vamp', 'gui': False,
+              'box_path': str(folder / f'debian-podman-{box_provider}.box'),
+              'box_created': False, 'podman_transport': 'SSH to rootless Unix socket',
+              'socket_path': '/run/user/<guest-uid>/podman/podman.sock'}
+    (folder / 'profile.json').write_text(json.dumps(result, indent=2) + '\n')
+    return result

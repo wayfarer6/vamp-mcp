@@ -12,6 +12,11 @@ const runtime=path.join(here,'dist/runtime');
 await rm(path.join(here,'dist'),{recursive:true,force:true});
 await mkdir(path.join(runtime,'backends/virtualbox'),{recursive:true});
 await mkdir(path.join(here,'dist'),{recursive:true});
+await copyFile(path.join(here,'src/containers-panel.cjs'),path.join(here,'dist/containers_panel.cjs'));
+await mkdir(path.join(runtime,'backends/podman'),{recursive:true});
+await copyFile(path.join(root,'backends/podman/adapter.cjs'),path.join(runtime,'backends/podman/adapter.cjs'));
+await mkdir(path.join(runtime,'backends/vagrant'),{recursive:true});
+await copyFile(path.join(root,'backends/vagrant/podman_handoff.py'),path.join(runtime,'backends/vagrant/podman_handoff.py'));
 await build({entryPoints:[path.join(root,'backends/common/host-backends.cjs')],outfile:path.join(here,'dist/host_backends.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
 await build({entryPoints:[path.join(root,'backends/common/guest-bootstrap.cjs')],outfile:path.join(here,'dist/guest_bootstrap.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
 const built=await build({metafile:true,entryPoints:[path.join(root,'backends/virtualbox/server.mjs')],
@@ -24,10 +29,11 @@ for(const name of ['backends/packer','backends/common/packer.cjs','backends/comm
   await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__') && source!==path.join(root,'backends/virtualbox/rpas/demos') && source!==path.join(root,'rpas/windows_print_pdf') && source!==path.join(root,'rpas/remote_host_validation')});
 }
 // A VSIX/npm runtime built on Windows must also execute on Linux/macOS.
-for(const name of ['vamp-ui-cleanup','vamp-ui-validation','vamp-rpa-ui-checks']) {
+for(const name of ['vamp-ui-cleanup','vamp-ui-validation','vamp-rpa-ui-checks','vamp-podman']) {
   await cp(path.join(root,'.agents/skills',name),path.join(runtime,'skills',name),{recursive:true});
 }
 await copyFile(path.join(here,'RESOLUTION.md'),path.join(runtime,'skills/vamp-rpa-ui-checks/references/user-guide.md'));
+await copyFile(path.join(here,'CONTAINERS_WSL.md'),path.join(runtime,'skills/vamp-podman/CONTAINERS_WSL.md'));
 // Preserve native Windows files; normalize only Unix shell scripts.
 async function normalizeUnixScripts(directory){
   for(const entry of await readdir(directory,{withFileTypes:true})){
@@ -46,6 +52,7 @@ await copyFile(path.join(root,'third_party/mcp-virtualbox/LICENSE'),path.join(he
 await copyFile(path.join(root,'third_party/mcp-virtualbox/PROVENANCE.json'),path.join(here,'dist/notices/mcp-virtualbox-PROVENANCE.json'));
 
 const libraryServer=await build({metafile:true,entryPoints:[path.join(root,'backends/library/server.mjs')],outfile:path.join(runtime,'backends/library/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
+const podmanServer=await build({metafile:true,entryPoints:[path.join(root,'backends/podman/server.mjs')],outfile:path.join(runtime,'backends/podman/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
 const remoteServer=await build({metafile:true,entryPoints:[path.join(root,'backends/remote_ssh/server.mjs')],
   outfile:path.join(runtime,'backends/remote_ssh/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node20',
   banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
@@ -56,7 +63,7 @@ const viewerHost=await build({metafile:true,entryPoints:[path.join(here,'src/vie
   outfile:path.join(here,'dist/viewer_bridge.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
 const viewerBrowser=await build({metafile:true,entryPoints:[path.join(here,'src/viewer_webview.js')],
   outfile:path.join(here,'dist/webview/viewer.js'),bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true});
-Object.assign(built.metafile.inputs,libraryServer.metafile.inputs,remoteServer.metafile.inputs,remoteClient.metafile.inputs,libraryStore.metafile.inputs,viewerHost.metafile.inputs,viewerBrowser.metafile.inputs);
+Object.assign(built.metafile.inputs,libraryServer.metafile.inputs,podmanServer.metafile.inputs,remoteServer.metafile.inputs,remoteClient.metafile.inputs,libraryStore.metafile.inputs,viewerHost.metafile.inputs,viewerBrowser.metafile.inputs);
 
 // Preserve licenses of dependencies included by the bundler.
 const packages=new Map();
