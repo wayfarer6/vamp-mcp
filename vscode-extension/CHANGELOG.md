@@ -1,6 +1,13 @@
 # Changelog
 
-## 0.3.0 (unreleased)
+## 0.3.1
+
+- Register one VAMP MCP server containing VM, RPA and Podman tools. Keep Vault separate.
+- Add an explicit same-user, native Linux rootless Podman target.
+- Add the Debian XFCE desktop container recipe with fixed 1920×1080 display, bundled noVNC packages, and optional NVIDIA/AMD recipes. No viewer listener is started.
+- Add read-only encrypted workspace planning groundwork. Production Vault/engine probes and live display/GPU/volume tests are not part of this preview.
+
+## 0.3.0
 
 - Add a Containers panel and separate Podman MCP server for named rootless SSH connections.
 - Add optional read-only Windows Podman/WSL discovery and an English manual setup guide. No system features or Podman machines are enabled or created by discovery.

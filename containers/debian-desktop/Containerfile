@@ -1,0 +1,39 @@
+ARG DEBIAN_BASE=docker.io/library/debian:trixie-slim
+FROM ${DEBIAN_BASE}
+LABEL org.opencontainers.image.title="VAMP Debian Desktop" \
+      org.opencontainers.image.description="Non-root XFCE desktop; no network viewer by default"
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates locales tini python3 dbus-x11 \
+    xvfb xauth x11-utils x11-xserver-utils x11-apps netpbm \
+    xfce4-session xfce4-panel xfce4-settings xfwm4 xfdesktop4 thunar \
+    xfce4-terminal mousepad \
+    chromium \
+    libreoffice-writer libreoffice-calc libreoffice-impress libreoffice-gtk3 \
+    fonts-noto-cjk fonts-noto-color-emoji fonts-liberation \
+    novnc websockify x11vnc \
+    && sed -i 's/^# \(en_US.UTF-8 UTF-8\)/\1/; s/^# \(ko_KR.UTF-8 UTF-8\)/\1/' /etc/locale.gen \
+    && locale-gen \
+    && useradd --create-home --uid 1000 --user-group --shell /bin/sh desktop \
+    && passwd --lock desktop \
+    && find / -xdev -type f -perm /6000 -exec chmod a-s {} + \
+    && rm -rf /var/lib/apt/lists/*
+# No sudo, SUID Chromium helper, host X server, engine socket, SSH or secrets.
+# Chromium must retain its namespace sandbox; incompatible hosts fail visibly.
+COPY desktop.py healthcheck.py helper_common.py capture.py view.py /opt/vamp-desktop/
+COPY chromium-launcher.py /usr/local/bin/vamp-chromium
+COPY chromium.desktop /usr/share/applications/vamp-chromium.desktop
+RUN chmod 0755 /usr/local/bin/vamp-chromium \
+    && mkdir -p /home/desktop/Desktop \
+    && cp /usr/share/applications/vamp-chromium.desktop /home/desktop/Desktop/ \
+    && chown -R desktop:desktop /home/desktop
+ENV HOME=/home/desktop USER=desktop LOGNAME=desktop \
+    LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8 DISPLAY=:99 \
+    XDG_RUNTIME_DIR=/tmp/vamp-desktop-runtime
+USER 1000:1000
+WORKDIR /home/desktop
+# No EXPOSE and no VNC/websockify start. Open Desktop needs a future authenticated
+# managed transport; installed packages alone do not provide a secure viewer.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=45s --retries=2 \
+    CMD ["/usr/bin/python3", "-I", "-B", "/opt/vamp-desktop/healthcheck.py"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/bin/python3", "-I", "-B", "/opt/vamp-desktop/desktop.py"]

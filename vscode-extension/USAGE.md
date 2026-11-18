@@ -98,7 +98,7 @@ For an authorized repair, an agent can use **rpa_revision** to inspect history a
 
 ## 6. Let an agent reuse skills before another CUA loop
 
-1. In VS Code MCP server management, start **VAMP RPA Library** and enable its tools. Enable the relevant VM provider for other VM operations.
+1. In VS Code MCP server management, start **VAMP MCP**. Its RPA Library and VM tools share the same connection.
 2. Example request: `Find the saved RPA for customer search by title and description. Reuse a compatible reviewed skill on my running VM with query=Alice, then verify its expected result.`
 3. The agent calls **rpa_search**, then **rpa_details** for a likely match. It checks backend, recorded resolution, input names, review state and expected result.
 4. With task authorization and an exact VM UUID, it calls **rpa_run_saved** with all declared inputs and `confirmed:true`. The runner does not start another VM implicitly.
@@ -141,7 +141,7 @@ Use this when the virtual machines live on another machine and you only have SSH
 2. Run **VAMP: Remote · Prepare Environment on the Remote Host**. VAMP uploads its remote server to `~/.vamp/remote/`, creates a Python venv, installs libvirt/QEMU when passwordless sudo is available, and reports the exact command for anything an administrator must do.
 3. Run **VAMP: Remote · Verify Remote Environment** to see every check.
 4. Open **Remote Server (SSH)** in VM Manager. Desktops on that host appear in the list; **Start**, **Shut Down** and **Screenshot** act on the remote hypervisor.
-5. For an agent, start **VAMP Remote (SSH)** in MCP server management. Tools: `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click`, `remote_rpa_run`.
+5. For an agent, start **VAMP MCP** in MCP server management after configuring the SSH target. Tools: `remote_env_check`, `remote_env_setup`, `remote_vm_list`, `remote_vm_status`, `remote_vm_start`, `remote_vm_stop`, `remote_vm_screenshot`, `remote_vm_send_keys`, `remote_vm_mouse_click`, `remote_rpa_run`.
 
 Remote screens are **screenshots only**: one PNG per request, refreshed every few seconds in the panel. There is no live stream, no forwarded hypervisor port, and guest credentials stay on the remote host. A started VM is not a booted guest — take a screenshot and look. Clicks use fractions of the screen so they follow the last screenshot; VirtualBox remote hosts report clicks as unsupported. Full guide: `docs/REMOTE_SETUP.md`.
 
@@ -152,7 +152,7 @@ Remote screens are **screenshots only**: one PNG per request, refreshed every fe
 | VM Create is disabled | Check hypervisor readiness, a valid name and a selected ISO. |
 | Recording is missing | Verify the file exists on the host. Use Add RPA Folder; verify the guest share separately. |
 | Registration rejects an operation/resolution | Select a supported guest-recorded Python script and enter its recorded guest resolution. |
-| An agent cannot find a skill | Save it under My RPA skills; start VAMP RPA Library MCP; use matching titles/descriptions/tags. |
+| An agent cannot find a skill | Save it under My RPA skills; start VAMP MCP; use matching titles/descriptions/tags. |
 | needs_review_or_confirmation | Review the skill in Edit Details; authorize the task and provide confirmed:true. |
 | Source/actions changed | Recreate and review the definition after source changes. |
 | completed_unverified | Verify the expected application result. |

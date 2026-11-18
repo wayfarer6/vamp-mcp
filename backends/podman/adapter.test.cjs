@@ -13,7 +13,7 @@ test('standard search includes the official per-user Windows MSI location, not P
 });
 function fixture({connections=[good],info={host:{security:{rootless:true},serviceIsRemote:true}},containers=[{Id:id,Names:['demo'],Image:'image',State:'running',Status:'Up'}],fail=false,output='bounded output'}={}){
  const calls=[];
- const adapter=createPodmanAdapter({execute:async(exe,args,options)=>{
+ const adapter=createPodmanAdapter({platform:'darwin',execute:async(exe,args,options)=>{
   calls.push({exe,args,options});
   assert.equal(exe,'podman');assert.equal(options.shell,false);assert.equal(options.windowsHide,true);assert.equal(options.timeout,30000);assert.equal(options.maxBuffer,1048576);
   if(fail)throw Error('secret raw stderr');
@@ -117,4 +117,106 @@ test('relative and absent identities rejected before remote access',async()=>{
 test('runner environment excludes ambient connection, SSH and PATH overrides',async()=>{
  const {adapter,calls}=fixture();await adapter.connections();
  for(const name of ['PATH','CONTAINER_HOST','container_connection','CONTAINER_SSHKEY','SSH_AUTH_SOCK','CONTAINERS_CONF','PODMAN_CONNECTIONS_CONF'])assert.equal(calls[0].options.env[name],undefined);
+});
+
+function localFixture({info={host:{security:{rootless:true},serviceIsRemote:false}},identity={uid:1000,euid:1000,home:'/home/qa'},platform='linux'}={}){
+ const calls=[];const user=typeof identity==='function'?identity:()=>identity;
+ const adapter=createPodmanAdapter({platform,userIdentity:user,execute:async(exe,args,options)=>{
+  calls.push({args,options});
+  if(args[0]==='system')return {stdout:JSON.stringify([good,{...good,Name:'local-linux'}])};
+  assert.equal(args[0],'--remote=false');assert.equal(options.env.HOME,'/home/qa');assert.equal(options.env.XDG_RUNTIME_DIR,'/run/user/1000');
+  if(args[1]==='info')return {stdout:JSON.stringify(info)};
+  if(args[1]==='ps')return {stdout:JSON.stringify([{Id:id,Names:['native'],State:'running'}])};
+  return {stdout:'local logs'};
+ }});return {adapter,calls};
+}
+test('explicit local target discovery is disconnected and reserved',async()=>{
+ const {adapter,calls}=localFixture();const rows=await adapter.connections();
+ assert.equal(rows.filter(r=>r.name==='local-linux').length,1);assert.equal(rows[0].transport,'local');assert.equal(calls.length,1);assert.equal(calls[0].args[0],'system');
+});
+test('native local rootless list lifecycle and logs use only remote=false fixed arguments',async()=>{
+ const {adapter,calls}=localFixture();const listed=await adapter.list('local-linux');assert.equal(listed.containers[0].id,id);
+ assert.equal((await adapter.check('local-linux')).binding,listed.binding);
+ await adapter.start('local-linux',id,listed.binding);assert.deepEqual(calls.at(-1).args,['--remote=false','start','--',id]);
+ await adapter.stop('local-linux',id,listed.binding);assert.deepEqual(calls.at(-1).args,['--remote=false','stop','--time','10','--',id]);
+ assert.equal((await adapter.logs('local-linux',id,10,listed.binding)).text,'local logs');
+ assert.ok(calls.every(c=>c.args[0]==='--remote=false'));assert.ok(!JSON.stringify(listed).includes('/home/qa'));
+});
+test('local target rejects root, setuid mismatch, other OS and unknown/remote/rootful info',async()=>{
+ for(const options of [{identity:{uid:0,euid:0,home:'/root'}},{identity:{uid:1000,euid:0,home:'/home/qa'}},{platform:'win32'},{platform:'darwin'}]){
+  const {adapter,calls}=localFixture(options);await assert.rejects(adapter.check('local-linux'));assert.equal(calls.length,0);
+ }
+ for(const info of [{},{host:{security:{rootless:true},serviceIsRemote:true}},{host:{security:{rootless:true}}},{host:{security:{rootless:false},serviceIsRemote:false}}])await assert.rejects(localFixture({info}).adapter.check('local-linux'),/local rootless/);
+});
+test('local bindings reject UID/home drift and missing binding before mutations',async()=>{
+ let identity={uid:1000,euid:1000,home:'/home/qa'};const {adapter,calls}=localFixture({identity:()=>identity});
+ const {binding}=await adapter.check('local-linux');await assert.rejects(adapter.start('local-linux',id),/binding/);
+ identity={uid:1001,euid:1001,home:'/home/other'};const count=calls.length;await assert.rejects(adapter.start('local-linux',id,binding),/changed/);assert.equal(calls.length,count);
+});
+
+const {deflateSync}=require('node:zlib');
+const {validatePng}=require('./adapter.cjs');
+function pngFixture(){
+ function crc(bytes){let c=0xffffffff;for(const b of bytes){c^=b;for(let n=0;n<8;n++)c=(c>>>1)^((c&1)?0xedb88320:0);}return(c^0xffffffff)>>>0;}
+ function chunk(type,data){const out=Buffer.alloc(data.length+12);out.writeUInt32BE(data.length);out.write(type,4);data.copy(out,8);out.writeUInt32BE(crc(out.subarray(4,8+data.length)),8+data.length);return out;}
+ const header=Buffer.alloc(13);header.writeUInt32BE(1920);header.writeUInt32BE(1080,4);header[8]=8;header[9]=2;
+ return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.alloc((1920*3+1)*1080))),chunk('IEND',Buffer.alloc(0))]);
+}
+function desktopFixture(change=()=>{},allow='b'.repeat(64),spawnProcess){
+ const calls=[];const value={Id:id,Image:'sha256:'+'b'.repeat(64),State:{Running:true},Config:{User:'1000:1000'},Mounts:[],HostConfig:{Privileged:false,ReadonlyRootfs:true,CapAdd:[],CapDrop:['ALL'],SecurityOpt:['no-new-privileges'],Devices:[],NetworkMode:'none',PidMode:'',IpcMode:'private',UTSMode:'',UsernsMode:''}};change(value);
+ const adapter=createPodmanAdapter({platform:'darwin',desktopImageIds:allow,spawnProcess,execute:async(exe,args,options)=>{
+  calls.push({args,options});if(args[0]==='system')return {stdout:JSON.stringify([good])};
+  const command=args[7];if(command==='info')return {stdout:JSON.stringify({host:{security:{rootless:true},serviceIsRemote:true}})};
+  if(command==='ps')return {stdout:JSON.stringify([{Id:id}])};if(command==='inspect')return {stdout:JSON.stringify([value])};
+  if(command==='exec')return {stdout:pngFixture()};throw Error('unexpected command');
+ }});return {adapter,calls};
+}
+test('capture only runs fixed trusted-image helper and returns validated bounded PNG',async()=>{
+ const {adapter,calls}=desktopFixture();const result=await adapter.capture('qa',id,binding);
+ assert.equal(result.width,1920);assert.equal(result.height,1080);assert.equal(validatePng(result.png),true);assert.equal(result.imageId,'b'.repeat(64));
+ assert.deepEqual(calls.at(-1).args.slice(7),['exec','--user','1000:1000','--',id,'/usr/bin/python3','-I','-B','/opt/vamp-desktop/capture.py']);assert.equal(calls.at(-1).options.timeout,20000);assert.equal(calls.at(-1).options.maxBuffer,8388608);
+});
+test('capture rejects image, identity, stopped, privileged, mounts and host namespace drift before exec',async()=>{
+ for(const change of [v=>v.Image='c'.repeat(64),v=>v.Id='c'.repeat(64),v=>v.State.Running=false,v=>v.Config.User='0',v=>v.HostConfig.Privileged=true,v=>v.HostConfig.ReadonlyRootfs=false,v=>v.Mounts=[{Destination:'/opt'}],v=>v.HostConfig.NetworkMode='host',v=>v.HostConfig.PidMode='container:other',v=>v.HostConfig.CapAdd=['SYS_ADMIN'],v=>v.HostConfig.CapDrop=[],v=>v.HostConfig.SecurityOpt=[],v=>v.HostConfig.Devices=[{}]]){
+  const {adapter,calls}=desktopFixture(change);await assert.rejects(adapter.capture('qa',id,binding));assert.ok(!calls.some(c=>c.args[7]==='exec'));
+ }
+ await assert.rejects(desktopFixture(()=>{},'').adapter.capture('qa',id,binding),/image IDs/);
+});
+test('PNG validates chunk CRC, size, strict dimensions and rejects trailing bytes',()=>{
+ const png=pngFixture();assert.equal(validatePng(png),true);
+ const corrupt=Buffer.from(png);corrupt[20]^=1;
+ for(const value of [corrupt,png.subarray(0,25),Buffer.concat([png,Buffer.from('extra')]),Buffer.alloc(8388609),'text'])assert.throws(()=>validatePng(value));
+});
+
+test('screen stream uses fixed view-only helper and bounded disposal, never a listener',async()=>{
+ const {EventEmitter}=require('node:events');const {PassThrough}=require('node:stream');const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();let killed=0;child.kill=()=>{killed++;};let spawned;
+ const {adapter}=desktopFixture(()=>{},'b'.repeat(64),(exe,args,options)=>{spawned={exe,args,options};return child;});
+ const handle=await adapter.openScreenStream('qa',id,binding);assert.equal(handle.child,child);assert.equal(handle.viewOnly,true);assert.equal(handle.imageId,'b'.repeat(64));
+ assert.deepEqual(spawned.args.slice(7),['exec','--user','1000:1000','--interactive','--',id,'/usr/bin/python3','-I','-B','/opt/vamp-desktop/view.py']);assert.equal(spawned.options.shell,false);
+ child.stderr.write(Buffer.alloc(16385));assert.equal(killed,1);handle.close();assert.equal(killed,1);
+});
+
+test('screenTarget is metadata only after exact trusted inspection, with no capture or stream',async()=>{
+ const {adapter,calls}=desktopFixture();assert.deepEqual(await adapter.screenTarget('qa',id,binding),{connection:'qa',id,imageId:'b'.repeat(64),width:1920,height:1080});
+ assert.ok(calls.some(c=>c.args[7]==='inspect'));assert.ok(!calls.some(c=>c.args[7]==='exec'));
+});
+test('desktop permits only declared benign tmpfs, never bind or code-shadowing mounts',async()=>{
+ for(const destination of ['/tmp','/run','/var/tmp']){
+  const {adapter}=desktopFixture(v=>{v.Mounts=[{Type:'tmpfs',Destination:destination,Source:'tmpfs'}];v.HostConfig.Tmpfs={[destination]:'rw,nosuid,nodev'};});
+  assert.equal((await adapter.screenTarget('qa',id,binding)).imageId,'b'.repeat(64));
+ }
+ for(const change of [v=>v.Mounts=[{Type:'bind',Destination:'/tmp',Source:'/host'}],v=>v.Mounts=[{Type:'tmpfs',Destination:'/opt'}],v=>v.Mounts=[{Type:'tmpfs',Destination:'/usr'}],v=>v.Mounts=[{Type:'tmpfs',Destination:'/workspace'}],v=>v.HostConfig.Tmpfs={'/opt':'rw'},v=>v.Mounts=[{Type:'tmpfs',Destination:'/tmp',Source:'/host'}]]){
+  const {adapter,calls}=desktopFixture(change);await assert.rejects(adapter.screenTarget('qa',id,binding),/isolation/);assert.ok(!calls.some(c=>c.args[7]==='exec'));
+ }
+});
+
+test('human control stream allows only exact fixed mode flag; default stays view-only',async()=>{
+ const {EventEmitter}=require('node:events');const {PassThrough}=require('node:stream');const spawned=[];
+ const {adapter,calls}=desktopFixture(()=>{},'b'.repeat(64),(exe,args)=>{spawned.push(args);const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();child.kill=()=>{};return child;});
+ for(const options of [{mode:'exec'},{mode:'control',args:['bad']},['control'],null,{command:'shell'}])await assert.rejects(adapter.openScreenStream('qa',id,binding,options),/options/);
+ assert.equal(calls.length,0);assert.equal(spawned.length,0);
+ const view=await adapter.openScreenStream('qa',id,binding);assert.equal(view.mode,'view_only');assert.equal(view.viewOnly,true);assert.equal(spawned[0].at(-1),'/opt/vamp-desktop/view.py');view.close();
+ const control=await adapter.openScreenStream('qa',id,binding,{mode:'control'});assert.equal(control.mode,'control');assert.equal(control.viewOnly,false);
+ assert.deepEqual(spawned[1].slice(7),['exec','--user','1000:1000','--interactive','--',id,'/usr/bin/python3','-I','-B','/opt/vamp-desktop/view.py','--interactive']);control.close();
+ assert.equal(calls.filter(c=>c.args[7]==='inspect').length,2);
 });

@@ -3,7 +3,7 @@ import {StdioServerTransport} from '../../third_party/mcp-virtualbox/node_module
 import {z} from '../../third_party/mcp-virtualbox/node_modules/zod/index.js';
 import {readdir,readFile} from 'node:fs/promises';
 import path from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {fileURLToPath,pathToFileURL} from 'node:url';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
@@ -11,7 +11,8 @@ import os from 'node:os';
 import visionPreload from '../common/vision-preload.cjs';
 const runGit=promisify(execFile);
 const root=process.env.VAMP_RPA_REGISTRY;
-const server=new McpServer({name:'VAMP RPA Library',version:'0.1.6'},{instructions:'RPA-FIRST WORKFLOW: Before using repeated CUA, screenshots, OCR, YOLO or multimodal reasoning, search saved skills with rpa_search using the task goal keywords. Match title, description, when_to_use, backend and input names. Read rpa_details for a likely match. Prefer a reviewed reusable RPA when it satisfies the user task and authorization. Run it with rpa_run_saved only with an explicit VM UUID, exact declared inputs and confirmed=true after authorization. Never run unreviewed or changed source. Read the compact result first; no screenshot is emitted automatically. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. completed_unverified means actions completed, not proof of application success. Use the expected result to verify, and fall back to targeted CUA/multimodal only when no suitable RPA exists, execution fails or verification needs it. Do not force a mismatched workflow just to save tokens. When a saved RPA fails and the user authorizes repair, use rpa_revision to inspect its latest source and commit a validated update with an expected commit. Never overwrite uncommitted user edits. Repairs require user review before another run. Hyper-V desktop replay is unsupported.'});
+export const libraryInstructions = 'RPA-FIRST WORKFLOW: Before using repeated CUA, screenshots, OCR, YOLO or multimodal reasoning, search saved skills with rpa_search using the task goal keywords. Match title, description, when_to_use, backend and input names. Read rpa_details for a likely match. Prefer a reviewed reusable RPA when it satisfies the user task and authorization. Run it with rpa_run_saved only with an explicit VM UUID, exact declared inputs and confirmed=true after authorization. Never run unreviewed or changed source. Read the compact result first; no screenshot is emitted automatically. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. completed_unverified means actions completed, not proof of application success. Use the expected result to verify, and fall back to targeted CUA/multimodal only when no suitable RPA exists, execution fails or verification needs it. Do not force a mismatched workflow just to save tokens. When a saved RPA fails and the user authorizes repair, use rpa_revision to inspect its latest source and commit a validated update with an expected commit. Never overwrite uncommitted user edits. Repairs require user review before another run. Hyper-V desktop replay is unsupported.';
+export function registerLibraryTools(server){
 const result=value=>({content:[{type:'text',text:JSON.stringify(value)}]});
 const identifier=z.string().uuid();
 async function definition(id){if(!root)throw Error('Open VAMP RPA Library in VS Code first.');const item=JSON.parse(await readFile(path.join(root,id,'rpa.json'),'utf8'));if(item.id!==id||item.format!=='vamp-saved-rpa')throw Error('Unknown saved RPA');return item;}
@@ -27,7 +28,7 @@ server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices wi
  const python=metadata.backend==='virtualbox'?(process.env.RPA_REPLAY_PYTHON||process.env.RPA_HOST_PYTHON):process.env.RPA_HOST_PYTHON;
  if(!python)return result({status:'needs_setup',message:'Run VAMP Python setup in VS Code first.'});
  return result(await new Promise(resolve=>{
-  const child=execFile(python,[fileURLToPath(new URL('./replay.py',import.meta.url))],{timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
+  const child=execFile(python,[fileURLToPath(new URL('../library/replay.py',import.meta.url))],{timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
   child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify({...request,registry:root,libvirt_uri:process.env.VAMP_LIBVIRT_URI||'qemu:///session'}));
  }));
 });
@@ -48,10 +49,15 @@ server.tool('rpa_revision','Inspect a saved skill’s local Git history, read it
  try{
   const source=path.join(temporary,'source.py');await writeFile(source,request.source,{mode:0o600});
   const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name};
-  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[fileURLToPath(new URL('./registry.py',import.meta.url))],{timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
+  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[fileURLToPath(new URL('../library/registry.py',import.meta.url))],{timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
   return result(repaired.status==='registered'?{status:'committed_needs_review',id:item.id,version:repaired.definition.version,commit:repaired.commit,reviewed:false}:repaired);
  }finally{await rm(temporary,{recursive:true,force:true});}
 });
+return server;
+}
+if(path.basename(path.dirname(process.argv[1]||''))==='library'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
+const server=new McpServer({name:'VAMP library',version:'0.3.0'},{instructions:libraryInstructions});
+registerLibraryTools(server);
 // Warm the local OCR/YOLO workers so the first verification does not pay the
 // model load. Detached from this process; a missing model environment is fine.
 {
@@ -60,3 +66,4 @@ server.tool('rpa_revision','Inspect a saved skill’s local Git history, read it
   else if (vision.status === 'unavailable') console.error(`Vision workers unavailable: ${vision.reason}`);
 }
 await server.connect(new StdioServerTransport());
+}

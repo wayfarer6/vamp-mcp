@@ -4,16 +4,19 @@
 // Runs on the machine that owns the hypervisor and is normally started by an
 // SSH client, so an agent anywhere can drive KVM or VirtualBox desktops
 // without opening a hypervisor port or copying guest credentials off the host.
+import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolveConfig, parseArgs } from './config.mjs';
 import { createTools, VERSION } from './tools.mjs';
+import { registerRemoteTools as registerTools, registerLocalKvmTools } from './register.mjs';
+import { registerPythonTools } from './python-bridge.mjs';
 
 export const SERVER_NAME = 'vamp-remote';
 const PROTOCOL_VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-const INSTRUCTIONS = [
+export const remoteInstructions = [
   'When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success.',
   'Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark.',
   'This server controls virtual desktops on the host that runs it, reached over SSH. Only screenshots are available - there is no live screen stream, so take a new screenshot for a new frame.',
@@ -24,6 +27,15 @@ const INSTRUCTIONS = [
   'remote_rpa_run executes a reviewed saved VAMP RPA and changes the guest; ask the user first and pass confirmed=true only after authorization.',
   'Secrets stay on the host. Never request, echo or store guest passwords in tool output, and do not paste credentials into text fields unless the user asked for exactly that.',
 ].join(' ');
+const INSTRUCTIONS = remoteInstructions;
+
+export function registerRemoteTools(server, options={}) {
+  const remote=registerTools(server,{...options,run:options.run||createRunner()});
+  const local=registerLocalKvmTools(server,{...options,run:options.run||createRunner()});
+  const python=registerPythonTools(server,options);
+  return {names:[...remote.names,...local.names,...python.names]};
+}
+
 
 export function createRunner() {
   return (exe, args, { timeoutMs = 30000, input } = {}) => new Promise((resolve, reject) => {
@@ -210,7 +222,7 @@ async function main() {
   return 0;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && ['remote_ssh','remote'].includes(path.basename(path.dirname(fileURLToPath(import.meta.url)))) && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   main().then(code => { process.exitCode = code; }).catch(error => {
     process.stderr.write(`vamp-remote: ${error?.stack || error}\n`);
     process.exitCode = 1;

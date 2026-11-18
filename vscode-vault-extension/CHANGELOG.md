@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+
+- Register only one VAMP Vault MCP definition. Choose the local target (default) or an explicitly configured remote target. Malformed remote settings never fall back to local.
+- Add test-only workspace-policy groundwork; existing Vault unlock and dismount behavior is unchanged.
+
 ## Unreleased
 
 - Add credentials by hand: **VAMP Vault: Add Credential** (`+` in the Credentials view title) asks for title, username, password, URL and notes and writes the entry to the open vault; the MCP server gains `vault_add_credential` with the same parameters. A `Group/Title` path creates the group, an existing path is never overwritten, and the password is never returned.

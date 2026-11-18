@@ -97,7 +97,7 @@ For an authorized repair, an agent can use **rpa_revision** to inspect history a
 
 ## 6. Let an agent reuse skills before another CUA loop
 
-1. In VS Code MCP server management, start **VAMP RPA Library** and enable its tools. Enable the relevant VM provider for other VM operations.
+1. In VS Code MCP server management, start **VAMP MCP**. RPA Library, VM and Podman tools share this registration.
 2. Example request: `Find the saved RPA for customer search by title and description. Reuse a compatible reviewed skill on my running VM with query=Alice, then verify its expected result.`
 3. The agent calls **rpa_search**, then **rpa_details** for a likely match. It checks backend, recorded resolution, input names, review state and expected result.
 4. With task authorization and an exact VM UUID, it calls **rpa_run_saved** with all declared inputs and `confirmed:true`. The runner does not start another VM implicitly.
@@ -143,7 +143,7 @@ Usernames fill in for the first 200 entries in the background. Search titles/gro
 | VM Create is disabled | Check hypervisor readiness, a valid name and a selected ISO. |
 | Recording is missing | Verify the file exists on the host. Use Add RPA Folder; verify the guest share separately. |
 | Registration rejects an operation/resolution | Select a supported guest-recorded Python script and enter its recorded guest resolution. |
-| An agent cannot find a skill | Save it under My RPA skills; start VAMP RPA Library MCP; use matching titles/descriptions/tags. |
+| An agent cannot find a skill | Save it under My RPA skills; start VAMP MCP; use matching titles/descriptions/tags. |
 | needs_review_or_confirmation | Review the skill in Edit Details; authorize the task and provide confirmed:true. |
 | Source/actions changed | Recreate and review the definition after source changes. |
 | completed_unverified | Verify the expected application result. |
@@ -238,7 +238,7 @@ AI는 설명과 검색 메타데이터를 작성합니다. 녹화 동작을 몰�
 
 ## 6. AI가 RPA를 먼저 찾아 재사용하도록 하기
 
-1. VS Code의 MCP 서버 관리에서 **VAMP RPA Library**를 시작하고 도구를 활성화합니다. VM 제어에는 필요한 VirtualBox/KVM 제공자도 사용합니다.
+1. VS Code의 MCP 서버 관리에서 **VAMP MCP**를 시작합니다. RPA Library, VM, Podman 도구가 같은 MCP 등록에 있습니다.
 2. 예: `거래처 검색 작업을 해줘. 먼저 저장된 RPA를 제목과 설명으로 찾아보고, 맞는 검토 완료 RPA가 있으면 재사용해. 입력은 query=홍길동이고 대상 VM은 내가 켜 둔 VM이야.`
 3. 에이전트는 `rpa_search`로 검색한 뒤 `rpa_details`에서 입력값·백엔드·해상도·검토 상태를 확인합니다.
 4. 사용자 작업 권한과 정확한 VM UUID를 확인한 뒤 `rpa_run_saved`에 선언한 입력과 `confirmed:true`를 전달합니다. 실행하지 않은 VM을 임의로 켜지는 않습니다.

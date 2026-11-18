@@ -1,0 +1,11 @@
+# Build after the common desktop image. Override with a verified base digest for release builds.
+ARG VAMP_DESKTOP_BASE=localhost/vamp-debian-desktop:dev
+FROM ${VAMP_DESKTOP_BASE}
+LABEL org.opencontainers.image.title="VAMP Debian Desktop - NVIDIA" \
+      org.opencontainers.image.description="Optional NVIDIA graphics userspace; requires explicit host CDI device selection"
+USER 0:0
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglvnd0 libgl1 libegl1 libglx0 libvulkan1 mesa-utils vulkan-tools \
+    && rm -rf /var/lib/apt/lists/*
+# No driver, CUDA toolkit, device nodes, or default GPU selection in the image.
+USER 1000:1000

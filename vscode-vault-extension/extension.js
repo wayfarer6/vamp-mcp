@@ -8,6 +8,7 @@ const { pathToFileURL } = require('node:url');
 const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const run = promisify(execFile);
+const { selectVaultDefinition } = require('./mcp-routing.cjs');
 
 const SECRET_KEY = 'vampVault.masterPasswords';
 const version = require('./package.json').version;
@@ -350,7 +351,6 @@ function activate(context) {
   // question, and no database is ever copied from one host to another.
   const remoteModule = () => loadModule(context, 'dist/runtime/src/remote_vault_client.mjs');
   const remoteCache = { key: '', at: 0, report: null, error: '', listing: null, listingKey: '', listingAt: 0, listingError: '' };
-  const REMOTE_REPORT_TTL = 5 * 60 * 1000;
   const REMOTE_LISTING_TTL = 60 * 1000;
 
   async function remoteSettings() {
@@ -412,14 +412,15 @@ function activate(context) {
     if (!state.configured) return state;
     const key = `${module.remoteVaultTarget(settings)}|${settings.kdbxPath}|${settings.port}`;
     state.unlocked = Boolean((await readSecretMap(context))[state.id]);
-    const fresh = remoteCache.report && remoteCache.key === key && Date.now() - remoteCache.at < REMOTE_REPORT_TTL;
-    if (force || !fresh) {
+    // Passive sidebar/activation reads never initiate an SSH connection.
+    // Only an explicit remote operation can request a fresh host check.
+    if (force) {
       // The sidebar must never hang on another machine, so a check that takes
       // longer than a moment finishes in the background and refreshes the views
       // when it arrives.
       await Promise.race([remoteCheck(module, settings, key, target), remoteGrace(VIEW_GRACE_MS)]);
     }
-    const report = remoteCache.report;
+    const report = remoteCache.key === key ? remoteCache.report : null;
     state.checked = remoteCache.key === key && remoteCache.at > 0;
     state.error = remoteCache.error;
     if (report) {
@@ -612,9 +613,7 @@ function activate(context) {
     }
   }));
 
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.vault', {
-    onDidChangeMcpServerDefinitions: changes.event,
-    provideMcpServerDefinitions() {
+  function localMcpDefinitions() {
       const environment = {
         ELECTRON_RUN_AS_NODE: '1',
         VAULT_BIN_DIR: binDir,
@@ -632,22 +631,18 @@ function activate(context) {
         environment.VAULT_BRIDGE_TOKEN = bridge.token;
       }
       return [new vscode.McpStdioServerDefinition('VAMP Vault', process.execPath, [path.join(runtime, 'backends/vault/server.mjs')], environment, version)];
-    },
-  }));
+  }
 
-  // The remote vault is a second, separate MCP server: the agent sees it under
-  // its own name and can never mistake one vault's entries for the other's.
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.vault.remote', {
-    onDidChangeMcpServerDefinitions: changes.event,
-    async provideMcpServerDefinitions() {
+  // Exactly one explicitly selected scope; never combine or fall back.
+  async function remoteMcpDefinitions() {
       let settings;
       try {
         ({ settings } = await remoteSettings());
       } catch (error) {
         output.appendLine(`Remote vault settings: ${error.message}`);
-        return [];
+        throw new Error('Remote Vault configuration is invalid');
       }
-      if (!settings.enabled || !settings.host) return [];
+      if (!settings.enabled || !settings.host) throw new Error('Remote Vault must be enabled and have an explicit configured host');
       const environment = {
         ELECTRON_RUN_AS_NODE: '1',
         VAULT_REMOTE_VERSION: version,
@@ -669,8 +664,19 @@ function activate(context) {
       ];
       if (settings.username) args.push('--username', settings.username);
       if (settings.privateKeyPath) args.push('--identity', settings.privateKeyPath);
-      const label = `VAMP Vault (Remote) · ${settings.username ? `${settings.username}@` : ''}${settings.host}`;
-      return [new vscode.McpStdioServerDefinition(label, process.execPath, args, environment, version)];
+      const label = 'VAMP Vault';
+      return [new vscode.McpStdioServerDefinition(label, process.execPath, args, environment, `${version}-remote`)];
+  }
+
+  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.vault', {
+    onDidChangeMcpServerDefinitions: changes.event,
+    async provideMcpServerDefinitions() {
+      try {
+        return await selectVaultDefinition(config().get('mcpTarget', 'local'), localMcpDefinitions, remoteMcpDefinitions);
+      } catch (error) {
+        output.appendLine(`Vault MCP unavailable: ${error.message}`);
+        return [];
+      }
     },
   }));
 
@@ -957,6 +963,11 @@ function activate(context) {
       await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `VAMP Vault: checking ${opened.target}` }, async () => {
         const report = await opened.client.envCheck();
         resetRemote();
+        // Preserve the explicit verification result for passive sidebar reads.
+        remoteCache.key = `${opened.target}|${opened.settings.kdbxPath}|${opened.settings.port}`;
+        remoteCache.report = report;
+        remoteCache.at = Date.now();
+        remoteCache.error = '';
         credentialView.refresh();
         statusView.refresh();
         const keepass = report.keepassxc;

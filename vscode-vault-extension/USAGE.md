@@ -142,7 +142,7 @@ Each remote host keeps its **own** vault. The local vault and a host's vault nev
 4. Run **VAMP Vault: Unlock Remote Vault** to open it, and **Lock Remote Vault** to forget that host's password while the local vault keeps its own.
 5. The sidebar now splits into **📦 Local Vault** and **🌐 Remote Vault · host**; entry rows under the remote section read that host only. The same entry path can exist in both and stays two separate rows.
 
-The agent sees a second MCP server, **VAMP Vault (Remote) · user@host**, with the same nine tools. Each read is approved here first, and that host's master password travels on the SSH command's standard input — never in an argument, never written to the remote disk.
+Set `vampVault.mcpTarget` to `remote` to use the configured SSH host from the same **VAMP Vault** MCP entry. The default is `local`; the client sees only one Vault target at a time, with the same nine tools. Each read is approved here first, and that host's master password travels on the SSH command's standard input — never in an argument, never written to the remote disk.
 
 Requirements: an OpenSSH client here, key-based SSH that works without a prompt (`BatchMode=yes`), Node.js 20+ and KeePassXC on the host. A vault server left from another version is replaced on the next setup; databases are never touched.
 

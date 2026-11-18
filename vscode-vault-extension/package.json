@@ -1,8 +1,8 @@
 {
   "name": "vamp-vault",
-  "displayName": "VAMP Vault — Credential & Certificate Isolation for AI Agents",
+  "displayName": "VAMP Vault \u2014 Credential & Certificate Isolation for AI Agents",
   "description": "Local & remote (SSH) encrypted vault isolation (KeePassXC & VeraCrypt) with strict per-host credential boundaries for AI agents",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -299,10 +299,6 @@
       {
         "id": "vamp.vault",
         "label": "VAMP Vault"
-      },
-      {
-        "id": "vamp.vault.remote",
-        "label": "VAMP Vault (Remote)"
       }
     ],
     "configuration": {
@@ -414,13 +410,23 @@
           ],
           "default": "per-session",
           "description": "When the agent must be approved on this computer before a read reaches the remote host. Kept separate from the local vault's approval mode."
+        },
+        "vampVault.mcpTarget": {
+          "type": "string",
+          "enum": [
+            "local",
+            "remote"
+          ],
+          "default": "local",
+          "scope": "application",
+          "markdownDescription": "Select the single VAMP Vault MCP target. Local is the default. Remote uses the existing vampVault.remote settings and must be enabled and configured; invalid settings never fall back to local. Local and remote sidebar operations remain separate. Changing this setting changes which vault the MCP client accesses; restart its server connection after switching."
         }
       }
     }
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out vamp-vault-0.1.7.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out vamp-vault-0.1.8.vsix",
     "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs && node test/remote.mjs && node --test test/browser.cjs",
     "vscode:prepublish": "npm run build"
   },

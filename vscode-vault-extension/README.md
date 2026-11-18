@@ -40,7 +40,7 @@ The isolation rule is the whole point: **a remote vault is never the local vault
 
 **How it works.** The extension uploads a standalone `server.mjs` into `~/.vamp/vault` on the host (mode 600) and runs `remote_vault_setup.sh` there: it creates the vault directory as 700, checks Node.js 20+, and installs or reports `keepassxc-cli` (and optionally `veracrypt`) for apt, dnf, yum, zypper, pacman or apk. The setup script is idempotent and never deletes a database.
 
-**What the agent sees.** A second MCP server named **VAMP Vault (Remote) · user@host** appears beside **VAMP Vault**. Its tools are the same nine, but each call runs on the host. The server on this side holds the bridge: it asks *you* for approval and for that host's master password, then sends the approved call over SSH. The host itself is headless and cannot reach your dialogs.
+**What the agent sees.** Set `vampVault.mcpTarget` to `remote` to route the single **VAMP Vault** MCP entry to the configured remote host. It defaults to `local`; only one target is active for MCP at a time. Its tools are the same nine, but each call runs on the selected host. The server on this side holds the bridge: it asks *you* for approval and for that host's master password, then sends the approved call over SSH. The host itself is headless and cannot reach your dialogs.
 
 **In the sidebar.** With a remote host configured, both views split into **📦 Local Vault** and **🌐 Remote Vault · host**. Entry rows under the remote section read that host's database only — the same entry path can exist in both vaults and the two rows stay separate. Remote rows offer the same Copy Username / Copy Password / Show Details actions.
 
@@ -100,7 +100,7 @@ For a remote host, **approval dialogs and master-password storage stay on this c
 ```
 VS Code extension host            remote proxy (Node, stdio)        SSH        remote host
 ┌──────────────────────┐          ┌───────────────────────┐        ┌───┐      ┌────────────────────┐
-│ vamp.vault.remote    │  MCP  →  │ remote/vault_proxy.mjs│ ──────→│ → │ ────→│ ~/.vamp/vault/      │
+│ vamp.vault (remote)  │  MCP  →  │ remote/vault_proxy.mjs│ ──────→│ → │ ────→│ ~/.vamp/vault/      │
 │  · approval dialog   │ ←──────  │  · approval mode      │        └───┘      │   server.mjs        │
 │  · secret storage    │          │  · password on stdin  │                 │   vault.kdbx (own)  │
 └──────────────────────┘          └───────────────────────┘                 └────────────────────┘

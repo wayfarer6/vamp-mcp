@@ -2,7 +2,7 @@
   "name": "vamp-mcp-tools",
   "displayName": "VAMP MCP Tools — VM Automation & Vault",
   "description": "Packer-powered VM setup, post-install automation and golden image management over MCP. Includes VM GUI automation and VAMP Vault.",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -137,29 +137,23 @@
     ],
     "mcpServerDefinitionProviders": [
       {
-        "id": "vamp.virtualbox",
-        "label": "VAMP VirtualBox"
-      },
-      {
-        "id": "vamp.podman",
-        "label": "VAMP Containers (Podman)"
-      },
-      {
-        "id": "vamp.kvm",
-        "label": "VAMP KVM (VNC)"
-      },
-      {
-        "id": "vamp.library",
-        "label": "VAMP RPA Library"
-      },
-      {
-        "id": "vamp.remote",
-        "label": "VAMP Remote (SSH)"
+        "id": "vamp.mcp",
+        "label": "VAMP MCP"
       }
     ],
     "configuration": {
       "title": "VAMP",
       "properties": {
+        "vamp.podman.desktopImageIds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(sha256:)?[a-f0-9]{64}$"
+          },
+          "default": [],
+          "scope": "application",
+          "description": "Verified immutable IDs of VAMP desktop images allowed for container screen viewing and capture. Leave empty to disable screen access. Do not trust an image ID based only on a tag or a label."
+        },
         "vamp.pythonExecutable": {
           "type": "string",
           "default": "",
@@ -326,12 +320,13 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.0.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.1.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
     "test:manager": "node --test test/vm-manager.cjs test/script-server.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs test/vagrant-backend.cjs test/vision-preload.cjs test/containers-panel.cjs test/podman-packaging.cjs",
     "test:remote": "node --test test/remote-backend.cjs test/remote-ssh.cjs",
     "test": "node --test test/vm-manager.cjs test/script-server.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs test/rpa-export-review.cjs test/migration.cjs test/ui-scripts.cjs test/remote-backend.cjs test/remote-ssh.cjs test/vagrant-backend.cjs test/vision-preload.cjs test/viewer-bridge.mjs test/containers-panel.cjs test/podman-packaging.cjs",
+    "test:mcp-registration": "node --experimental-vm-modules --test ../backends/unified/registration.test.cjs ../backends/remote_ssh/registration.test.mjs ../vscode-vault-extension/test/mcp-routing.cjs test/podman-packaging.cjs",
     "test:containers": "node --experimental-vm-modules --test ../backends/podman/adapter.test.cjs ../backends/podman/server.test.cjs test/containers-panel.cjs test/podman-packaging.cjs",
     "test:privacy": "node --test test/library-store.cjs test/rpa-author.cjs test/rpa-export-review.cjs"
   },

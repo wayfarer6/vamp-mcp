@@ -1,6 +1,6 @@
 # VAMP MCP
 
-Independent stdio MCP servers for VM-isolated GUI automation. Run with an MCP client such as VS Code or Codex; the VS Code extension is optional for these servers.
+A unified stdio MCP server for virtual machines, RPA and Podman containers. Run with an MCP client such as VS Code or Codex; the VS Code extension is optional for these servers.
 
 ## Requirements and scope
 
@@ -27,9 +27,24 @@ npx -y vamp-mcp@0.2.0 library
 npx -y vamp-mcp@0.2.0 remote --backend kvm
 ```
 
-Servers communicate over standard input/output and wait for an MCP client. Use separate MCP registrations for each server. Installation alone does not register them with every client.
+The current default entry point is `vamp-mcp` with no arguments (or `vamp-mcp unified`). Register it once as **VAMP MCP**. Register `vamp-mcp-vault` separately only if you use Vault. The older per-backend subcommands shown above remain available for explicit legacy integrations; do not add them as duplicate registrations.
 
-## VS Code MCP configuration
+## Default MCP registration
+
+Register a verified installed binary rather than relying on an implicit download. A VS Code client with both VAMP extensions does not need additional manual entries. Remove manually added legacy entries after updating both extensions. See the [registration and migration guide](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/MCP_REGISTRATION.md).
+
+```json
+{
+  "servers": {
+    "vamp": { "type": "stdio", "command": "vamp-mcp", "args": [] },
+    "vamp-vault": { "type": "stdio", "command": "vamp-mcp-vault", "args": [] }
+  }
+}
+```
+
+Omit the Vault entry if you do not use it. Where required, replace commands with the absolute paths of the two verified installed binaries. The examples below are legacy integrations, not additional entries to enable alongside these two.
+
+## Legacy VS Code MCP configuration
 
 Add a server to `.vscode/mcp.json` (on Windows use `npx.cmd` if your client requires it):
 
@@ -67,7 +82,7 @@ For the RPA library, register `library` instead and set `VAMP_RPA_REGISTRY` to y
 
 ## Podman containers
 
-The container MCP server manages **existing containers** over an explicitly chosen, named rootless SSH connection. It is separate from the VM MCP servers. When using a package built with this backend, register its installed `vamp-mcp` binary and pass `podman` as the only argument. In the matching VS Code extension select **Open Containers** or enable the **VAMP Containers (Podman)** MCP server.
+The `podman_*` tools in **VAMP MCP** manage **existing containers** over an explicitly chosen, named rootless SSH connection. To use these tools, register the installed `vamp-mcp` binary once with no arguments, or enable **VAMP MCP** in VS Code. **Open Containers** remains available separately as a graphical view.
 
 Install the Podman CLI in a standard location on the machine running VAMP, and run a rootless Podman service on the Debian VM or Linux server. Configure the named SSH connection in Podman with an absolute local identity path before using VAMP. Podman Desktop is optional. VAMP does not enable WSL or Hyper-V, create a VM, install Podman, or change the default Podman connection. A VirtualBox guest needs only its existing hypervisor and an SSH route such as host-only networking or localhost NAT port forwarding.
 

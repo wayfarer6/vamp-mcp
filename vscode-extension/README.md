@@ -93,13 +93,13 @@ Original integration: MIT. Bundled [mcp-virtualbox](https://github.com/chryaner/
 
 ## Remote desktops over SSH
 
-Desktops can live on another machine: a home server, a lab box or a cloud VM. Set `vamp.remote.enabled`, the host and the user, then run **VAMP: Remote · Prepare Environment on the Remote Host**. The extension uploads a self-contained MCP server to `~/.vamp/remote/` there, prepares Python and libvirt/VirtualBox, and contributes the **VAMP Remote (SSH)** MCP server. Communication stays inside SSH, so no hypervisor port is opened and guest disks, credentials and the vault never leave the remote host.
+Desktops can live on another machine: a home server, a lab box or a cloud VM. Set `vamp.remote.enabled`, the host and the user, then run **VAMP: Remote · Prepare Environment on the Remote Host**. The extension uploads a self-contained MCP server to `~/.vamp/remote/` there, prepares Python and libvirt/VirtualBox, and exposes SSH tools through **VAMP MCP**. Communication stays inside SSH, so no hypervisor port is opened and guest disks, credentials and the vault never leave the remote host.
 
 Remote screens are **screenshots**, one PNG per request, with no live stream. Start/stop, list, status, key input, absolute-pointer clicks on KVM and reviewed RPA replay are available remotely. VirtualBox remote clicks and pointer movement require `--repo` and a Python runtime with the matching VirtualBox SDK. The extension automatic uploader uses a POSIX shell; native Windows SSH can use an explicit PowerShell launch command. See [docs/REMOTE_SETUP.md](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/REMOTE_SETUP.md).
 
 ## Live KVM viewer
 
-Set `vamp.kvmRepositoryPath` to the VAMP checkout. Optionally set `vamp.kvmPythonExecutable` and `vamp.kvmConfigPath`; the defaults are `.venv` and `config/vm-mcp.json` in that checkout. Start **VAMP KVM (VNC)** in MCP server management.
+Set `vamp.kvmRepositoryPath` to the VAMP checkout. Optionally set `vamp.kvmPythonExecutable` and `vamp.kvmConfigPath`; the defaults are `.venv` and `config/vm-mcp.json` in that checkout. Start **VAMP MCP** in MCP server management and use its explicit KVM tools.
 
 Run **VAMP: Open KVM Viewer (Live VNC)** and choose a running VM. The view receives the live binary RFB stream through a local WebSocket bridge. It is view-only, scales to the panel and supports reconnecting. The table below the screen shows the VM name, host, actual VNC port and an address copy button for external viewers. The VM image, installer ISO and model weights are outside the VSIX.
 
@@ -119,7 +119,7 @@ VAMP includes VAMP Vault (`wayfarer6.vamp-vault`) in its extension pack so Marke
 
 ### VM installation in 0.2.0
 
-VirtualBox provisioning starts headless and verifies Running state. KVM VM creation is shared between the manager and the bundled **VAMP KVM Host** MCP server (`remote_vm_create`). Debian amd64 installer ISOs install automatically by booting the stock ISO with a preseed injected into the initrd; VAMP no longer rewrites ISOs and **xorriso is not required**. The public sandbox login is `vboxuser` / `password123!`. Ubuntu/Windows KVM installers and Hyper-V OS installation remain manual. VM startup does not establish that OS installation, recorder setup or Vault setup completed.
+VirtualBox provisioning starts headless and verifies Running state. KVM VM creation is shared between the manager and the KVM tools in **VAMP MCP**. Debian amd64 installer ISOs install automatically by booting the stock ISO with a preseed injected into the initrd; VAMP no longer rewrites ISOs and **xorriso is not required**. The public sandbox login is `vboxuser` / `password123!`. Ubuntu/Windows KVM installers and Hyper-V OS installation remain manual. VM startup does not establish that OS installation, recorder setup or Vault setup completed.
 
 ### Guest setup over HTTP (port 8421)
 

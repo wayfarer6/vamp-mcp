@@ -13,6 +13,8 @@ await rm(path.join(here,'dist'),{recursive:true,force:true});
 await mkdir(path.join(runtime,'backends/virtualbox'),{recursive:true});
 await mkdir(path.join(here,'dist'),{recursive:true});
 await copyFile(path.join(here,'src/containers-panel.cjs'),path.join(here,'dist/containers_panel.cjs'));
+await copyFile(path.join(here,'src/container-capture.cjs'),path.join(here,'dist/container_capture.cjs'));
+await copyFile(path.join(here,'src/container-viewer.cjs'),path.join(here,'dist/container_viewer.cjs'));
 await mkdir(path.join(runtime,'backends/podman'),{recursive:true});
 await copyFile(path.join(root,'backends/podman/adapter.cjs'),path.join(runtime,'backends/podman/adapter.cjs'));
 await mkdir(path.join(runtime,'backends/vagrant'),{recursive:true});
@@ -34,6 +36,12 @@ for(const name of ['vamp-ui-cleanup','vamp-ui-validation','vamp-rpa-ui-checks','
 }
 await copyFile(path.join(here,'RESOLUTION.md'),path.join(runtime,'skills/vamp-rpa-ui-checks/references/user-guide.md'));
 await copyFile(path.join(here,'CONTAINERS_WSL.md'),path.join(runtime,'skills/vamp-podman/CONTAINERS_WSL.md'));
+await copyFile(path.join(root,'docs/CONTAINER_DESKTOP.md'),path.join(runtime,'skills/vamp-podman/CONTAINER_DESKTOP.md'));
+const desktopRecipe=path.join(runtime,'containers/debian-desktop');
+await mkdir(desktopRecipe,{recursive:true});
+for (const name of ['Containerfile','Containerfile.nvidia','Containerfile.amd','.containerignore','.dockerignore','desktop.py','healthcheck.py','helper_common.py','capture.py','view.py','chromium-launcher.py','chromium.desktop','README.md','GPU.md']) {
+  await copyFile(path.join(root,'containers/debian-desktop',name),path.join(desktopRecipe,name));
+}
 // Preserve native Windows files; normalize only Unix shell scripts.
 async function normalizeUnixScripts(directory){
   for(const entry of await readdir(directory,{withFileTypes:true})){
@@ -53,6 +61,7 @@ await copyFile(path.join(root,'third_party/mcp-virtualbox/PROVENANCE.json'),path
 
 const libraryServer=await build({metafile:true,entryPoints:[path.join(root,'backends/library/server.mjs')],outfile:path.join(runtime,'backends/library/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
 const podmanServer=await build({metafile:true,entryPoints:[path.join(root,'backends/podman/server.mjs')],outfile:path.join(runtime,'backends/podman/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
+const unifiedServer=await build({metafile:true,entryPoints:[path.join(root,'backends/unified/server.mjs')],outfile:path.join(runtime,'backends/unified/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node22',banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
 const remoteServer=await build({metafile:true,entryPoints:[path.join(root,'backends/remote_ssh/server.mjs')],
   outfile:path.join(runtime,'backends/remote_ssh/server.mjs'),bundle:true,platform:'node',format:'esm',target:'node20',
   banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
@@ -63,7 +72,13 @@ const viewerHost=await build({metafile:true,entryPoints:[path.join(here,'src/vie
   outfile:path.join(here,'dist/viewer_bridge.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
 const viewerBrowser=await build({metafile:true,entryPoints:[path.join(here,'src/viewer_webview.js')],
   outfile:path.join(here,'dist/webview/viewer.js'),bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true});
-Object.assign(built.metafile.inputs,libraryServer.metafile.inputs,podmanServer.metafile.inputs,remoteServer.metafile.inputs,remoteClient.metafile.inputs,libraryStore.metafile.inputs,viewerHost.metafile.inputs,viewerBrowser.metafile.inputs);
+const browsableContainer=await build({metafile:true,entryPoints:[path.join(here,'src/container_browser_web.js')],
+  outfile:path.join(runtime,'backends/podman/container-browser.js'),bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true});
+const containerViewerHost=await build({metafile:true,entryPoints:[path.join(here,'src/container-viewer-bridge.mjs')],
+  outfile:path.join(here,'dist/container_viewer_bridge.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
+const containerViewerBrowser=await build({metafile:true,entryPoints:[path.join(here,'src/container_viewer.js')],
+  outfile:path.join(here,'dist/webview/container_viewer.js'),bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true});
+Object.assign(built.metafile.inputs,libraryServer.metafile.inputs,podmanServer.metafile.inputs,unifiedServer.metafile.inputs,remoteServer.metafile.inputs,remoteClient.metafile.inputs,libraryStore.metafile.inputs,viewerHost.metafile.inputs,viewerBrowser.metafile.inputs,browsableContainer.metafile.inputs,containerViewerHost.metafile.inputs,containerViewerBrowser.metafile.inputs);
 
 // Preserve licenses of dependencies included by the bundler.
 const packages=new Map();

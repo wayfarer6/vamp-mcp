@@ -29,7 +29,7 @@ function remoteModule() {
   }
 }
 
-function registerRemote(context, { runtime, output, version, changes }) {
+function registerRemote(context, { runtime, output, version, changes, registerMcp = true }) {
   const cfg = () => vscode.workspace.getConfiguration('vamp');
   const last = { report: null, error: '', checkedAt: null };
 
@@ -318,7 +318,7 @@ function registerRemote(context, { runtime, output, version, changes }) {
 
   // MCP server definition: VS Code starts ssh itself, so agents anywhere get the
   // same tools without the extension keeping a session open.
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.remote', {
+  if(registerMcp)context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.remote', {
     onDidChangeMcpServerDefinitions: changes.event,
     provideMcpServerDefinitions() {
       const raw = configured();

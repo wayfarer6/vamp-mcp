@@ -1,9 +1,9 @@
-#!/usr/bin/env node
+import path from 'node:path';
 import packerModule from '../common/packer.cjs';
 // First-party MIT integration; upstream files remain unmodified.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerDisplayTools } from '../../third_party/mcp-virtualbox/dist/tools/display.js';
 import { registerInputTools } from '../../third_party/mcp-virtualbox/dist/tools/input.js';
 import guestBootstrap from '../common/guest-bootstrap.cjs';
@@ -14,13 +14,14 @@ import { McpServer } from '../../third_party/mcp-virtualbox/node_modules/@modelc
 import { StdioServerTransport } from '../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/server/stdio.js';
 import { z } from '../../third_party/mcp-virtualbox/node_modules/zod/index.js';
 import { config as vboxConfig } from '../../third_party/mcp-virtualbox/dist/types.js';
-vboxConfig.mouseHelperPath=process.env.MOUSE_HELPER_PATH || fileURLToPath(new URL('./mouse_click.py',import.meta.url));
+vboxConfig.mouseHelperPath=process.env.MOUSE_HELPER_PATH || fileURLToPath(new URL('../virtualbox/mouse_click.py',import.meta.url));
 vboxConfig.pythonPath=process.env.PYTHON_PATH || process.env.RPA_HOST_PYTHON || (process.platform==='win32'?'python':'python3');
-const server = new McpServer({name: 'VAMP', version: '0.3.0'}, {instructions:'Before recording or coordinate-based guest automation, verify the actual guest framebuffer is 1920x1080 with 100% guest scaling. If different, adjust the guest display using the authorized backend and verify fresh evidence before continuing; respect user pauses. A resized viewer is not proof. If the guest display drifts, use the guest-local reset shortcut: Windows Desktop Set-Resolution-1920x1080.cmd or Debian home ~/set-resolution-1920x1080.sh. Do not run guest commands on the host. Read skills/vamp-rpa-ui-checks/references/display.md in the packaged runtime (or .agents/skills/vamp-rpa-ui-checks/references/display.md in the repository) for Linux and Windows guidance. Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup. Guest setup scripts are served over HTTP from the host Python script server on port 8421; guests install them with wget/curl (vm_script_server_start/status/stop). New VM installations use HashiCorp Packer and official hypervisor plugins. Windows guest setup runs as administrator with Unrestricted process execution policy, installs VirtualBox Guest Additions or KVM virtio-win guest drivers and resumes after the driver reboot before reporting completion. Explain the CLI/plugin downloads, large golden images plus separate live disks, public sandbox autologin, and the 60-second post-reboot setup wait. Windows answer media is generated with an isolated pycdlib helper; original ISOs are not rewritten.'});
+export const virtualBoxInstructions = 'Before recording or coordinate-based guest automation, verify the actual guest framebuffer is 1920x1080 with 100% guest scaling. If different, adjust the guest display using the authorized backend and verify fresh evidence before continuing; respect user pauses. A resized viewer is not proof. If the guest display drifts, use the guest-local reset shortcut: Windows Desktop Set-Resolution-1920x1080.cmd or Debian home ~/set-resolution-1920x1080.sh. Do not run guest commands on the host. Read skills/vamp-rpa-ui-checks/references/display.md in the packaged runtime (or .agents/skills/vamp-rpa-ui-checks/references/display.md in the repository) for Linux and Windows guidance. Before repeated CUA or multimodal analysis, use VAMP RPA Library rpa_search/rpa_details to find suitable reviewed skills. Prefer an authorized compatible skill; read its compact result before requesting screenshots, and verify application outcomes. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. Fall back to targeted CUA when needed. For first-time setup call vamp_setup. Ask whether to set up the VM environment and obtain a host ISO path. Ask once each session whether to take a snapshot, explain space use, and never assume consent. Debian is default; ask explicitly before Windows and disclose licensing and public sandbox credentials. Do not create a VM merely on server startup. Guest setup scripts are served over HTTP from the host Python script server on port 8421; guests install them with wget/curl (vm_script_server_start/status/stop). New VM installations use HashiCorp Packer and official hypervisor plugins. Windows guest setup runs as administrator with Unrestricted process execution policy, installs VirtualBox Guest Additions or KVM virtio-win guest drivers and resumes after the driver reboot before reporting completion. Explain the CLI/plugin downloads, large golden images plus separate live disks, public sandbox autologin, and the 60-second post-reboot setup wait. Windows answer media is generated with an isolated pycdlib helper; original ISOs are not rewritten.';
+export function registerVirtualBoxTools(server){
 const result = value => ({content: [{type: 'text', text: JSON.stringify(value)}]});
 async function displayAction(action,values) {
   const python=process.env.RPA_HOST_PYTHON || 'python';
-  const script=fileURLToPath(new URL('./display.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/display.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(python,[script,action],{timeout:180000},(error,stdout,stderr)=>{
       if(error) reject(new Error(stdout || stderr || error.message)); else resolve(stdout);
@@ -35,7 +36,7 @@ server.tool('vm_insert_guest_additions','Insert host Guest Additions ISO for a W
   {vm:z.string().min(1),iso_path:z.string().optional()},async args=>result(await displayAction('additions',args)));
 async function historyAction(args) {
   const python=process.env.RPA_HOST_PYTHON || 'python';
-  const script=fileURLToPath(new URL('./history.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/history.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(python,[script],{timeout:120000},(error,stdout,stderr)=>{
       if(error)reject(new Error(stdout || stderr || error.message));else resolve(stdout);
@@ -67,7 +68,7 @@ server.tool('vm_recording_share','Prepare host recording share (no overwriting e
   filename:z.string().optional(),offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(8000).default(8000),
 },async ({vm,action,filename,offset,limit})=>{
   const python=process.env.RPA_HOST_PYTHON || 'python';
-  const script=fileURLToPath(new URL('./shares.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/shares.py',import.meta.url));
   const args=action==='prepare'?{vm,action}:{vm,action,filename,offset,limit};
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(python,[script],{timeout:90000},(error,stdout,stderr)=>{
@@ -76,7 +77,7 @@ server.tool('vm_recording_share','Prepare host recording share (no overwriting e
   });return result(JSON.parse(output));
 });
 async function transferAction(action,values) {
-  const script=fileURLToPath(new URL('./transfers.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/transfers.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{timeout:180000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
       if(error && !stdout)reject(new Error(stderr || error.message));else resolve(stdout);
@@ -96,7 +97,7 @@ server.tool('vm_import_recording','Copy a user-chosen .py/.handoff.json under gu
   vm:z.string().min(1),guest_path:z.string().min(1),username:z.string().default('vboxuser'),
 },async args=>{
   const python=process.env.RPA_HOST_PYTHON || 'python';
-  const script=fileURLToPath(new URL('./recordings.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/recordings.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(python,[script],{timeout:100000},(error,stdout,stderr)=>{
       if(error)reject(new Error(stdout || stderr || error.message));else resolve(stdout);
@@ -108,7 +109,7 @@ server.tool('vm_snapshot','List/take/restore snapshots. Ask about extra disk spa
   name:z.string().optional(),initial:z.boolean().default(false),confirm_restore:z.boolean().default(false),
 },async args=>{
   const python=process.env.RPA_HOST_PYTHON || 'python';
-  const script=fileURLToPath(new URL('./snapshots.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/snapshots.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(python,[script],{timeout:330000},(error,stdout,stderr)=>{
       if(error) reject(new Error(stdout || stderr || error.message)); else resolve(stdout);
@@ -116,7 +117,7 @@ server.tool('vm_snapshot','List/take/restore snapshots. Ask about extra disk spa
   });return result(JSON.parse(output));
 });
 async function vncAction(values) {
-  const script=fileURLToPath(new URL('./vnc.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/vnc.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{timeout:180000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
       if(error && !stdout)reject(new Error(stderr || error.message));else resolve(stdout);
@@ -133,7 +134,7 @@ server.tool('vamp_setup','First-run setup: check VirtualBox, show current resour
   let installed=false,version='';
   try { version=(await vboxManage('--version')).trim(); installed=true; } catch {}
   const {readFile}=await import('node:fs/promises');
-  const profiles=JSON.parse(await readFile(new URL('./profiles.json',import.meta.url),'utf8'));
+  const profiles=JSON.parse(await readFile(new URL('../virtualbox/profiles.json',import.meta.url),'utf8'));
   return result({status:'needs_user_input',virtualbox_installed:installed,virtualbox_version:version,
     installation_engine:'HashiCorp Packer',packer_notice:'Preparation downloads the managed Packer CLI and official VirtualBox plugin. Builds create large golden images and separate live disks, and wait 60 seconds after first reboot for post-install setup. Debian uses public sandbox autologin.',default_guest:'debian',profiles:profiles.profiles,vnc:await initialVncProbe,
     questions:['At this session, take a snapshot before changes? It uses additional disk space and only preserves the captured point in time.','Set up the VM environment now?','Provide the host OS installation ISO path. Debian is the default.','Create a Windows VM too? Recommend it when your certificate workflow needs Windows-only security software.'],
@@ -148,7 +149,7 @@ server.tool('vm_list', 'List registered VirtualBox VMs without starting them', {
 server.tool('vm_info', 'Read VM configuration/state', {vm: z.string().min(1)}, async ({vm}) =>
   result(parseMachineReadable(await vboxManage('showvminfo', vm, '--machinereadable'))));
 async function prepareShareOnStart(vm) {
-  const script=fileURLToPath(new URL('./shares.py',import.meta.url));
+  const script=fileURLToPath(new URL('../virtualbox/shares.py',import.meta.url));
   const output=await new Promise((resolve,reject)=>{
     const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{timeout:90000},(error,stdout,stderr)=>{
       if(error)reject(new Error(stdout || stderr || error.message));else resolve(stdout);
@@ -234,6 +235,11 @@ server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach
   }
   return result(media);
 });
+return server;
+}
+if(path.basename(path.dirname(process.argv[1]||''))==='virtualbox'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
+const server=new McpServer({name:'VAMP virtualbox',version:'0.3.1'},{instructions:virtualBoxInstructions});
+registerVirtualBoxTools(server);
 // Warm the local OCR/YOLO workers in the background. Detached, never blocking
 // stdio, and harmless when this host has no model environment.
 {
@@ -243,3 +249,4 @@ server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach
 }
 await server.connect(new StdioServerTransport());
 console.error('VM RPA VirtualBox stdio server ready');
+}

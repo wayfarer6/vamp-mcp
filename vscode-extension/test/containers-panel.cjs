@@ -13,7 +13,7 @@ function harness(){
   const panel={webview:{html:'',postMessage:m=>messages.push(m),onDidReceiveMessage:fn=>{receive=fn;}},reveal(){},onDidDispose:fn=>{dispose=fn;},dispose:()=>dispose?.()};
   const context={subscriptions:[],extensionUri:{path:'/mock/extension'}};
   const vscode={Uri:{joinPath:(uri,name)=>({path:uri.path+'/'+name})},commands:{executeCommand:async(...args)=>{calls.push(['command',...args]);},registerCommand:(name,fn)=>{commands.set(name,fn);return {}; }},ViewColumn:{Active:1},window:{createWebviewPanel:()=>panel,showWarningMessage:async(...args)=>{prompts.push(args);return typeof confirmation==='function'?confirmation():confirmation;}}};
-  registerContainers(context,{vscode,createBackend:()=>{factoryCalls++;return backend;},output:{appendLine(){}}});
+  registerContainers(context,{vscode,openDesktop:options=>calls.push(['openDesktop',options]),openCapture:result=>calls.push(['openCapture',result]),createBackend:()=>{factoryCalls++;return backend;},output:{appendLine(){}}});
   return {calls,messages,prompts,panel,backend,commands,open:()=>commands.get('vamp.openContainers')(),send:m=>receive(m),close:()=>panel.dispose(),factoryCalls:()=>factoryCalls,setConfirmation:x=>{confirmation=x;},setFailure:x=>{failure=x;},state:()=>messages.findLast(m=>m.type==='state')};
 }
 async function select(h){h.open();await h.send({action:'refresh'});await h.send({action:'select',connection:'debian-vm'});await h.send({action:'list',connection:'debian-vm'});}
@@ -59,4 +59,22 @@ test('fresh opaque binding is pinned across modal and never exposed to webview',
 });
 test('inventory without binding fails closed before confirmation',async()=>{
  const h=harness();try{await select(h);h.backend.list=async()=>[{id:ID,state:'exited'}];await h.send({action:'start',connection:'debian-vm',id:ID});assert.equal(h.prompts.length,0);assert.ok(!h.calls.some(c=>c[0]==='start'));assert.equal(h.state().error,true);}finally{h.close();}
+});
+
+test('Linux local target discovery is explicit, labeled, never implicitly selected',async()=>{
+ const h=harness();try{h.backend.connections=async()=>{h.calls.push(['connections']);return [{name:'local-linux',transport:'local',rootlessCandidate:true}];};h.open();await h.send({action:'ready'});assert.equal(h.factoryCalls(),0);await h.send({action:'refresh'});assert.deepEqual(h.state().connections,[{name:'local-linux',label:'Linux local (rootless)'}]);assert.equal(h.state().connection,'');assert.deepEqual(h.calls,[['connections']]);await h.send({action:'select',connection:'local-linux'});assert.equal(h.state().connection,'local-linux');assert.equal(h.calls.length,1);}finally{h.close();}
+});
+test('desktop and workspace remain explicitly unverified with no launch or mount action',async()=>{
+ const html=containersHTML();assert.match(html,/Planned OCI Containerfile: minimal XFCE, fixed 1920×1080 display and installed noVNC/);assert.match(html,/Workspace visibility and exclusive write access must be checked/);assert.ok(!html.includes('data-action="open-desktop"'));const h=harness();try{h.open();await h.send({action:'open-desktop',verified:true});await h.send({action:'mount',verified:true});assert.equal(h.factoryCalls(),0);}finally{h.close();}
+});
+
+test('capture resolves fresh target and binding, opens only matching response',async()=>{
+ const h=harness();try{await select(h);h.setConfirmation('Start Container');await h.send({action:'start',connection:'debian-vm',id:ID});h.backend.capture=async(connection,id,binding)=>({connection,id,binding,png:Buffer.alloc(0)});await h.send({action:'capture',connection:'debian-vm',id:ID});assert.equal(h.calls.filter(c=>c[0]==='openCapture').length,1);h.backend.capture=async()=>({connection:'other',id:ID,binding:'opaque-binding'});await h.send({action:'capture',connection:'debian-vm',id:ID});assert.equal(h.calls.filter(c=>c[0]==='openCapture').length,1);assert.equal(h.state().error,true);}finally{h.close();}
+});
+test('capture viewer uses bounded PNG only, no scripts, network or persistent files',()=>{
+ const {captureHTML,showCapture}=require('../src/container-capture.cjs');const png=Buffer.alloc(33);Buffer.from('89504e470d0a1a0a','hex').copy(png);png.write('IHDR',12);png.writeUInt32BE(1920,16);png.writeUInt32BE(1080,20);const html=captureHTML({png});assert.match(html,/default-src 'none'; img-src data:/);assert.ok(!html.includes('<script'));assert.ok(!html.includes('https:'));assert.throws(()=>captureHTML({png:Buffer.from('<script>')}));const wrong=Buffer.from(png);wrong.writeUInt32BE(1,16);assert.throws(()=>captureHTML({png:wrong}));let options;showCapture({window:{createWebviewPanel:(a,b,c,o)=>{options=o;return {webview:{}};}},ViewColumn:{Active:1}},{png});assert.equal(options.enableScripts,false);assert.deepEqual(options.localResourceRoots,[]);
+});
+
+test('Open Desktop requires trusted image precheck and pins stream target',async()=>{
+ const h=harness();try{await select(h);await h.send({action:'start',connection:'debian-vm',id:ID});h.backend.screenTarget=async(...args)=>{h.calls.push(['screenTarget',...args]);};h.backend.openScreenStream=async(...args)=>args;await h.send({action:'desktop',connection:'debian-vm',id:ID});const opened=h.calls.find(c=>c[0]==='openDesktop');assert.ok(opened);assert.deepEqual(h.calls.find(c=>c[0]==='screenTarget'),['screenTarget','debian-vm',ID,'opaque-binding']);assert.deepEqual(await opened[1].openScreenStream(),['debian-vm',ID,'opaque-binding']);h.backend.screenTarget=async()=>{throw Error('Untrusted image');};await h.send({action:'desktop',connection:'debian-vm',id:ID});assert.equal(h.calls.filter(c=>c[0]==='openDesktop').length,1);}finally{h.close();}
 });

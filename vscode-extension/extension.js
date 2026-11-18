@@ -19,52 +19,55 @@ function activate(context) {
   const output = vscode.window.createOutputChannel('VAMP');
   const containersSource=path.join(__dirname,'src/containers-panel.cjs');
   const containersUI=require(fs.existsSync(containersSource)?containersSource:'./dist/containers_panel.cjs');
-  containersUI.registerContainers(context,{vscode,output,createBackend:()=>{
+  const createContainersBackend=()=>{
     const development=path.join(__dirname,'../backends/podman/adapter.cjs');
-    const adapter=require(fs.existsSync(development)?development:path.join(runtime,'backends/podman/adapter.cjs')).createPodmanAdapter();
+    const adapter=require(fs.existsSync(development)?development:path.join(runtime,'backends/podman/adapter.cjs')).createPodmanAdapter({desktopImageIds:config().get('podman.desktopImageIds')||[]});
     return {connections:()=>adapter.connections(),status:name=>adapter.check(name),list:name=>adapter.list(name),
-      start:(name,id,binding)=>adapter.start(name,id,binding),stop:(name,id,binding)=>adapter.stop(name,id,binding),logs:(name,id,binding)=>adapter.logs(name,id,100,binding),detectLocal:()=>adapter.detectLocal()};
+      start:(name,id,binding)=>adapter.start(name,id,binding),stop:(name,id,binding)=>adapter.stop(name,id,binding),logs:(name,id,binding)=>adapter.logs(name,id,100,binding),detectLocal:()=>adapter.detectLocal(),capture:(name,id,binding)=>adapter.capture(name,id,binding),openScreenStream:(name,id,binding)=>adapter.openScreenStream(name,id,binding),screenTarget:(name,id,binding)=>adapter.screenTarget(name,id,binding)};
+  };
+  const openContainerDesktop=options=>{
+    const source=path.join(__dirname,'src/container-viewer.cjs');
+    const {createContainerViewerBridge}=require('./dist/container_viewer_bridge.cjs');
+    return require(fs.existsSync(source)?source:'./dist/container_viewer.cjs').openViewer(vscode,context,{...options,createBridge:createContainerViewerBridge});
+  };
+  containersUI.registerContainers(context,{vscode,output,createBackend:createContainersBackend,openDesktop:openContainerDesktop,openCapture:result=>{
+    const source=path.join(__dirname,'src/container-capture.cjs');
+    context.subscriptions.push(require(fs.existsSync(source)?source:'./dist/container_capture.cjs').showCapture(vscode,result));
   }});
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.podman',{
-    provideMcpServerDefinitions(){
-      return [new vscode.McpStdioServerDefinition('VAMP Podman',process.execPath,
-        [path.join(runtime,'backends/podman/server.mjs')],{ELECTRON_RUN_AS_NODE:'1'},version)];
-    }
-  }));
   context.subscriptions.push(output, changes);
   context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(e => {
     if(e.affectsConfiguration('vamp')) changes.fire();
   }));
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.virtualbox', {
+  // One public MCP provider. GUI commands retain their separate, explicit workflows.
+  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.mcp', {
     onDidChangeMcpServerDefinitions: changes.event,
     provideMcpServerDefinitions() {
-      const env = {ELECTRON_RUN_AS_NODE:'1',VBOXMANAGE_DEBUG:'false',RPA_HOST_PYTHON:pythonPath(),MOUSE_HELPER_PATH:path.join(runtime,'backends/virtualbox/mouse_click.py')};
-      if(config().get('vboxManagePath')) env.VBOXMANAGE_PATH=config().get('vboxManagePath');
-      if(config().get('mousePythonExecutable')) env.PYTHON_PATH=config().get('mousePythonExecutable');
-      return [new vscode.McpStdioServerDefinition('VAMP VirtualBox',process.execPath,
-        [path.join(runtime,'backends/virtualbox/server.mjs')],env,version)];
-    }
-  }));
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.kvm', {
-    onDidChangeMcpServerDefinitions: changes.event,
-    provideMcpServerDefinitions() {
-      const definitions = process.platform==='linux' ? [new vscode.McpStdioServerDefinition('VAMP KVM Host',process.execPath,[path.join(runtime,'backends/remote_ssh/server.mjs'),'--backend','kvm'],{ELECTRON_RUN_AS_NODE:'1',VAMP_REMOTE_REPO:runtime,VAMP_REMOTE_WORKDIR:context.globalStorageUri.fsPath,VAMP_REMOTE_PYTHON:config().get('kvmPythonExecutable')||config().get('pythonExecutable')||'python3',VAMP_LIBVIRT_URI:config().get('libvirtUri')||'qemu:///session'},version)] : [];
-      const repository = config().get('kvmRepositoryPath');
-      if (!repository || !fs.existsSync(path.join(repository, 'vm_mcp_server.py'))) return definitions;
-      const python = config().get('kvmPythonExecutable') || path.join(repository, '.venv', process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
-      const profile = config().get('kvmConfigPath') || path.join(repository, 'config/vm-mcp.json');
-      return [...definitions,new vscode.McpStdioServerDefinition('VAMP KVM (VNC)', python,
-        [path.join(repository, 'vm_mcp_server.py')], {VM_MCP_CONFIG: profile}, version)];
-    }
-  }));
-  context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.library',{
-    onDidChangeMcpServerDefinitions:changes.event,
-    provideMcpServerDefinitions(){
-      return [new vscode.McpStdioServerDefinition('VAMP RPA Library',process.execPath,[path.join(runtime,'backends/library/server.mjs')],{
-        ELECTRON_RUN_AS_NODE:'1',VAMP_RPA_REGISTRY:path.join(context.globalStorageUri.fsPath,'rpa-catalog'),
+      const env = {
+        ELECTRON_RUN_AS_NODE:'1',VBOXMANAGE_DEBUG:'false',
+        VAMP_DESKTOP_IMAGE_IDS:(config().get('podman.desktopImageIds')||[]).join(','),
         RPA_HOST_PYTHON:pythonPath(),RPA_REPLAY_PYTHON:config().get('mousePythonExecutable')||pythonPath(),
-        VBOXMANAGE_PATH:config().get('vboxManagePath')||'',VAMP_LIBVIRT_URI:config().get('libvirtUri')||'qemu:///session'
-      },version)];
+        MOUSE_HELPER_PATH:path.join(runtime,'backends/virtualbox/mouse_click.py'),
+        VAMP_RPA_REGISTRY:path.join(context.globalStorageUri.fsPath,'rpa-catalog'),
+        VAMP_LIBVIRT_URI:config().get('libvirtUri')||'qemu:///session',
+        VAMP_REMOTE_REPO:runtime,VAMP_REMOTE_WORKDIR:context.globalStorageUri.fsPath,
+        VAMP_REMOTE_PYTHON:config().get('kvmPythonExecutable')||config().get('pythonExecutable')||'python3'
+      };
+      if(config().get('vboxManagePath'))env.VBOXMANAGE_PATH=config().get('vboxManagePath');
+      if(config().get('mousePythonExecutable'))env.PYTHON_PATH=config().get('mousePythonExecutable');
+      const repository=config().get('kvmRepositoryPath');
+      const pythonProfile={enabled:!!(repository&&path.isAbsolute(repository)&&fs.existsSync(path.join(repository,'vm_mcp_server.py')))};
+      if(pythonProfile.enabled){
+        pythonProfile.repo=repository;
+        pythonProfile.python=config().get('kvmPythonExecutable')||path.join(repository,'.venv',process.platform==='win32'?'Scripts/python.exe':'bin/python');
+        pythonProfile.config=config().get('kvmConfigPath')||path.join(repository,'config/vm-mcp.json');
+      }
+      env.VAMP_PYTHON_CONFIG_JSON=JSON.stringify(pythonProfile);
+      // Credentials remain configured paths; defining the server does not connect.
+      const remoteConfig={enabled:Boolean(config().get('remote.enabled'))};
+      if(remoteConfig.enabled)for(const key of ['host','port','username','privateKeyPath','backend','libvirtUri','remotePythonPath','remoteNodePath','remoteRepoPath','remoteRegistryPath','remoteVboxManagePath','connectTimeoutSeconds'])remoteConfig[key]=config().get('remote.'+key);
+      env.VAMP_REMOTE_CONFIG_JSON=JSON.stringify(remoteConfig);
+      return [new vscode.McpStdioServerDefinition('VAMP MCP',process.execPath,
+        [path.join(runtime,'backends/unified/server.mjs')],env,version)];
     }
   }));
   const viewerPanels = new Map();
@@ -160,7 +163,7 @@ function activate(context) {
   }));
   context.subscriptions.push(vscode.commands.registerCommand('vamp.openVault',()=>vscode.extensions.getExtension('wayfarer6.vamp-vault')?vscode.commands.executeCommand('vampVault.openBrowser'):vscode.commands.executeCommand('workbench.extensions.search','@id:wayfarer6.vamp-vault')));
   require('./rpa-library').registerLibrary(context,{runtime,output});
-  const remote = require('./remote-backend').registerRemote(context,{runtime,output,version,changes});
+  const remote = require('./remote-backend').registerRemote(context,{runtime,output,version,changes,registerMcp:false});
   require('./vm-manager').registerManager(context,{
     pythonPath,runtime,output,remote,
     setupPython:()=>vscode.commands.executeCommand('vamp.setupPython')
