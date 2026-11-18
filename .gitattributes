@@ -3,4 +3,7 @@ third_party/** -whitespace
 
 # Unix scripts authored here must run from Windows checkouts and packages.
 guest_setup/**/*.sh text eol=lf
+guest_setup/vault/vamp-vault-receive text eol=lf
+backends/packer/debian-hyperv/*.sh text eol=lf
+containers/debian-desktop/*.sh text eol=lf
 scripts/**/*.sh text eol=lf

@@ -54,7 +54,7 @@ async function normalizeUnixScripts(directory){
   for(const entry of await readdir(directory,{withFileTypes:true})){
     const file=path.join(directory,entry.name);
     if(entry.isDirectory())await normalizeUnixScripts(file);
-    else if(entry.isFile()&&entry.name.endsWith('.sh')){
+    else if(entry.isFile()&&(entry.name.endsWith('.sh')||entry.name==='vamp-vault-receive')){
       const source=await readFile(file,'utf8');
       if(source.includes('\r\n'))await writeFile(file,source.replaceAll('\r\n','\n'));
     }

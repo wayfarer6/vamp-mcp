@@ -125,6 +125,8 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       assert.equal(install(archive).trim(),installed);
       assert.equal(install(archive,digest.toUpperCase()).trim(),installed);
       await access(path.join(installed,'guest_setup/http/debian-preseed.cfg'));
+      const receiver=await readFile(path.join(installed,'guest_setup/vault/vamp-vault-receive'),'utf8');
+      assert.ok(receiver.startsWith('#!/usr/bin/python3 -I\n'));
       await access(path.join(installed,'third_party/pyautogui-recorder'));
       await access(path.join(installed,'backends/hyperv/scripts/Manage-Desktop.ps1'));
       await access(path.join(installed,'scripts/script_server.py'));
