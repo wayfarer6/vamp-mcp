@@ -46,7 +46,7 @@ def local_tool(command):
         pf=Path(os.environ.get('ProgramFiles','C:/Program Files'))
         drive=Path(os.environ.get('SystemDrive','C:')+'/')
         win=Path(os.environ.get('SystemRoot','C:/Windows'))
-        candidates={'vagrant':[drive/'HashiCorp/Vagrant/bin/vagrant.exe',pf/'HashiCorp/Vagrant/bin/vagrant.exe'],
+        candidates={'vagrant':[drive/'HashiCorp/Vagrant/bin/vagrant.exe',pf/'HashiCorp/Vagrant/bin/vagrant.exe',pf/'Vagrant/bin/vagrant.exe'],
                     'ssh-keygen':[win/'System32/OpenSSH/ssh-keygen.exe'],
                     'VBoxManage':[pf/'Oracle/VirtualBox/VBoxManage.exe']}
     else:

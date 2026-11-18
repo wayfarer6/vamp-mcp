@@ -8,7 +8,7 @@ class McpServer{constructor(meta,options){this.meta=meta;this.options=options;th
 async function load(relative,overrides={}){
  const source=fs.readFileSync(path.join(root,relative),'utf8');
  const context=vm.createContext({process:{argv:['node',relative==='backends/unified/server.mjs'?'/mock/test.mjs':'/mock/backends/unified/server.mjs'],env:{},platform:'linux'},console:{error:unexpected},URL,Buffer,setTimeout:unexpected});
- const module=new vm.SourceTextModule(source,{context,initializeImportMeta:m=>m.url='file:///mock/backends/unified/server.mjs'});
+ const module=new vm.SourceTextModule(source,{context,initializeImportMeta:m=>m.url=url.pathToFileURL(path.join(root,'backends/unified/server.mjs')).href});
  await module.link(async spec=>{
   let exports=overrides[spec];
   if(!exports){
@@ -19,6 +19,7 @@ async function load(relative,overrides={}){
    else if(spec.endsWith('/mcp.js'))exports={McpServer};else if(spec.endsWith('/stdio.js'))exports={StdioServerTransport:class{constructor(){unexpected();}}};
    else if(spec.includes('/zod/'))exports={z:schema};
    else if(spec.endsWith('packer.cjs'))exports={default:{packer:()=>unexpected}};
+   else if(spec.endsWith('/hyperv/uac.cjs'))exports={default:{createHyperVUac:()=>({request:unexpected})}};
    else if(spec.endsWith('vision-preload.cjs'))exports={default:{ensureVisionServices:unexpected}};
    else if(spec.endsWith('adapter.cjs'))exports={default:{createPodmanAdapter:()=>({})}};
    else if(spec.endsWith('workspace.cjs'))exports={default:{createWorkspacePlanner:()=>({planWorkspace:unexpected})}};

@@ -23,7 +23,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY desktop.py healthcheck.py helper_common.py capture.py view.py /opt/vamp-desktop/
 COPY chromium-launcher.py /usr/local/bin/vamp-chromium
 COPY chromium.desktop /usr/share/applications/vamp-chromium.desktop
-RUN chmod 0755 /usr/local/bin/vamp-chromium \
+RUN sed -i 's/\r$//' /usr/local/bin/vamp-chromium \
+    && chmod 0755 /usr/local/bin/vamp-chromium \
     && mkdir -p /home/desktop/Desktop \
     && cp /usr/share/applications/vamp-chromium.desktop /home/desktop/Desktop/ \
     && chown -R desktop:desktop /home/desktop

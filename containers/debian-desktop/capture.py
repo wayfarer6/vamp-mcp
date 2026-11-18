@@ -18,6 +18,7 @@ CAPTURE_SECONDS = 10
 COMMANDS = [
     ['/usr/bin/xwd', '-root', '-silent', '-display', ':99'],
     ['/usr/bin/xwdtopnm'],
+    ['/usr/bin/pamdepth', '255'],
     ['/usr/bin/pnmtopng', '-force'],
 ]
 

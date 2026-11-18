@@ -11,7 +11,7 @@ const DEST='/workspace';
 const TMPFS=new Set(['/tmp','/run','/var/tmp','/home/desktop']);
 const ENTRYPOINT=['/usr/bin/tini','--','/usr/bin/python3','-I','-B','/opt/vamp-desktop/desktop.py'];
 const overlap=(a,b)=>a===b||a==='/'||b==='/'||a.startsWith(b+'/')||b.startsWith(a+'/');
-const safePath=s=>typeof s==='string'&&s.startsWith('/')&&s!=='/'&&!/[\x00-\x20\x7f\\,:]/.test(s)&&path.normalize(s)===s&&!s.endsWith('/');
+const safePath=s=>typeof s==='string'&&s.startsWith('/')&&s!=='/'&&!/[\x00-\x20\x7f\\,:]/.test(s)&&path.posix.normalize(s)===s&&!s.endsWith('/');
 async function readConfig(file,uid){
   if(!safePath(file)||await fs.realpath(file)!==file)throw Error('Configure a private local workspace file first');
   const handle=await fs.open(file,constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
@@ -76,7 +76,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
         let id;
         try{
           id=(await command(['create','--pull=never','--rm','--restart=no','--read-only','--read-only-tmpfs=false','--network=none','--userns=keep-id:uid=1000,gid=1000','--user=1000:1000','--cap-drop=all','--security-opt=no-new-privileges','--pids-limit=512','--memory=3g','--cpus=2','--shm-size=512m',
-            '--tmpfs=/tmp:rw,nosuid,nodev,mode=1777','--tmpfs=/home/desktop:rw,nosuid,nodev,uid=1000,gid=1000,mode=0700','--volume',m.directory+':'+DEST+':rw,private,nodev,nosuid,noexec','--label',LABEL+'='+label,
+            '--tmpfs=/tmp:rw,nosuid,nodev,mode=1777','--mount','type=tmpfs,destination=/home/desktop,tmpfs-mode=0700,nosuid,nodev,U=true','--volume',m.directory+':'+DEST+':rw,private,nodev,nosuid,noexec','--label',LABEL+'='+label,
             '--name','vamp-workspace-'+ctx.config.workloadId+'-'+randomBytes(6).toString('hex'),'--',image])).trim();
           if(!ID.test(id)||!verifiedMount(await inspect(id),m,ctx.config.imageId))throw Error('Created workspace mount did not validate');
           await revalidate();
@@ -127,7 +127,7 @@ async function writerAbsent(values,m,except,resolve=fs.realpath){
       if(typeof entry?.Source!=='string'||!entry.Source.startsWith('/'))throw Error('Podman workspace writer inventory could not be verified');
       let source;
       try{source=await resolve(entry.Source);}catch{throw Error('Podman workspace writer inventory could not be verified');}
-      if(overlap(path.normalize(entry.Source),m.directory)||overlap(source,m.directory))throw Error('Another local rootless Podman container already reserves or may see this workspace');
+      if(overlap(path.posix.normalize(entry.Source),m.directory)||overlap(source,m.directory))throw Error('Another local rootless Podman container already reserves or may see this workspace');
     }
   }
 }

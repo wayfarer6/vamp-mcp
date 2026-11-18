@@ -22,7 +22,9 @@ import {
   remoteVaultTarget,
 } from './remote_vault_client.mjs';
 
-const VERSION = process.env.VAULT_REMOTE_VERSION || '0.1.4';
+import manifest from '../package.json' with { type: 'json' };
+
+const VERSION = process.env.VAULT_REMOTE_VERSION || manifest.version;
 
 function parseArgs(argv) {
   const out = {};

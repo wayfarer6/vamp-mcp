@@ -17,12 +17,12 @@ test('same capability reusable within session; cookie required with exact WS ori
  assert.equal((await request(origin(b)+'/novnc.js',{headers:{Cookie:cookie}})).status,200);
  assert.equal(await deny(b,{Origin:'http://evil.example',Cookie:cookie}),403);
  }finally{b.dispose();}});
-test('human control reconnects sequentially; concurrent connection denied and exact children cleaned',async()=>{let calls=0,closed=0;const handles=[];
- const b=await createBrowserViewer({...opts(),mode:'control',openScreenStream:()=>{calls++;const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.kill=()=>closed++;const h={child,viewOnly:false,close:()=>closed++};handles.push(h);return h;}});
+test('human control reconnects sequentially; concurrent connection denied and exact children cleaned',{timeout:5000},async()=>{let calls=0;const handles=[];
+ const b=await createBrowserViewer({...opts(),mode:'control',openScreenStream:()=>{calls++;const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.kill=()=>{};let close;const closed=new Promise(resolve=>{close=resolve;});const h={child,viewOnly:false,close,closed};handles.push(h);return h;}});
  try{const r=await claim(b);assert.equal(calls,0);const cookie=r.headers['set-cookie'][0].split(';')[0];
  for(let i=0;i<2;i++){const ws=new WebSocket(origin(b).replace('http:','ws:')+'/stream',{headers:{Origin:origin(b),Cookie:cookie}});ws.on('error',()=>{});await once(ws,'open');assert.equal(calls,i+1);
  assert.equal(await deny(b,{Origin:origin(b),Cookie:cookie}),403);
- const msg=once(ws,'message');handles[i].child.stdout.write(Buffer.from('RFB 003.008\n'));assert.equal((await msg)[0].toString(),'RFB 003.008\n');ws.close();await once(ws,'close');assert.ok(closed>0);}
+ const msg=once(ws,'message');handles[i].child.stdout.write(Buffer.from('RFB 003.008\n'));assert.equal((await msg)[0].toString(),'RFB 003.008\n');ws.close();await Promise.all([once(ws,'close'),handles[i].closed]);}
  }finally{b.dispose();}});
 test('bounded failed claims and distinct simultaneous ports/cookies',async()=>{const a=await createBrowserViewer(opts()),b=await createBrowserViewer(opts());try{
  assert.equal(b.port,a.port+1);const x=await claim(a),y=await claim(b);assert.notEqual(x.headers['set-cookie'][0].split('=')[0],y.headers['set-cookie'][0].split('=')[0]);

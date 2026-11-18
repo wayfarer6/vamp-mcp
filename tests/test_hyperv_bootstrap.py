@@ -34,7 +34,8 @@ class HyperVBootstrapTests(unittest.TestCase):
             request={'backend':'hyperv','guest_os':'debian','iso_path':str(iso),'switch_name':'QA','preflight_only':True}
             result=runner.create(request)
             self.assertEqual(result['request']['bootstrap_host'],'172.20.1.1')
-            self.assertEqual(probe.call_args.args[1],['-NoProfile','-NonInteractive','-Command',hyperv_bootstrap.NETWORK_QUERY])
+            self.assertEqual(probe.call_args.args[1][:3],['-NoProfile','-NonInteractive','-Command'])
+            self.assertTrue(probe.call_args.args[1][-1].endswith(hyperv_bootstrap.NETWORK_QUERY))
             self.assertFalse(result['vm_created'])
             with self.assertRaisesRegex(ValueError,'not a usable address'):
                 runner.create({**request,'bootstrap_host':'172.20.1.2'})
@@ -87,8 +88,10 @@ class HyperVReadOnlyPreflightTests(unittest.TestCase):
         self.assertEqual(network['host_ipv4'],'172.20.1.1')
         args=execute.call_args.args
         self.assertEqual(args[0],'powershell.exe')
-        self.assertEqual(args[1],['-NoProfile','-NonInteractive','-Command',hyperv_bootstrap.NETWORK_QUERY])
+        self.assertEqual(args[1][:3],['-NoProfile','-NonInteractive','-Command'])
+        self.assertTrue(args[1][-1].endswith(hyperv_bootstrap.NETWORK_QUERY))
         self.assertEqual(execute.call_args.kwargs['timeout'],30)
+        self.assertTrue(execute.call_args.kwargs['binary'])
         query=args[1][-1]
         self.assertIn('Get-VMSwitch',query);self.assertIn('Get-NetIPAddress',query)
         self.assertIn('Get-ExecutionPolicy',query)
@@ -154,5 +157,16 @@ class HyperVReadOnlyPreflightTests(unittest.TestCase):
         with patch.object(runner,'run',side_effect=failure) as execute:
             with self.assertRaisesRegex(RuntimeError,'CIM access denied'):runner.hyperv_network({})
         self.assertEqual(execute.call_count,1)
+
+    def test_missing_empty_and_invalid_inventory_outputs(self):
+        for output, message in (
+            (None, 'no stdout'),
+            (b'  ', 'empty stdout'),
+            (b'\xff', 'invalid JSON'),
+            (b'{}', 'an invalid name list'),
+        ):
+            with self.subTest(message=message), patch.object(runner,'run',return_value=output):
+                with self.assertRaisesRegex(RuntimeError, 'VM inventory returned ' + message):
+                    runner.names('hyperv',{})
 
 if __name__=='__main__':unittest.main()

@@ -26,8 +26,9 @@ import { sep } from 'node:path';
 import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
+import manifest from '../../package.json' with { type: 'json' };
 
-const VERSION = '0.1.5';
+const VERSION = manifest.version;
 
 const USAGE = [
   'usage: server.mjs [ --version | --list-tools | --env-check',

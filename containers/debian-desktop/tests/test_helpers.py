@@ -55,6 +55,7 @@ class HelperTests(unittest.TestCase):
                 capture.capture()
         self.assertEqual(capture.COMMANDS[0], ['/usr/bin/xwd', '-root', '-silent', '-display', ':99'])
         self.assertEqual(capture.COMMANDS[-1], ['/usr/bin/pnmtopng', '-force'])
+        self.assertEqual(capture.COMMANDS[-2], ['/usr/bin/pamdepth', '255'])
 
     def test_capture_stdout_is_png_only_errors_stderr_and_no_extra_args(self):
         class Output(io.StringIO):

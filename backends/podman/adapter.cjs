@@ -225,16 +225,23 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     const managedWorkspace=Boolean(config?.Labels?.[LABEL]);
     const workspaceVerified=managedWorkspace&&snapshot.local&&await workspace.verify(snapshot,value);
     if(managedWorkspace&&!workspaceVerified)throw Error('Workspace desktop scope could not be verified');
-    const safeTmpfs=new Set(['/tmp','/run','/var/tmp',...(workspaceVerified?['/home/desktop']:[])]);
+    const safeTmpfs=new Set(['/tmp','/run','/var/tmp','/home/desktop']);
     const mountsSafe=workspaceVerified||Array.isArray(value.Mounts)&&value.Mounts.every(m=>m&&m.Type==='tmpfs'&&safeTmpfs.has(m.Destination)&&(!m.Source||m.Source==='tmpfs'));
     const declaredTmpfs=host?.Tmpfs;
     const tmpfsSafe=declaredTmpfs==null||(typeof declaredTmpfs==='object'&&!Array.isArray(declaredTmpfs)&&Object.keys(declaredTmpfs).every(key=>safeTmpfs.has(key)));
     if(config?.User!=='1000:1000'||host?.Privileged!==false||host?.ReadonlyRootfs!==true||!mountsSafe||!tmpfsSafe||
-       !Array.isArray(host.CapAdd)||host.CapAdd.length||!Array.isArray(host.CapDrop)||!host.CapDrop.some(x=>String(x).toUpperCase()==='ALL')||
+       !Array.isArray(host.CapAdd)||host.CapAdd.length||!Array.isArray(host.CapDrop)||!host.CapDrop.length||
        !Array.isArray(host.SecurityOpt)||!host.SecurityOpt.some(x=>/^no-new-privileges(?::true|=true)?$/.test(x))||
        ['NetworkMode','PidMode','IpcMode','UTSMode','UsernsMode'].some(key=>typeof host[key]!=='string'||/^(host|container:)/.test(host[key]))||
        (host.Devices!=null&&(!Array.isArray(host.Devices)||host.Devices.length))||
        (host.DeviceRequests!=null&&(!Array.isArray(host.DeviceRequests)||host.DeviceRequests.length)))throw Error('Container desktop isolation could not be verified');
+    if(!host.CapDrop.some(x=>String(x).toUpperCase()==='ALL')){
+      // Podman can expand ALL to a concrete list in inspect. Check the actual
+      // capability sets before accepting that representation.
+      const status=await run(args(snapshot,['exec','--user','1000:1000','--',id,'/usr/bin/cat','/proc/1/status']),snapshot);
+      if(!['CapInh','CapPrm','CapEff','CapBnd','CapAmb'].every(key=>new RegExp('^'+key+':\\s*0+\\s*$','m').test(status)))
+        throw Error('Container desktop isolation could not be verified');
+    }
     await same(snapshot);
     return {snapshot,metadata:{connection,id,binding,imageId,width:1920,height:1080}};
   }

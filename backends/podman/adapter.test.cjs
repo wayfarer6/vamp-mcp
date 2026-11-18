@@ -52,7 +52,7 @@ test('logs strictly bounded and do not follow',async()=>{
 });
 test('errors do not expose raw stderr',async()=>{await assert.rejects(fixture({fail:true}).adapter.connections(),e=>!e.message.includes('secret'));});
 test('changed connection fails readiness',async()=>{
- let n=0;const a=createPodmanAdapter({execute:async(exe,args)=>({stdout:JSON.stringify(args[0]==='system'?[{...good,URI:++n===1?good.URI:good.URI.replace('example.test','changed.test')}]:{host:{security:{rootless:true},serviceIsRemote:true}})})});await assert.rejects(a.check('qa'),/changed/);
+ let n=0;const a=createPodmanAdapter({platform:'linux',execute:async(exe,args)=>({stdout:JSON.stringify(args[0]==='system'?[{...good,URI:++n===1?good.URI:good.URI.replace('example.test','changed.test')}]:{host:{security:{rootless:true},serviceIsRemote:true}})})});await assert.rejects(a.check('qa'),/changed/);
 });
 
 test('bounded success output and inventories',async()=>{
@@ -98,7 +98,7 @@ test('snapshot binding is opaque and required across lifecycle steps',async()=>{
 test('URI and identity drift before mutation fail closed; last-moment drift cannot redirect pinned argv',async()=>{
  for(const field of ['URI','Identity']){
   let n=0;const calls=[];
-  const adapter=createPodmanAdapter({execute:async(exe,args)=>{
+  const adapter=createPodmanAdapter({platform:'linux',execute:async(exe,args)=>{
    calls.push(args);
    if(args[0]==='system')return {stdout:JSON.stringify([{...good,...(++n===3?{[field]:field==='URI'?good.URI.replace('example.test','other.test'):'/other/key'}:{})}])};
    return {stdout:JSON.stringify(args[7]==='info'?{host:{security:{rootless:true},serviceIsRemote:true}}:[{Id:id}])};
@@ -162,13 +162,13 @@ function pngFixture(){
  const header=Buffer.alloc(13);header.writeUInt32BE(1920);header.writeUInt32BE(1080,4);header[8]=8;header[9]=2;
  return Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]),chunk('IHDR',header),chunk('IDAT',deflateSync(Buffer.alloc((1920*3+1)*1080))),chunk('IEND',Buffer.alloc(0))]);
 }
-function desktopFixture(change=()=>{},allow='b'.repeat(64),spawnProcess){
+function desktopFixture(change=()=>{},allow='b'.repeat(64),spawnProcess,capStatus=''){
  const calls=[];const value={Id:id,Image:'sha256:'+'b'.repeat(64),State:{Running:true},Config:{User:'1000:1000'},Mounts:[],HostConfig:{Privileged:false,ReadonlyRootfs:true,CapAdd:[],CapDrop:['ALL'],SecurityOpt:['no-new-privileges'],Devices:[],NetworkMode:'none',PidMode:'',IpcMode:'private',UTSMode:'',UsernsMode:''}};change(value);
  const adapter=createPodmanAdapter({platform:'darwin',desktopImageIds:allow,spawnProcess,execute:async(exe,args,options)=>{
   calls.push({args,options});if(args[0]==='system')return {stdout:JSON.stringify([good])};
   const command=args[7];if(command==='info')return {stdout:JSON.stringify({host:{security:{rootless:true},serviceIsRemote:true}})};
   if(command==='ps')return {stdout:JSON.stringify([{Id:id}])};if(command==='inspect')return {stdout:JSON.stringify([value])};
-  if(command==='exec')return {stdout:pngFixture()};throw Error('unexpected command');
+  if(command==='exec')return {stdout:args.at(-1)==='/proc/1/status'?capStatus:pngFixture()};throw Error('unexpected command');
  }});return {adapter,calls};
 }
 test('capture only runs fixed trusted-image helper and returns validated bounded PNG',async()=>{
@@ -181,6 +181,12 @@ test('capture rejects image, identity, stopped, privileged, mounts and host name
   const {adapter,calls}=desktopFixture(change);await assert.rejects(adapter.capture('qa',id,binding));assert.ok(!calls.some(c=>c.args[7]==='exec'));
  }
  await assert.rejects(desktopFixture(()=>{},'').adapter.capture('qa',id,binding),/image IDs/);
+});
+test('capture accepts Podman expanded drops only with zero capability sets and a tmpfs home',async()=>{
+ const change=v=>{v.HostConfig.CapDrop=['CAP_CHOWN'];v.HostConfig.Tmpfs={'/home/desktop':'mode=0700'};};
+ const zeros=['CapInh','CapPrm','CapEff','CapBnd','CapAmb'].map(key=>key+': 0000000000000000').join('\n');
+ assert.equal((await desktopFixture(change,undefined,undefined,zeros).adapter.capture('qa',id,binding)).width,1920);
+ await assert.rejects(desktopFixture(change,undefined,undefined,zeros.replace('CapBnd: 0','CapBnd: 1')).adapter.capture('qa',id,binding),/isolation/);
 });
 test('PNG validates chunk CRC, size, strict dimensions and rejects trailing bytes',()=>{
  const png=pngFixture();assert.equal(validatePng(png),true);

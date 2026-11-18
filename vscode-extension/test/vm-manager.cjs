@@ -47,7 +47,7 @@ test('resolution warning opens the dedicated guide without dispatching a VM oper
   const h=harness();try {
     await h.open();
     const html=h.api.managerHTML();
-    assert.match(html,/Before automation: set the guest display to 1920×1080 at 100% scaling/);
+    assert.match(html,/confirm the guest display is 1920×1080 at 100% scaling/);
     assert.match(html,/data-action="resolutionGuide"/);
     h.calls.length=0;
     await h.send({type:'resolutionGuide'});
@@ -74,7 +74,7 @@ test('one-click create installs missing dependencies and ignores injected paths 
     await h.open();await h.send({type:'iso'});h.answers.missingPython=true;
     await h.send({type:'create',os:'debian',name:'My-Desktop',iso:'/malicious.iso',cpus:64});
     const request=h.calls.find(c=>c[0]==='provision')[1];assert.equal(request.iso_path,'/tmp/installer.iso');assert.equal(request.name,'My-Desktop');assert.equal(request.disk_mb,65536);assert.ok(request.cpus<=2);assert.equal(request.backend,'virtualbox');assert.ok(h.calls.some(c=>c[0]==='setup'));
-    assert.match(h.messages.findLast(m=>m.type==='progress').message,/Packer build queued/);
+    assert.match(h.messages.findLast(m=>m.type==='progress').message,/Installation queued/);
   }finally{h.close();}
 });
 test('failed preparation never launches provisioning and returns controls to idle',async()=>{

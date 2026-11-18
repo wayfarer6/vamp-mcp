@@ -24,8 +24,31 @@ from images import list_images,delete,directory
 def write(path,data):
     temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,indent=2)+'\n');temp.replace(path)
 
-def run(exe,args,timeout=120,**kwargs):
-    return subprocess.run([str(exe),*map(str,args)],capture_output=True,text=True,timeout=timeout,check=True,**kwargs).stdout
+def run(exe,args,timeout=120,*,binary=False,**kwargs):
+    return subprocess.run([str(exe),*map(str,args)],capture_output=True,text=not binary,timeout=timeout,check=True,**kwargs).stdout
+
+
+def hyperv_json(query, stage):
+    command = "[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $ErrorActionPreference='Stop'; " + query
+    try:
+        output = run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', command], timeout=30, binary=True)
+    except subprocess.CalledProcessError as error:
+        detail = error.stderr or error.stdout or b''
+        if isinstance(detail, bytes):
+            detail = detail.decode('utf-8', errors='replace')
+        lines = detail.strip().splitlines()
+        message = lines[0][:240] if lines else 'Check Hyper-V permissions in this Windows session.'
+        raise RuntimeError(f'Hyper-V {stage} failed (exit {error.returncode}): {message}') from None
+    except subprocess.TimeoutExpired:
+        raise RuntimeError(f'Hyper-V {stage} timed out') from None
+    if output is None:
+        raise RuntimeError(f'Hyper-V {stage} returned no stdout')
+    if not output.strip():
+        raise RuntimeError(f'Hyper-V {stage} returned empty stdout')
+    try:
+        return json.loads(output)
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        raise RuntimeError(f'Hyper-V {stage} returned invalid JSON') from None
 
 def vbox():
     return os.environ.get('VBOXMANAGE_PATH') or (str(Path(os.environ.get('ProgramFiles','C:/Program Files'))/'Oracle/VirtualBox/VBoxManage.exe') if sys.platform=='win32' else 'VBoxManage')
@@ -70,19 +93,17 @@ def conflicts(backend):
 def names(backend,request):
     if backend=='virtualbox':return [m[1] for m in re.finditer(r'^"(.*)" \{',run(vbox(),['list','vms']),re.M)]
     if backend=='kvm':return run('virsh',['-c',request.get('libvirt_uri','qemu:///session'),'list','--all','--name']).splitlines()
-    return json.loads(run('powershell.exe',['-NoProfile','-NonInteractive','-Command','ConvertTo-Json -InputObject @(Get-VM | Select-Object -ExpandProperty Name)']))
+    inventory = hyperv_json('ConvertTo-Json -InputObject @(Get-VM | Select-Object -ExpandProperty Name) -Compress', 'VM inventory')
+    if not isinstance(inventory, list) or any(not isinstance(name, str) for name in inventory):
+        raise RuntimeError('Hyper-V VM inventory returned an invalid name list')
+    return inventory
 
 def hyperv_network(request):
     from hyperv_bootstrap import NETWORK_QUERY, select_network
     switch=request.get('switch_name','Default Switch')
     if not isinstance(switch,str) or not re.fullmatch(r'[^\x00-\x1f\x7f]{1,128}',switch) or switch.startswith('-'):
         raise ValueError('Choose a valid Hyper-V switch name')
-    args=['-NoProfile','-NonInteractive','-Command',NETWORK_QUERY]
-    try:
-        data=json.loads(run('powershell.exe',args,timeout=30))
-    except subprocess.CalledProcessError as error:
-        detail=(error.stderr or error.stdout or '').strip().splitlines()
-        raise RuntimeError('Hyper-V switch IPv4 check failed for '+switch+(': '+detail[0].strip() if detail else '. Check switch membership and host permissions.')) from None
+    data = hyperv_json(NETWORK_QUERY, 'switch IPv4 check')
     return select_network(data,switch,request.get('bootstrap_host'))
 
 def create(request):
@@ -227,6 +248,8 @@ def worker(image_id):
         from drivers import prepare as prepare_drivers
         driver_iso=prepare_drivers(request,vbox(),run)
         if driver_iso:status('building',driver_media=str(driver_iso))
+        if request['backend']=='hyperv':
+            (folder/'temporary').mkdir(exist_ok=True)
         template=render(request,folder,iso_hash,f'http://{host}:8421',callback)
         with (folder/'packer.log').open('w',encoding='utf8') as log:
             # Init a separate directory so duplicate required_plugins blocks never coexist.

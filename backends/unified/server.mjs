@@ -11,7 +11,7 @@ import path from 'node:path';
 export function createUnifiedServer({remote={},podman={}}={}){
   const instructions=[virtualBoxInstructions,libraryInstructions,podmanInstructions,remoteInstructions,
     'This is the single VAMP MCP server. VirtualBox VM tools retain vm_ names; remote backend tools use remote_ names. Podman manages existing containers, scoped workspace sessions and explicitly authorized local Debian VM builds. Vault remains a separate server. Registration and initialization do not prepare or start hosts, guests, models, or container engines.'].join('\n\n');
-  const server=new McpServer({name:'VAMP MCP',version:'0.3.2'},{instructions});
+  const server=new McpServer({name:'VAMP MCP',version:'0.3.3'},{instructions});
   registerVirtualBoxTools(server);
   registerLibraryTools(server);
   registerPodmanTools(server,podman);

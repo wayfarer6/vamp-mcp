@@ -119,6 +119,7 @@ sandbox, not the owner's current Windows environment:
 podman build -t localhost/vamp-debian-desktop:phase1 containers/debian-desktop
 podman run --rm --name vamp-desktop-smoke \
   --read-only --network=none --cap-drop=all --security-opt=no-new-privileges \
+  --mount type=tmpfs,destination=/home/desktop,tmpfs-mode=0700,nosuid,nodev,U=true \
   --pids-limit=512 --memory=3g --cpus=2 --shm-size=512m \
   localhost/vamp-debian-desktop:phase1
 ```
