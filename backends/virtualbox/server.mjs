@@ -196,7 +196,7 @@ server.tool('vm_guest_bootstrap','Run guest setup with the same bootstrap as VSI
 });
 registerScriptServerTools(server);
 server.tool('vm_create', 'Create a NEW VM through HashiCorp Packer: install CLI and official plugin, build OS and post-install scripts, wait 60s after reboot, export a golden image and deploy a separate live disk. Returns queued; use vm_golden_images for status/paths. Public sandbox autologin vboxuser/password123!.', {
-  backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox'),switch_name:z.string().min(1).optional(),libvirt_uri:z.enum(['qemu:///session','qemu:///system']).optional(),
+  backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox'),switch_name:z.string().min(1).optional(),bootstrap_host:z.ipv4().optional().describe('Optional guest-reachable IPv4 for Packer bootstrap on Hyper-V or KVM. Hyper-V requires an address on the selected virtual switch; default KVM uses QEMU user-mode NAT.'),libvirt_uri:z.enum(['qemu:///session','qemu:///system']).optional(),
   name:z.string().min(1).optional(), iso_path:z.string().min(1),
   memory_mb:z.number().int().optional(), cpus:z.number().int().optional(),
   disk_mb:z.number().int().optional(), basedir:z.string().optional(),

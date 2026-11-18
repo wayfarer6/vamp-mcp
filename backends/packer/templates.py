@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from xml.sax.saxutils import escape
 from toolchain import POLICY,answer_iso
+from hyperv_bootstrap import bootstrap_origin
+from kvm_bootstrap import kvm_late_command,kvm_script_endpoints,DEFAULT_QEMU_SCRIPT_HOST
 
 ROOT=Path(__file__).resolve().parents[2]
 
@@ -77,6 +79,10 @@ try {
 } finally { Stop-Transcript }
 shutdown.exe /s /t 10
 '''
+    if backend in ('hyperv','kvm'):
+        host=bootstrap_origin(base)
+        script=script.replace(" $env:VAMP_SCRIPT_BASE_URL='__BASE__'", " $env:VAMP_BOOTSTRAP_HOST='"+host+"'\n $env:VAMP_SCRIPT_BASE_URL='http://'+$env:VAMP_BOOTSTRAP_HOST+':8421'")
+        script=script.replace("  Invoke-WebRequest -UseBasicParsing '__BASE__/postwin.ps1' -OutFile $entry\n  & $entry", "  $pending=$entry+'.download'\n  try {\n   Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop ($env:VAMP_SCRIPT_BASE_URL+'/postwin.ps1') -OutFile $pending\n   if(-not(Test-Path -LiteralPath $pending) -or (Get-Item -LiteralPath $pending).Length -eq 0){throw 'Bootstrap script download is empty'}\n   Move-Item -LiteralPath $pending -Destination $entry -Force\n   & $entry\n   if(-not $?){throw 'Bootstrap script failed'}\n  } catch {\n   Remove-Item -LiteralPath $pending -ErrorAction SilentlyContinue\n   throw 'Bootstrap script download or execution failed; completion was not reported'\n  }")
     return script.replace('__BASE__',base).replace('__CALLBACK__',callback).replace('__BACKEND__',backend)
 
 
@@ -102,8 +108,16 @@ def render(request,folder,iso_hash,base,callback):
     if guest=='debian':
         text=(ROOT/'guest_setup/http/debian-preseed.cfg').read_text()
         text=ensure_openssh_preseed(text)
-        text+='\nd-i preseed/late_command string wget -qO /tmp/vamp-postdeb.sh '+base+'/postdeb.sh && VAMP_SCRIPT_BASE_URL='+base+' VAMP_PACKER_CALLBACK='+callback+' sh /tmp/vamp-postdeb.sh\n'
+        if backend=='kvm':
+            text+='\nd-i preseed/late_command string '+kvm_late_command(base,callback)+'\n'
+        else:
+            text+='\nd-i preseed/late_command string wget -qO /tmp/vamp-postdeb.sh '+base+'/postdeb.sh && VAMP_SCRIPT_BASE_URL='+base+' VAMP_PACKER_CALLBACK='+callback+' sh /tmp/vamp-postdeb.sh\n'
         if backend=='kvm':text+='d-i grub-installer/force-efi-extra-removable boolean true\n'
+        if backend=='hyperv':
+            host=bootstrap_origin(base)
+            lines=[line for line in text.splitlines() if not line.startswith('d-i preseed/late_command')]
+            lines.append('d-i preseed/late_command string wget -T 60 -t 3 -qO /tmp/vamp-postdeb.sh.download '+base+'/postdeb.sh && test -s /tmp/vamp-postdeb.sh.download && mv /tmp/vamp-postdeb.sh.download /tmp/vamp-postdeb.sh && VAMP_BOOTSTRAP_HOST='+host+' VAMP_SCRIPT_BASE_URL='+base+' VAMP_PACKER_CALLBACK='+callback+' sh /tmp/vamp-postdeb.sh')
+            text='\n'.join(lines)+'\n'
         (http/'preseed.cfg').write_text(text)
         source.update(http_directory=str(http),boot_command=['c<wait>','linux /install.amd/vmlinuz auto=true priority=critical preseed/url=http://{{ .HTTPIP }}:{{ .HTTPPort }}/preseed.cfg vamp_base='+base+' --- quiet<enter>','initrd /install.amd/initrd.gz<enter>','boot<enter>'])
     else:
@@ -119,12 +133,23 @@ def render(request,folder,iso_hash,base,callback):
                       vboxmanage=[['modifyvm','{{.Name}}','--mouse','usbtablet','--vram','128','--nat-localhostreachable1','on','--graphicscontroller','vboxsvga' if guest=='windows11' else 'vmsvga']]+([['modifyvm','{{.Name}}','--tpm-type','2.0']] if guest=='windows11' else []))
         if guest=='windows11':source['vboxmanage'].append(['storageattach','{{.Name}}','--storagectl','SATA','--port','2','--device','0','--type','dvddrive','--medium',str(media)])
     elif backend=='hyperv':
+        host=bootstrap_origin(base)
+        if guest=='debian':
+            source['http_bind_address']=host
+            source['boot_command']=[command.replace('{{ .HTTPIP }}',host) for command in source['boot_command']]
         source.update(vm_name='VAMP-build-'+folder.name[:12],generation=2,switch_name=request.get('switch_name','Default Switch'),
                       enable_secure_boot=guest=='windows11',enable_tpm=guest=='windows11',disable_shutdown=True,
                       temp_path=str(folder/'temporary'),skip_compaction=True)
         if guest=='windows11':source['secondary_iso_images']=[str(media)]
     else:
         profile=request.get('osinfo',{})
+        if guest=='debian':
+            # Use the same guest-visible host for preseed and post-install.
+            # The worker verifies override ownership before rendering. QEMU's
+            # default guest host alias reaches a loopback-only Packer listener.
+            bootstrap_host=kvm_script_endpoints(base,callback)['host']
+            source['http_bind_address']='127.0.0.1' if bootstrap_host==DEFAULT_QEMU_SCRIPT_HOST else bootstrap_host
+            source['boot_command']=[command.replace('{{ .HTTPIP }}',bootstrap_host) for command in source['boot_command']]
         source.update(vm_name='golden.qcow2',format='qcow2',accelerator='kvm',cpu_model='host',disk_interface='sata' if guest=='windows11' else 'virtio',
                       net_device='e1000',efi_boot=True)
         if profile:

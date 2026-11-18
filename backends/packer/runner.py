@@ -45,6 +45,14 @@ def check_request(request):
     for key,default,low,high in [('memory_mb',4096 if guest=='windows11' else 2048,4096 if guest=='windows11' else 2048,131072),('cpus',2,1,64),('disk_mb',65536,32768,2097152),('image_index',1,1,99)]:
         if request.get(key) is None:request[key]=default
         if type(request[key]) is not int or not low<=request[key]<=high:raise ValueError('Invalid '+key)
+    if backend=='hyperv':
+        from hyperv_bootstrap import requested_host
+        selected=requested_host(request,os.environ)
+        if selected is not None:request['bootstrap_host']=selected
+    if backend=='kvm':
+        from kvm_bootstrap import resolve_kvm_bootstrap_host,kvm_bind_address
+        request['bootstrap_host']=resolve_kvm_bootstrap_host(request)
+        kvm_bind_address(request['bootstrap_host'])
     return request
 
 def conflicts(backend):
@@ -64,8 +72,27 @@ def names(backend,request):
     if backend=='kvm':return run('virsh',['-c',request.get('libvirt_uri','qemu:///session'),'list','--all','--name']).splitlines()
     return json.loads(run('powershell.exe',['-NoProfile','-NonInteractive','-Command','ConvertTo-Json -InputObject @(Get-VM | Select-Object -ExpandProperty Name)']))
 
+def hyperv_network(request):
+    from hyperv_bootstrap import host_ipv4
+    switch=request.get('switch_name','Default Switch')
+    if not isinstance(switch,str) or not re.fullmatch(r'[^\x00-\x1f\x7f]{1,128}',switch) or switch.startswith('-'):
+        raise ValueError('Choose a valid Hyper-V switch name')
+    args=['-NoProfile','-NonInteractive','-File',HERE/'hyperv-network.ps1','-SwitchName',switch]
+    selected=request.get('bootstrap_host')
+    if selected:args+=['-BootstrapHost',selected]
+    try:
+        data=json.loads(run('powershell.exe',args,timeout=30))
+    except subprocess.CalledProcessError as error:
+        detail=(error.stderr or error.stdout or '').strip().splitlines()
+        raise RuntimeError('Hyper-V switch IPv4 check failed for '+switch+(': '+detail[0].strip() if detail else '. Check switch membership and host permissions.')) from None
+    host=host_ipv4(data,switch)
+    if selected and host!=selected:raise ValueError('Hyper-V bootstrap IPv4 no longer matches the selected switch')
+    return data
+
 def create(request):
     request=check_request(request)
+    if request['backend']=='hyperv' and (request.get('preflight_only') or request['guest_os']!='windows11' or request.get('windows_confirmed')):
+        request['bootstrap_host']=hyperv_network(request)['host_ipv4']
     if request.get('preflight_only'):return {'status':'preflight_ready','engine':'packer','vm_created':False,'request':request,'post_reboot_wait_seconds':60}
     if request['guest_os']=='windows11' and not request.get('windows_confirmed'):
         return {'status':'needs_windows_confirmation','vm_created':False,'action_required':'Windows requires explicit confirmation and your own valid license.'}
@@ -88,9 +115,12 @@ def create(request):
             child=subprocess.Popen([sys.executable,str(HERE/'runner.py'),'worker','--id',image_id],stdin=subprocess.DEVNULL,stdout=output,stderr=output,**flags)
     except Exception as exc:
         record.update(status='failed',error=str(exc));write(folder/'image.json',record);lock.unlink(missing_ok=True);raise
-    notice=post_create_notice(request['guest_os'],'http://10.0.2.2:8421')
+    notice=post_create_notice(request['guest_os'],f"http://{request.get('bootstrap_host','10.0.2.2')}:8421")
     notice['title']='Packer build queued: OS installation and post-install setup'
     notice['message']='HashiCorp Packer downloads its CLI and official plugin, installs the guest, waits 60 seconds after the first reboot and completes post-install setup. Windows also installs the hypervisor guest drivers and reboots before completion. Debian uses automatic desktop login. Check Golden images for status, paths and logs. The live VM is deployed only after the build succeeds.'
+    if request['backend'] in ('hyperv','kvm'):
+        notice['setup_command']=''
+        notice['message']+=f" Build-only bootstrap IPv4: {request['bootstrap_host']}. If guest setup fails, check the build logs and correct connectivity before building again."
     return {'status':'installation_started','engine':'packer','installation_mode':'unattended','installation_verified':False,'image_id':image_id,'worker_pid':child.pid,
             'vm':request['name'],'golden_image_path':str(folder),'log_path':str(folder/'packer.log'),
             'post_reboot_wait_seconds':60,'credentials':{'username':'vboxuser','password':'password123!','public_sandbox_credentials':True},
@@ -139,7 +169,7 @@ def deploy(request,folder):
     return {'vm_id':vm_id,'vm_path':str(live),'vm_disk_path':str(disk) if backend=='kvm' else str(live),'vm':name,'startup_verified':True}
 
 def worker(image_id):
-    folder=directory(image_id);record=json.loads((folder/'image.json').read_text());request=json.loads((folder/'request.json').read_text());server=None
+    folder=directory(image_id);record=json.loads((folder/'image.json').read_text());request=json.loads((folder/'request.json').read_text());server=None;bootstrap_server=None
     def status(value,**extra):
         record.update(status=value,**extra);write(folder/'image.json',record)
     try:
@@ -151,13 +181,21 @@ def worker(image_id):
                 if self.path!='/complete/'+token:self.send_error(404);return
                 record.update(guest_setup_completed=True,stage='golden_export');write(folder/'image.json',record);completed.set();self.send_response(200);self.end_headers();self.wfile.write(b'OK')
             def log_message(self,*args):pass
-        server=ThreadingHTTPServer(('0.0.0.0',0),Handler)
-        threading.Thread(target=server.serve_forever,daemon=True).start()
         host='10.0.2.2'
         if request['backend']=='hyperv':
-            network=json.loads(run('powershell.exe',['-NoProfile','-NonInteractive','-File',HERE/'hyperv-network.ps1','-SwitchName',request.get('switch_name','Default Switch')]))
+            network=hyperv_network(request)
             host=network['host_ipv4'];status('building',network=network)
         if request['backend']=='kvm':
+            from kvm_bootstrap import resolve_kvm_bootstrap_host,bind_kvm_listener
+            host=resolve_kvm_bootstrap_host(request)
+            # Fail closed before osinfo, libvirt or Packer preparation. The guest
+            # alias maps to host loopback; overrides must be assigned locally.
+            server=bind_kvm_listener(host,0,lambda bind,port:ThreadingHTTPServer((bind,port),Handler))
+            threading.Thread(target=server.serve_forever,daemon=True).start()
+            from script_server import stage,make_server
+            staged=stage(destination=folder/'bootstrap',port=8421)
+            bootstrap_server=bind_kvm_listener(host,8421,lambda bind,port:make_server(Path(staged['directory']),port,bind,10800))
+            threading.Thread(target=bootstrap_server.serve_forever,daemon=True).start()
             from osinfo import resolve
             profile=resolve(request,folder)
             if profile['libvirt_uri'].endswith('/system'):
@@ -166,9 +204,21 @@ def worker(image_id):
                 if 'default' not in run('virsh',['-c',uri,'net-list','--name']).splitlines():run('virsh',['-c',uri,'net-start','default'])
                 if 'default' not in run('virsh',['-c',uri,'pool-list','--name']).splitlines():run('virsh',['-c',uri,'pool-start','default'])
             status('building',osinfo_profile=profile,resource_profile={key:request[key] for key in ['memory_mb','cpus','disk_mb']})
-        from script_server import start
-        started=start(port=8421,ttl=10800)
-        if started.get('status')!='running':raise RuntimeError('Guest setup script server failed to start')
+        if request['backend']!='kvm':
+            server=ThreadingHTTPServer((host if request['backend']=='hyperv' else '0.0.0.0',0),Handler)
+            threading.Thread(target=server.serve_forever,daemon=True).start()
+        if request['backend']=='hyperv':
+            # Job-owned listener: no reuse of an unrelated adapter or wildcard.
+            # Binding is atomic; port conflicts fail instead of changing hosts.
+            from script_server import stage,make_server
+            staged=stage(destination=folder/'bootstrap',port=8421)
+            bootstrap_server=make_server(Path(staged['directory']),8421,host,10800)
+            threading.Thread(target=bootstrap_server.serve_forever,daemon=True).start()
+        elif request['backend']!='kvm':
+            from script_server import start
+            started=start(port=8421,ttl=10800)
+            if started.get('status')!='running':raise RuntimeError('Guest setup script server failed to start')
+        if request['backend'] in ('hyperv','kvm'):status('building',bootstrap_host=host,bootstrap_port=8421)
         callback=f'http://{host}:{server.server_port}/complete/{token}'
         with Path(request['iso_path']).open('rb') as file:iso_hash=hashlib.file_digest(file,'sha256').hexdigest()
         from drivers import prepare as prepare_drivers
@@ -187,6 +237,7 @@ def worker(image_id):
     except Exception as exc:
         status('failed',error=str(exc),partial_files_preserved=True)
     finally:
+        if bootstrap_server:bootstrap_server.shutdown();bootstrap_server.server_close()
         if server:server.shutdown();server.server_close()
         lock=home()/'locks'/(request['backend']+'-'+request['name']+'.lock')
         if lock.exists() and lock.read_text()==image_id:lock.unlink()

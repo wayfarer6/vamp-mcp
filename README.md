@@ -69,7 +69,7 @@ Forget OS-dependent orchestration. During Packer automated builds, VAMP automati
 
 ### 2. 🎛️ Virtualization Abstraction via Packer & Vagrant
 VAMP abstracts the entire virtualization stack using **HashiCorp Packer** and **Vagrant**, enabling seamless support across diverse hypervisors and guest OSes:
-- **Automated Image Provisioning (Packer)**: Builds clean, standardized golden images (`.box` / OVA / QCOW2) across **Windows 11, Debian, and Ubuntu** with zero human intervention. Automatically injects guest drivers (VirtIO / Guest Additions) and provisions OpenSSH.
+- **Automated Image Provisioning (Packer)**: Builds clean, standardized golden images (`.box` / OVA / QCOW2) across **Windows 11 and Debian** with zero human intervention. Automatically injects guest drivers (VirtIO / Guest Additions) and provisions OpenSSH.
 - **Unified Runtime Lifecycle (Vagrant & DesktopAdapter)**: Wraps VM creation, boot, snapshots, and networking behind a common interface. Automatically resolves the optimal provider and plugins across **VirtualBox, KVM (libvirt/QEMU), and Hyper-V**.
 - **Zero Hypervisor Boilerplate**: AI agents and developers interact with the exact same MCP tools and SSH pipelines regardless of the host OS or underlying hypervisor engine.
 
@@ -81,54 +81,29 @@ VAMP MCP servers automatically warm up local OCR (PaddleOCR) and YOLO vision dae
 - Credentials are piped exclusively via `stdin` directly into target tools—**never passed via command-line arguments (`argv`)**, preventing `ps aux` process table inspection.
 - **Strict Per-Host Boundary**: Remote servers maintain their own independent vaults; credentials and master keys are never shared or synced between remote hosts.
 
-### 5. 📦 Lightweight HTTP Bootstrapping (Port 8421)
-No more fragile ISO remastering with `xorriso`. VAMP spins up a lightweight, isolated Python HTTP server on port **8421** on the host. Guests download setup scripts with a single command:
-```bash
-# Debian / Ubuntu
-wget -qO- http://10.0.2.2:8421/setup.sh | sh
+### 5. 📦 Guest bootstrapping
 
-# Windows (PowerShell)
-irm http://10.0.2.2:8421/setup.ps1 | iex
-```
+Packer guests fetch post-install resources from their build host, not from a universal address. VirtualBox keeps its existing NAT path. Hyper-V uses the selected virtual switch's host IPv4; QEMU's default build NAT reaches the host at `10.0.2.2`, distinct from the deployed libvirt network. See [VM MCP](docs/VM_MCP.md) for setup and troubleshooting.
 
 ---
 
 ## 🚀 Quick Start
 
-### 1. Use via MCP (Claude Desktop, Cursor, Codex)
+### 1. Use MCP without VS Code
 
-Run standalone MCP servers with **Node.js 22+**:
+With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from the [GitHub Releases page](https://github.com/wayfarer6/vamp-mcp/releases). Verify the SHA-256 hashes against the release notes, then install from the downloaded files:
 
 ```bash
-# Global installation
-npm install -g vamp-mcp vamp-mcp-vault
+npm install -g ./vamp-mcp-0.3.1.tgz ./vamp-mcp-vault-0.1.8.tgz
 ```
 
-Add to your MCP configuration file (e.g., `claude_desktop_config.json`):
+Register **VAMP MCP** with command `vamp-mcp` and no arguments, and **VAMP Vault** with command `vamp-mcp-vault` and no arguments. If the client cannot resolve these commands, use their full installed paths. Do not add separate Podman or hypervisor registrations. See [MCP registration](docs/MCP_REGISTRATION.md).
 
-```json
-{
-  "mcpServers": {
-    "vamp": {
-      "command": "npx",
-      "args": ["-y", "vamp-mcp", "virtualbox"]
-    },
-    "vamp-vault": {
-      "command": "npx",
-      "args": ["-y", "vamp-mcp-vault"]
-    }
-  }
-}
-```
-> *Replace `virtualbox` with `kvm`, `vagrant`, or `library` depending on your active hypervisor.*
+### 2. Use the VS Code extensions
 
-### 2. Use via VS Code Extension
-
-1. Install **VAMP** from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools).
-2. Open the **VAMP** Activity Bar sidebar:
-   - **Open VM Manager**: Create, start, stop, and snapshot VMs with one click.
-   - **RPA Library**: Record, inspect, and export reusable workflows.
-   - **Browse Credentials**: Manage isolated KeePassXC vault entries with human-in-the-loop modal approvals.
+1. Download both VSIX files from [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases), install them using **Extensions: Install from VSIX**, and reload VS Code.
+2. Open the **VAMP** activity bar. Use **Open VM Manager** for VMs, **Open Containers** for the Podman inventory and desktop actions, and **RPA Library** for reviewed workflows. Manage credentials in **VAMP Vault** separately.
+3. For WSL, follow the [manual setup guide](vscode-extension/CONTAINERS_WSL.md). See [Container desktops](docs/CONTAINER_DESKTOP.md) for rootless Podman, noVNC, capture, and limitations.
 
 ---
 

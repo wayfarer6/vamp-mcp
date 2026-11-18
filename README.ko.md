@@ -69,7 +69,7 @@
 
 ### 2. 🎛️ Packer와 Vagrant를 통한 가상화 계층 추상화
 VAMP는 **HashiCorp Packer**와 **Vagrant**를 결합하여 가상화 인프라 전반을 추상화함으로써, **다양한 하이퍼바이저와 게스트 OS를 단일 규격으로 지원**합니다:
-- **이미지 빌드 자동화 (Packer)**: Windows 11, Debian, Ubuntu 등 다양한 게스트 OS의 무인 설치, 드라이버 주입(VirtIO / Guest Additions), OpenSSH 서버 구성을 표준 골든 이미지(`.box` / OVA / QCOW2)로 완전 자동화합니다.
+- **이미지 빌드 자동화 (Packer)**: Windows 11과 Debian의 무인 설치, 드라이버 주입(VirtIO / Guest Additions), OpenSSH 서버 구성을 표준 골든 이미지(`.box` / OVA / QCOW2)로 완전 자동화합니다.
 - **수명주기 통합 제어 (Vagrant & DesktopAdapter)**: 가상머신 생성, 기동, 스냅샷, 정지를 `DesktopAdapter` 공통 인터페이스로 제어합니다. 플랫폼 환경에 맞춰 **VirtualBox, KVM(libvirt/QEMU), Hyper-V** 등 최적의 프로바이더와 플러그인을 자동으로 판별해 연동합니다.
 - **하이퍼바이저 종속성 제거**: 어떤 호스트 OS나 가상화 엔진을 쓰더라도, AI 에이전트는 동일한 MCP 도구와 표준 SSH 통로를 통해 일관되게 VM을 다룰 수 있습니다.
 
@@ -81,54 +81,29 @@ VAMP MCP 서버는 기동 시 stdio 핸드셰이크를 블로킹하지 않고 �
 - 암호와 인증서는 CLI 인자(`argv`) 대신 오직 **표준 입력(`stdin`) 파이프로만 전달**되어 `ps aux` 프로세스 목록 노출을 원천 차단합니다.
 - **호스트별 엄격한 격리**: 원격 서버는 각자의 로컬 볼트를 독립적으로 소유하며, 호스트 간 자격증명을 절대 공유하거나 동기화하지 않습니다.
 
-### 5. 📦 가벼운 HTTP 부트스트랩 (Port 8421)
-플랫폼마다 깨지기 쉬운 `xorriso` ISO 리마스터링을 완전히 도려냈습니다. 호스트에서 8421번 포트로 파이썬 표준 라이브러리 웹서버를 열고, 게스트는 단 한 줄로 환경을 구축합니다:
-```bash
-# Debian / Ubuntu
-wget -qO- http://10.0.2.2:8421/setup.sh | sh
+### 5. 📦 게스트 초기 설정
 
-# Windows (PowerShell)
-irm http://10.0.2.2:8421/setup.ps1 | iex
-```
+Packer 게스트는 사후 설정 파일을 빌드 호스트에서 받습니다. VirtualBox는 기존 NAT 경로를 유지합니다. Hyper-V는 선택한 가상 스위치의 호스트 IPv4를 사용합니다. QEMU 기본 빌드 NAT의 호스트 주소는 `10.0.2.2`이며, 배포된 libvirt VM의 네트워크와는 별개입니다. 설정과 오류 진단은 [VM MCP 문서](docs/VM_MCP.md)를 참고하세요.
 
 ---
 
 ## 🚀 빠른 시작
 
-### 1. MCP 클라이언트 연동 (Claude Desktop, Cursor, Codex)
+### 1. VS Code 없이 MCP 사용
 
-**Node.js 22+** 환경에서 npm으로 독립 MCP 서버를 실행합니다:
+Node.js 22+ 환경에서 [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)의 `vamp-mcp`와 선택 사항인 `vamp-mcp-vault` tarball을 내려받습니다. 릴리즈 노트의 SHA-256을 확인한 뒤 내려받은 파일로 설치합니다.
 
 ```bash
-# 전역 설치
-npm install -g vamp-mcp vamp-mcp-vault
+npm install -g ./vamp-mcp-0.3.1.tgz ./vamp-mcp-vault-0.1.8.tgz
 ```
 
-MCP 클라이언트 설정 파일(예: `claude_desktop_config.json`)에 추가합니다:
-
-```json
-{
-  "mcpServers": {
-    "vamp": {
-      "command": "npx",
-      "args": ["-y", "vamp-mcp", "virtualbox"]
-    },
-    "vamp-vault": {
-      "command": "npx",
-      "args": ["-y", "vamp-mcp-vault"]
-    }
-  }
-}
-```
-> *사용 중인 하이퍼바이저에 따라 `virtualbox`를 `kvm`, `vagrant`, `library`로 변경할 수 있습니다.*
+클라이언트에 인자 없이 `vamp-mcp`를 **VAMP MCP**로, `vamp-mcp-vault`를 **VAMP Vault**로 등록합니다. 클라이언트가 명령을 찾지 못하면 설치된 전체 경로를 사용하세요. Podman이나 하이퍼바이저를 별도로 등록하지 않습니다. 자세한 내용은 [MCP 등록 가이드](docs/MCP_REGISTRATION.md)를 참고하세요.
 
 ### 2. VS Code 확장 사용
 
-1. [VS Code 마켓플레이스](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools)에서 **VAMP** 확장을 설치합니다.
-2. 사이드바의 **VAMP** 아이콘을 클릭합니다:
-   - **Open VM Manager**: 클릭 한 번으로 VM 생성, 부팅, 스냅샷 관리.
-   - **RPA Library**: 재사용 가능한 워크플로를 녹화하고 검토 후 내보내기.
-   - **Browse Credentials**: 사용자 모달 승인을 거치는 격리된 KeePassXC 금고 관리.
+1. [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)에서 VSIX 파일 두 개를 받아 **Extensions: Install from VSIX**로 설치한 뒤 VS Code를 다시 로드합니다.
+2. **VAMP** 사이드바에서 **Open VM Manager**로 VM을, **Open Containers**로 Podman 목록과 데스크톱을, **RPA Library**로 검토한 워크플로를 관리합니다. 자격증명은 별도의 **VAMP Vault**에서 관리합니다.
+3. WSL은 [수동 설정 가이드(영문)](vscode-extension/CONTAINERS_WSL.md)를, rootless Podman과 noVNC는 [컨테이너 데스크톱 문서](docs/CONTAINER_DESKTOP.md)를 참고하세요.
 
 ---
 

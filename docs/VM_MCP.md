@@ -94,3 +94,18 @@ Hyper-V는 [별도 폴더](../backends/hyperv/README.md)와 `$hyperv-rpa` 스킬
 서버 이름은 VAMP (Virtual Agent Machine Platform)입니다. `vm_recorder_media`는 Windows/Debian용 레코더 ISO를 만들며, SPICE VM에서는 사용자가/libvirt 관리자가 연결한 뒤 게스트 사용자 세션에서 설치기를 실행합니다. 자동 녹화는 하지 않습니다.
 
 `virtualbox_create`는 VirtualBox 호스트의 ISO 경로를 받아 VM 생성·무인 설치 시작·레코더 후속 구성을 스크립트로 처리합니다. 기본 계정 **vboxuser / password123!**는 공개 정보라고 고지합니다. 이 도구는 libvirt VM을 생성하지 않습니다. `installation_started`는 설치 완료 검증이 아니며 실제 VM 시험이 필요합니다. [게스트 레코더](GUEST_RECORDER.md), [VirtualBox](../backends/virtualbox/README.md), [VS Code Marketplace 패키지](VSCODE_MARKETPLACE.md)를 참고하세요.
+
+
+## Packer build network: post-install scripts
+
+This applies to `vm_create`, the local `kvm_vm_create` and configured SSH KVM tool, and **Open VM Manager → New Virtual Machine → Packer network options**. It does not configure the deployed VM's adapter. Leave the optional IPv4 blank to use the hypervisor default. A request's `bootstrap_host` takes precedence over the builder's `VAMP_PACKER_BOOTSTRAP_HOST` environment variable. Set the environment variable on the machine actually running Packer, not the client. Use a plain IPv4, never a URL or hostname.
+
+| Builder | Default | Override |
+| --- | --- | --- |
+| VirtualBox | Existing NAT path | Unchanged; the bootstrap override is not used. |
+| Hyper-V | The single usable host IPv4 on the selected switch (default: `Default Switch`). | Choose an IPv4 already assigned to the selected switch. An isolated Private switch without a host adapter cannot serve these scripts. |
+| KVM/QEMU | `10.0.2.2` through QEMU user NAT; the host listener is bound to loopback. | Use a private IPv4 assigned to the builder and already reachable from the build guest. The deployed libvirt network's gateway does not determine this address. |
+
+Hyper-V and KVM run job-owned script and completion listeners. Use a trusted build network; the post-install transport uses HTTP, not TLS. Port `8421` must be free on the selected address. Debian's Packer preseed also uses a temporary HTTP port; the guest reports completion to a separate temporary callback port. VAMP does not change firewall rules or routes. If the preflight or job fails, check **Golden images** and its Packer/worker logs for the chosen address, then check the switch, firewall and guest route. A failed or empty bootstrap download is not executed, and no authenticated completion means no deployment.
+
+For the default network behavior see [QEMU user networking](https://www.qemu.org/docs/master/system/devices/net.html) and [HashiCorp's Hyper-V builder HTTP options](https://developer.hashicorp.com/packer/integrations/hashicorp/hyperv/latest/components/builder/iso).

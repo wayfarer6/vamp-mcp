@@ -191,3 +191,17 @@ test('golden deletion resolves a known ID, shows path/size and requires explicit
   assert.ok(h.messages.some(m=>m.type==='progress'&&m.message.includes('Golden image deleted')));
  }finally{h.close();}
 });
+
+
+test('Packer network options are scoped to the matching hypervisor',()=>{
+ const h=harness();
+ const {buildNetworkOptions,managerHTML}=h.api;
+ const options={bootstrapHost:' 172.20.1.1 ',switchName:'Default Switch'};
+ assert.equal(JSON.stringify(buildNetworkOptions('hyperv',options)),JSON.stringify({bootstrap_host:'172.20.1.1',switch_name:'Default Switch'}));
+ assert.equal(JSON.stringify(buildNetworkOptions('kvm',options)),JSON.stringify({bootstrap_host:'172.20.1.1'}));
+ for(const backend of ['virtualbox','remote'])assert.equal(JSON.stringify(buildNetworkOptions(backend,options)),'{}');
+ assert.equal(JSON.stringify(buildNetworkOptions('hyperv',{})),'{}');
+ assert.throws(()=>buildNetworkOptions('kvm',{bootstrapHost:'http://10.0.2.2:8421'}),/plain IPv4/);
+ assert.throws(()=>buildNetworkOptions('hyperv',{switchName:'bad\nname'}),/valid Hyper-V switch/);
+ assert.match(managerHTML(),/id="packer-network" hidden/);
+});

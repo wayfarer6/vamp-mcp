@@ -1,6 +1,6 @@
 {
   "name": "vamp-mcp-vault",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "VAMP Vault MCP server for KeePassXC credentials and VeraCrypt volumes, with explicit approval and optional VS Code bridge.",
   "type": "module",
   "license": "MIT",

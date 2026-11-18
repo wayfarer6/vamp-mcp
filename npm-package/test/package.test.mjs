@@ -18,7 +18,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.ok(npmCli,'Run this check through npm test so npm_execpath is available');
   execFileSync(process.execPath,[npmCli,'install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
   const cli=path.join(temporary,'node_modules',packageName,'bin',packageName+'.mjs');
-  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.7':'0.3.1');
+  assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),vault?'0.1.8':'0.3.1');
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async()=>{
@@ -40,7 +40,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       await assert.rejects(access(work));
     });
   }
-  for (const [command,expected] of (vault?[[null,'vault_status']]:[['virtualbox','vamp_setup'],['kvm','remote_vm_list'],['library','rpa_search'],['remote','remote_vm_list']])) {
+  for (const [command,expected] of (vault?[[null,'vault_status']]:[['unified','podman_view_container_screen'],['virtualbox','vamp_setup'],['kvm','remote_vm_list'],['library','rpa_search'],['remote','remote_vm_list']])) {
     await t.test(`${command}: initialize and discover real MCP tools`,{timeout:12000},async()=>{
       const child=spawn(process.execPath,[cli,...(command?[command]:[])],{cwd:temporary,env:{...process.env,VAMP_RPA_REGISTRY:path.join(temporary,'catalog')}});
       let stdout='',stderr='';

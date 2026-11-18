@@ -299,17 +299,16 @@ test('the packaged server runs as a one-shot tool call over its command line', {
   assert.match((await runNode([server, '--help'])).stdout, /--call TOOL/);
 });
 
-test('the remote command line expands $HOME and runs the uploaded server', {skip:process.platform==='win32'}, async () => {
+test('the remote command line expands $HOME and runs the uploaded server', {skip:process.platform==='win32'}, async t => {
   const client = await load('client.mjs');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-remote-home-'));
+  t.after(()=>fs.rmSync(home,{recursive:true,force:true}));
   const remoteDir = path.join(home, '.vamp', 'remote');
   fs.mkdirSync(remoteDir, { recursive: true });
-  const shared=path.join(home,'.vamp/common');fs.mkdirSync(shared,{recursive:true});
-  for(const name of ['host-support.cjs','guest-install.json'])fs.copyFileSync(path.join(repo,'backends/common',name),path.join(shared,name));
-  for (const name of fs.readdirSync(path.join(repo, 'backends/remote_ssh'))) {
-    if (!name.endsWith('.mjs')) continue;
-    fs.copyFileSync(path.join(repo, 'backends/remote_ssh', name), path.join(remoteDir, name));
-  }
+  // The extension uploads the esbuild bundle, not a selection of raw modules.
+  await require('esbuild').build({entryPoints:[path.join(repo,'backends/remote_ssh/server.mjs')],
+    outfile:path.join(remoteDir,'server.mjs'),bundle:true,platform:'node',format:'esm',target:'node20',
+    banner:{js:"import { createRequire as __vampRequire } from 'node:module'; const require = __vampRequire(import.meta.url);"}});
   const config = client.normalizeRemoteConfig({ host: 'lab-host.local', username: 'dev' });
   const command = client.remoteCommand(config, { tool: 'remote_env_check', args: {} });
   assert.ok(!command.includes(`'$HOME`), 'the home directory must be expanded by the remote shell');

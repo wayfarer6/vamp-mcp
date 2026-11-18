@@ -70,6 +70,9 @@ test('real MCP SDK discovery and SSH mock call preserve schemas and content',asy
   const {tools}=await client.listTools();assert.equal(calls,0);assert.equal(tools.length,32);
   const schema=tools.find(t=>t.name==='remote_vm_create').inputSchema;
   assert.deepEqual(schema.properties.guest_os.enum,['debian','windows11']);
+  assert.equal(schema.properties.bootstrap_host.format,'ipv4');
+  assert.equal((await client.callTool({name:'remote_vm_create',arguments:{name:'Fixture',iso_path:'/fixture.iso',bootstrap_host:'http://10.0.2.2:8421'}})).isError,true);
+  assert.equal(calls,0);
   const output=await client.callTool({name:'remote_vm_stop',arguments:{vm:'guest'}});assert.equal(calls,1);assert.equal(JSON.parse(output.content[0].text).args.force,false);
   const py=await client.callTool({name:'kvm_python_call',arguments:{tool:'vm_viewer_info',arguments:{vm_name:'fixture'}}});
   assert.equal(py.isError,undefined);assert.equal(JSON.parse(py.content[0].text).args.vm_name,'fixture');

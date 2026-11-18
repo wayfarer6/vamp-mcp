@@ -12,7 +12,10 @@ export function remoteSchema(schema) {
   let value;
   if (schema.enum) value=z.enum(schema.enum);
   else if(schema.type==='string') {
-    value=z.string();if(schema.pattern)value=value.regex(new RegExp(schema.pattern));
+    if(schema.format!==undefined&&schema.format!=='ipv4')throw Error(`Unsupported remote string format: ${schema.format}`);
+    value=schema.format==='ipv4'?z.ipv4():z.string();
+    if(schema.maxLength!==undefined)value=value.max(schema.maxLength);
+    if(schema.pattern)value=value.regex(new RegExp(schema.pattern));
   } else if(schema.type==='boolean') value=z.boolean();
   else if(['number','integer'].includes(schema.type)) {
     value=z.number();if(schema.type==='integer')value=value.int();

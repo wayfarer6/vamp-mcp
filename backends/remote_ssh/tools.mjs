@@ -589,6 +589,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     if (guest_os==='windows11' && args.windows_confirmed!==true) return {status:'needs_windows_confirmation',vm_created:false,message:'Windows requires your own valid license and explicit windows_confirmed:true.'};
     if (typeof args.name!=='string' || !/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test(args.name)) throw new Error('Invalid VM name');
     if (typeof args.iso_path!=='string' || !path.isAbsolute(args.iso_path)) throw new Error('Choose an absolute host ISO path');
+    if(args.bootstrap_host!==undefined&&config.backend!=='kvm')throw new Error('bootstrap_host is only configurable for KVM on this host.');
     const values={memory_mb:args.memory_mb ?? (guest_os==='windows11'?4096:2048),cpus:args.cpus ?? 2,disk_mb:args.disk_mb ?? 256000};
     for (const [key,min,max] of [['memory_mb',guest_os==='windows11'?4096:2048,131072],['cpus',1,64],['disk_mb',32768,2097152]]) {
       if (!Number.isInteger(values[key]) || values[key]<min || values[key]>max) throw new Error(`Invalid ${key}: expected integer ${min}..${max}`);
@@ -598,7 +599,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       runtime:config.repo || config.workdir,python:()=>config.python||(process.platform==='win32'?'python':'python3'),platform:config.platform,config:()=>({get:key=>key==='libvirtUri'?config.libvirtUri:key==='kvmPythonExecutable'?config.python:undefined}),
       execute:(exe,argv,options)=>run(exe,argv,{timeoutMs:options.timeout}),
     });
-    const created=await adapter.create(config.backend,{name:args.name,iso_path:args.iso_path,guest_os,installation_mode:args.installation_mode,windows_confirmed:args.windows_confirmed,...values});
+    const created=await adapter.create(config.backend,{name:args.name,iso_path:args.iso_path,guest_os,installation_mode:args.installation_mode,windows_confirmed:args.windows_confirmed,bootstrap_host:args.bootstrap_host,...values});
     return { ...created,backend:config.backend,guest_os,os_installation_completed:false,guest_setup_completed:false,
       next_action:'Packer build queued. Use remote_golden_images for completion status, file paths, sizes and logs. Public sandbox autologin: vboxuser / password123!.'};
   }
@@ -636,7 +637,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       description: 'Create and deploy a new VM with the selected hypervisor through the same Packer runner as VS Code. Requires confirmed:true. HashiCorp Packer installs Debian/Windows and post-install scripts, waits 60s after reboot, exports a golden image and deploys a separate live disk. Windows requires windows_confirmed:true and your own license. Public sandbox autologin vboxuser/password123!.',
       inputSchema: {type:'object',properties:{
         name:{type:'string',pattern:'^[A-Za-z][A-Za-z0-9_-]{0,62}$'},iso_path:{type:'string',description:'Absolute ISO path on the host running this server'},
-        guest_os:{type:'string',enum:['debian','windows11'],default:'debian'},installation_mode:{type:'string',enum:['auto','unattended']},
+        guest_os:{type:'string',enum:['debian','windows11'],default:'debian'},bootstrap_host:{type:'string',format:'ipv4',description:'Optional guest-reachable IPv4 for the KVM Packer build only. Leave unset for the QEMU NAT default.'},installation_mode:{type:'string',enum:['auto','unattended']},
         memory_mb:{type:'integer',minimum:2048,maximum:131072},cpus:{type:'integer',minimum:1,maximum:64},disk_mb:{type:'integer',minimum:32768,maximum:2097152},
         confirmed:{type:'boolean',default:false},windows_confirmed:{type:'boolean',default:false}
       },required:['name','iso_path'],additionalProperties:false},
