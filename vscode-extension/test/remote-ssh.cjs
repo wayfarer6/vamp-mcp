@@ -94,14 +94,17 @@ test('stdio proxy drains stdin and preserves SSH failure at EOF without reconnec
         child.stdin = new PassThrough();
         child.stdout = new PassThrough();
         child.stderr = new PassThrough();
-        child.stdin.once('finish', () => child.emit('close', code));
+        child.stdin.once('finish', () => {
+          if (code !== 0) child.stderr.write('REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key verification failed.\n');
+          child.emit('close', code);
+        });
         return child;
       },
     });
     input.end();
     assert.equal(await result, code === 0 ? 0 : 1);
     assert.equal(attempts, 1);
-    if (code !== 0) assert.match(diagnostic.read().toString(), /^remote_session_lost:/);
+    if (code !== 0) assert.match(diagnostic.read().toString(), /^remote_session_lost: The remote SSH host key changed.*trusted source/);
     else assert.equal(diagnostic.read(), null);
   }
 });

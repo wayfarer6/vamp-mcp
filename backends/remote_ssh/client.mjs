@@ -140,10 +140,21 @@ export function parseToolOutput(stdout) {
   return null;
 }
 
+function hostKeyMessage(text) {
+  if (/remote host identification has changed|offending .* key in/i.test(text)) {
+    return 'The remote SSH host key changed. Verify the new fingerprint through a trusted source before updating known_hosts.';
+  }
+  if (/host key verification failed/i.test(text)) {
+    return 'The remote SSH host key is untrusted. Verify its fingerprint through a trusted source before adding it to known_hosts.';
+  }
+  return '';
+}
+
 function friendly(error, config, stderr) {
   const text = String(stderr || '').trim();
   if (error?.code === 'ENOENT') return 'The ssh command was not found on this computer. Install an OpenSSH client.';
-  if (/Host key verification failed/i.test(text)) return 'The remote host key is not trusted yet. Connect once from a terminal, or remove the stale key from known_hosts.';
+  const keyError = hostKeyMessage(text);
+  if (keyError) return keyError;
   if (/Permission denied \(publickey/i.test(text)) return `SSH authentication failed for ${remoteTarget(config)}. Check the private key and the authorized_keys file on the remote host.`;
   if (/Connection refused/i.test(text)) return `Nothing is listening on ${remoteTarget(config)}:${config.port}. Check the SSH server and port.`;
   if (/Could not resolve hostname/i.test(text)) return `The host name ${config.host} could not be resolved.`;
@@ -504,7 +515,8 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
     child.stdout.on('data', inspectHandshake);
   }
   child.stdout.pipe(output, { end: false });
-  child.stderr.resume();
+  let sshDiagnostic = '';
+  child.stderr.setEncoding('utf8').on('data', chunk => { sshDiagnostic = (sshDiagnostic + chunk).slice(-4096); });
   const closed = new Promise((resolve, reject) => {
     child.once('error', reject);
     child.once('close', resolve);
@@ -519,9 +531,10 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
     input.removeListener('end', onEnd);
     input.pause();
   }
+  const keyError = hostKeyMessage(sshDiagnostic);
   if (ended) {
     if (code === 0) return 0;
-    diagnostic.write('remote_session_lost: SSH closed without completing the MCP session.\n');
+    diagnostic.write(`remote_session_lost: ${keyError || 'SSH closed without completing the MCP session.'}\n`);
     return 1;
   }
   const retry = new RemoteSshClient(normalized, { spawnImpl });
@@ -530,6 +543,6 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
   } catch {
     // The original MCP session is lost even if the remote host is reachable again.
   }
-  diagnostic.write('remote_session_lost: Start a new MCP session to reconnect. Pending requests were not replayed.\n');
+  diagnostic.write(`remote_session_lost: ${keyError || 'Start a new MCP session to reconnect. Pending requests were not replayed.'}\n`);
   return 1;
 }
