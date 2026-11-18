@@ -42,7 +42,9 @@ read-only libvirt access, upload the remote server, and verify that it can list
 desktops. Bootstrap runs without `sudo` and assumes the host dependencies are
 already installed. After that, a standalone MCP client can use
 `vamp-mcp proxy --host lab.example --user dev` as its stdio command. Use
-`--port`, `--key`, `--node`, or `--libvirt-uri` to match the SSH host. When SSH
+`--port`, `--key`, `--node`, or `--libvirt-uri` to match the SSH host. Verify the
+host key through a trusted source and add it to OpenSSH's known-hosts file before
+using the proxy, an exported MCP configuration, or its Verify action. When SSH
 disconnects, the proxy checks the same host once and reports
 `remote_session_lost` on stderr. The MCP client starts a new session to continue.
 

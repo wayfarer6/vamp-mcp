@@ -69,8 +69,11 @@ test('verify uses the exported SSH command and counts its MCP tool results', asy
   const { RemoteSshClient, normalizeRemoteConfig, remoteStdioDefinition } = await load('client.mjs');
   const config = normalizeRemoteConfig({ host: 'lab-host.local' });
   const client = new RemoteSshClient(config);
-  client.exec = async (command, { stdinText }) => {
-    assert.equal(command, remoteStdioDefinition(config).args.at(-1));
+  client.exec = async (command, { stdinText, requireKnownHost }) => {
+    const definition = remoteStdioDefinition(config);
+    assert.equal(command, definition.args.at(-1));
+    assert.ok(definition.args.includes('StrictHostKeyChecking=yes'));
+    assert.equal(requireKnownHost, true);
     assert.deepEqual(stdinText.trim().split('\n').map(line => JSON.parse(line).method), ['initialize', 'notifications/initialized', 'tools/list']);
     return { code: 0, stdout: '{"id":1,"result":{"serverInfo":{"version":"test"}}}\n{"id":2,"result":{"tools":[{},{}]}}\n' };
   };
@@ -140,6 +143,7 @@ test('stdio proxy preserves bytes and attempts one SSH probe after session loss'
   child.emit('close', 255);
   assert.equal(await result, 1);
   assert.equal(attempts.length, 2);
+  assert.ok(attempts.every(({ args }) => args.includes('StrictHostKeyChecking=yes')));
   assert.match(attempts[1].args.at(-1), /--version$/);
   assert.match(diagnostic.read().toString(), /^remote_session_lost:/);
 });

@@ -352,7 +352,7 @@ export class RemoteSshClient {
       { id: 2, method: 'tools/list' },
     ];
     const stdinText = requests.map(request => JSON.stringify({ jsonrpc: '2.0', ...request })).join('\n') + '\n';
-    const result = await this.exec(remoteMcpCommand(this.config), { stdinText, timeoutMs: 30000 });
+    const result = await this.exec(remoteMcpCommand(this.config), { stdinText, timeoutMs: 30000, requireKnownHost: true });
     if (result.code !== 0) throw new RemoteSshError(friendly({ code: result.code }, this.config, result.stderr), { code: result.code });
     let initialized;
     let tools;
@@ -460,7 +460,7 @@ export function remoteStdioDefinition(config, { version = '0.1.7' } = {}) {
   return {
     name: 'VAMP Remote (SSH)',
     command: 'ssh',
-    args: sshArgs(normalized, remoteMcpCommand(normalized)),
+    args: sshArgs(normalized, remoteMcpCommand(normalized), { requireKnownHost: true }),
     version,
     label: `VAMP Remote (SSH) · ${remoteTarget(normalized)}`,
   };
@@ -470,7 +470,8 @@ export function remoteStdioDefinition(config, { version = '0.1.7' } = {}) {
 export async function proxyRemoteStdio(config, { input = process.stdin, output = process.stdout, diagnostic = process.stderr, spawnImpl = spawn, expectedVersion } = {}) {
   const normalized = normalizeRemoteConfig(config);
   if (normalized.backend !== 'kvm') throw new Error('The remote proxy requires a Linux KVM host.');
-  const child = spawnImpl('ssh', sshArgs(normalized, remoteMcpCommand(normalized)), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  const definition = remoteStdioDefinition(normalized);
+  const child = spawnImpl(definition.command, definition.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
   let ended = false;
   let shutdownTimer;
   const onEnd = () => {
@@ -525,7 +526,7 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
   }
   const retry = new RemoteSshClient(normalized, { spawnImpl });
   try {
-    await retry.exec(`exec ${quote(normalized.remoteNodePath)} ${remoteFile('server.mjs')} --version`, { timeoutMs: 15000 });
+    await retry.exec(`exec ${quote(normalized.remoteNodePath)} ${remoteFile('server.mjs')} --version`, { timeoutMs: 15000, requireKnownHost: true });
   } catch {
     // The original MCP session is lost even if the remote host is reachable again.
   }
