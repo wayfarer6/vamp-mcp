@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {spawn,execFile,execFileSync} from 'node:child_process';
+import {spawn,spawnSync,execFile,execFileSync} from 'node:child_process';
 import {mkdtemp,rm,writeFile,access,readFile,readdir} from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -27,6 +27,17 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),sourceManifest.version);
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
+    await t.test('packaged proxy requires an explicit Linux KVM host', () => {
+      const runProxy = args => spawnSync(process.execPath, [cli, 'proxy', ...args], { encoding: 'utf8' });
+      const missing = runProxy([]);
+      assert.equal(missing.status, 1);
+      assert.equal(missing.stdout, '');
+      assert.match(missing.stderr, /Remote host is not configured/);
+      const unsupported = runProxy(['--host', 'lab.example', '--backend', 'virtualbox']);
+      assert.equal(unsupported.status, 1);
+      assert.equal(unsupported.stdout, '');
+      assert.match(unsupported.stderr, /requires a Linux KVM host/);
+    });
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async scenario=>{
       const source=path.join(temporary,'installer.iso');await writeFile(source,'test');
       const args={name:'Blocked-Test',iso_path:source,confirmed:false};
