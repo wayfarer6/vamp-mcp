@@ -10,8 +10,6 @@
 
 <p align="center">
   <a href="https://github.com/wayfarer6/vamp-mcp/releases"><img src="https://img.shields.io/github/v/release/wayfarer6/vamp-mcp?style=flat-square&color=8A2BE2" alt="Latest Release"></a>
-  <a href="https://www.npmjs.com/package/vamp-mcp"><img src="https://img.shields.io/npm/v/vamp-mcp?style=flat-square&label=vamp-mcp&color=CB3837" alt="npm vamp-mcp"></a>
-  <a href="https://www.npmjs.com/package/vamp-mcp-vault"><img src="https://img.shields.io/npm/v/vamp-mcp-vault?style=flat-square&label=vamp-mcp-vault&color=CB3837" alt="npm vamp-mcp-vault"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools"><img src="https://img.shields.io/badge/VS%20Code-vamp--mcp-007ACC?style=flat-square&logo=visual-studio-code&logoColor=white" alt="VS Code Extension"></a>
   <a href="https://wayfarer6.github.io/vamp-script-hub/"><img src="https://img.shields.io/badge/Community-Script%20Hub-blueviolet?style=flat-square" alt="Script Hub"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg?style=flat-square" alt="License: MIT"></a>
@@ -91,7 +89,7 @@ Packer guests fetch post-install resources from their build host, not from a uni
 
 ### 1. Use MCP without VS Code
 
-With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from the [GitHub Releases page](https://github.com/wayfarer6/vamp-mcp/releases). Verify the SHA-256 hashes against the release notes, then install from the downloaded files:
+With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases). Verify the SHA-256 hashes against the release's `SHA256SUMS` file, then install from the downloaded files:
 
 ```bash
 npm install -g ./vamp-mcp-0.3.5.tgz ./vamp-mcp-vault-0.1.11.tgz
