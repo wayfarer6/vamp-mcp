@@ -46,6 +46,11 @@ already installed. After that, a standalone MCP client can use
 disconnects, the proxy checks the same host once and reports
 `remote_session_lost` on stderr. The MCP client starts a new session to continue.
 
+In desktop VS Code, **VAMP Remote: Open Live Viewer** opens a tunnel to a
+noVNC/websockify service already listening on the Linux host at `127.0.0.1:6080`.
+Connect once over SSH and verify the host key before opening the viewer. Closing
+the viewer closes its tunnel. The screenshot viewer does not enable forwarding.
+
 KVM guests need a graphics device for screenshots and an absolute pointing
 device (USB tablet) for clicks. Desktops created by VAMP already have both.
 

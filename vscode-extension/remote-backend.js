@@ -242,6 +242,36 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
   }
 
   const screens = new Map();
+  const liveViewers = new Map();
+  async function openLiveViewer() {
+    const normalized = requireConfigured();
+    if (normalized.backend !== 'kvm') throw new Error('The live viewer requires a Linux KVM host.');
+    const key = `${normalized.username}@${normalized.host}:${normalized.port}`;
+    if (liveViewers.has(key)) {
+      (await liveViewers.get(key)).reveal();
+      return;
+    }
+    const opening = (async () => {
+      const tunnel = await clientFor(normalized).openForward(6080);
+      try {
+        const panel = vscode.window.createWebviewPanel('vamp.remoteLive', 'VAMP Remote Live Viewer', vscode.ViewColumn.Active, { enableScripts: true });
+        panel.onDidDispose(() => { tunnel.dispose(); liveViewers.delete(key); });
+        const origin = `http://127.0.0.1:${tunnel.localPort}`;
+        panel.webview.html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'unsafe-inline'"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}iframe{display:block;width:100vw;height:100vh;border:0}</style></head><body><iframe title="Remote noVNC viewer" sandbox="allow-scripts allow-same-origin" src="${origin}/vnc.html?autoconnect=1&amp;view_only=1"></iframe></body></html>`;
+        return panel;
+      } catch (error) {
+        tunnel.dispose();
+        throw error;
+      }
+    })();
+    liveViewers.set(key, opening);
+    try {
+      await opening;
+    } catch (error) {
+      liveViewers.delete(key);
+      throw error;
+    }
+  }
   async function openScreen(vm) {
     const normalized = requireConfigured();
     const key = `${normalized.host}:${vm.id || vm.name}`;
@@ -366,6 +396,7 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
   const commands = {
     'vamp.remote.setupEnvironment': () => setupRemote(),
     'vamp.remote.exportMcpConfig': () => exportMcpConfig(),
+    'vamp.remote.openLiveViewer': () => openLiveViewer(),
     'vamp.remote.verifyEnvironment': () => verify(),
     'vamp.remote.listVMs': async () => {
       const result = await listVMs();
@@ -420,7 +451,12 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
       }
     }));
   }
-  context.subscriptions.push({ dispose() { for (const panel of screens.values()) panel.dispose(); screens.clear(); } });
+  context.subscriptions.push({ dispose() {
+    for (const panel of screens.values()) panel.dispose();
+    screens.clear();
+    for (const opening of liveViewers.values()) opening.then(panel => panel.dispose(), () => {});
+    liveViewers.clear();
+  } });
 
   return {
     read,

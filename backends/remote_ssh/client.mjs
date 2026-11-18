@@ -4,6 +4,7 @@
 // the SSH connection, and secrets never leave the host filesystem.
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { createServer } from 'node:net';
 
 const HOST_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const USER_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -360,6 +361,55 @@ export class RemoteSshClient {
     if (result.code !== 0 || !listeners.includes(ipv4) || listeners.some(listener => listener !== ipv4 && listener !== ipv6)) {
       throw new RemoteSshError('Remote forwarding requires a listener on 127.0.0.1 with no non-loopback listener on the same port.', { code: 'remote_listener_not_private' });
     }
+  }
+
+  async openForward(remotePort) {
+    await this.checkForwardListener(remotePort);
+    const localPort = await new Promise((resolve, reject) => {
+      const reservation = createServer();
+      reservation.once('error', reject);
+      reservation.listen(0, '127.0.0.1', () => {
+        const { port } = reservation.address();
+        reservation.close(error => error ? reject(error) : resolve(port));
+      });
+    });
+    const args = sshForwardArgs(this.config, localPort, remotePort);
+    const child = this.spawnImpl('ssh', ['-v', ...args], {
+      stdio: ['ignore', 'ignore', 'pipe'], windowsHide: true, env: { ...process.env, LC_ALL: 'C' },
+    });
+    let disposed = false;
+    const dispose = () => {
+      if (disposed) return;
+      disposed = true;
+      child.kill();
+    };
+    await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => fail('SSH forwarding did not become ready.'), 15000);
+      const fail = message => {
+        clearTimeout(timer);
+        dispose();
+        reject(new RemoteSshError(message, { code: 'remote_forward_failed' }));
+      };
+      child.once('error', () => fail('Could not start SSH forwarding.'));
+      child.once('close', () => fail('SSH forwarding closed.'));
+      const ready = `Local forwarding listening on 127.0.0.1 port ${localPort}.`;
+      let pending = '';
+      let binding = false;
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', chunk => {
+        pending += chunk;
+        const lines = pending.split(/\r?\n/);
+        pending = lines.pop().slice(-4096);
+        for (const line of lines) {
+          if (line.includes(ready)) binding = true;
+          if (binding && /channel \d+: new port-listener\b/.test(line)) {
+            clearTimeout(timer);
+            resolve();
+          }
+        }
+      });
+    });
+    return { localPort, dispose };
   }
 
   async status(vm) {

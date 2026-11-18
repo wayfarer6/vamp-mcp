@@ -92,6 +92,10 @@ function harness(overrides = {}, { exportPath } = {}) {
     screenshot: async name => ({ status: 'ok', width: 2, height: 1, png: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]) }),
     upload: async () => ({ server_version: '0.1.7', setup_script: null }),
     verifyStdio: async () => { calls.push(['verifyStdio']); return { toolCount: 15 }; },
+    openForward: async port => {
+      calls.push(['openForward', port]);
+      return { localPort: 37591, dispose: () => calls.push(['closeForward']) };
+    },
     call: async (tool) => { calls.push(['call', tool]); return { status: 'ok', steps: [] }; },
   };
   const module = { exports: {} };
@@ -141,6 +145,17 @@ test('configuration export writes a mergeable fragment and preserves existing fi
   assert.equal(fs.readFileSync(exportPath, 'utf8'), existing);
   assert.deepEqual(calls, [['verifyStdio']]);
   assert.ok(notices.some(([message]) => message.includes('existing MCP configuration was preserved')));
+});
+
+test('live viewer opens one forward on demand and closes it with the panel', async () => {
+  const { commands, calls, panel, dispose } = harness();
+  const open = commands.get('vamp.remote.openLiveViewer');
+  assert.deepEqual(calls, []);
+  await Promise.all([open(), open()]);
+  assert.deepEqual(calls, [['openForward', 6080]]);
+  assert.match(panel.webview.html, /src="http:\/\/127\.0\.0\.1:37591\/vnc\.html\?/);
+  dispose();
+  assert.deepEqual(calls, [['openForward', 6080], ['closeForward']]);
 });
 
 test('the MCP provider stays quiet until remote is enabled and configured', () => {

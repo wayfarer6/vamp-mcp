@@ -14,6 +14,31 @@ const load = async name => import(pathToFileURL(path.join(repo, 'backends/remote
 const VM_A = '11111111-2222-3333-4444-555555555555';
 const VM_B = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
+test('forward waits for OpenSSH to establish its listener and disposes it once', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  let kills = 0;
+  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }), {
+    spawnImpl: (command, args) => {
+      assert.equal(command, 'ssh');
+      const port = /127\.0\.0\.1:(\d+):127/.exec(args[args.indexOf('-L') + 1])[1];
+      const child = new (require('node:events').EventEmitter)();
+      child.stderr = new PassThrough();
+      child.kill = () => { kills++; };
+      setImmediate(() => {
+        child.stderr.write(`debug1: Local forwarding listening on 127.0.0.1 port ${port}.\n`);
+        child.stderr.write('debug1: channel 0: new port-listener [port listener]\n');
+      });
+      return child;
+    },
+  });
+  client.checkForwardListener = async port => assert.equal(port, 6080);
+  const tunnel = await client.openForward(6080);
+  assert.ok(tunnel.localPort > 0);
+  tunnel.dispose();
+  tunnel.dispose();
+  assert.equal(kills, 1);
+});
+
 test('SSH forwarding accepts only explicit private listeners and binds locally to loopback', async () => {
   const { RemoteSshClient, normalizeRemoteConfig, sshForwardArgs } = await load('client.mjs');
   const config = normalizeRemoteConfig({ host: 'lab-host.local', username: 'dev', port: 2222 });

@@ -119,6 +119,10 @@
         "title": "VAMP Remote: Export MCP Config"
       },
       {
+        "command": "vamp.remote.openLiveViewer",
+        "title": "VAMP Remote: Open Live Viewer"
+      },
+      {
         "command": "vamp.remote.verifyEnvironment",
         "title": "VAMP: Remote \u00b7 Verify Remote Environment"
       },
