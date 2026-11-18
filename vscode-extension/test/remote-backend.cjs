@@ -9,7 +9,7 @@ const { PassThrough } = require('node:stream');
 
 const root = path.resolve(__dirname, '..');
 
-function harness(overrides = {}, { exportPath } = {}) {
+function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => {}) } = {}) {
   const settings = {
     'remote.enabled': true,
     'remote.host': 'lab-host.local',
@@ -94,7 +94,7 @@ function harness(overrides = {}, { exportPath } = {}) {
     verifyStdio: async () => { calls.push(['verifyStdio']); return { toolCount: 15 }; },
     openForward: async port => {
       calls.push(['openForward', port]);
-      return { localPort: 37591, dispose: () => calls.push(['closeForward']) };
+      return { localPort: 37591, closed: tunnelClosed, dispose: () => calls.push(['closeForward']) };
     },
     call: async (tool) => { calls.push(['call', tool]); return { status: 'ok', steps: [] }; },
   };
@@ -156,6 +156,18 @@ test('live viewer opens one forward on demand and closes it with the panel', asy
   assert.match(panel.webview.html, /src="http:\/\/127\.0\.0\.1:37591\/vnc\.html\?/);
   dispose();
   assert.deepEqual(calls, [['openForward', 6080], ['closeForward']]);
+});
+
+test('live viewer replaces its frame with a message when SSH forwarding ends', async () => {
+  let disconnect;
+  const tunnelClosed = new Promise(resolve => { disconnect = resolve; });
+  const { commands, panel, dispose } = harness({}, { tunnelClosed });
+  await commands.get('vamp.remote.openLiveViewer')();
+  disconnect();
+  await tunnelClosed;
+  assert.match(panel.webview.html, /SSH forwarding disconnected/);
+  assert.doesNotMatch(panel.webview.html, /<iframe/);
+  dispose();
 });
 
 test('the MCP provider stays quiet until remote is enabled and configured', () => {

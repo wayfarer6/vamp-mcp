@@ -23,7 +23,7 @@ test('forward waits for OpenSSH to establish its listener and disposes it once',
       const port = /127\.0\.0\.1:(\d+):127/.exec(args[args.indexOf('-L') + 1])[1];
       const child = new (require('node:events').EventEmitter)();
       child.stderr = new PassThrough();
-      child.kill = () => { kills++; };
+      child.kill = () => { kills++; child.emit('close', 0); };
       setImmediate(() => {
         child.stderr.write(`debug1: Local forwarding listening on 127.0.0.1 port ${port}.\n`);
         child.stderr.write('debug1: channel 0: new port-listener [port listener]\n');
@@ -36,6 +36,7 @@ test('forward waits for OpenSSH to establish its listener and disposes it once',
   assert.ok(tunnel.localPort > 0);
   tunnel.dispose();
   tunnel.dispose();
+  await tunnel.closed;
   assert.equal(kills, 1);
 });
 

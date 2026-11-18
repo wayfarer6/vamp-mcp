@@ -408,6 +408,12 @@ export class RemoteSshClient {
       disposed = true;
       child.kill();
     };
+    const closed = new Promise(resolve => {
+      child.once('close', () => {
+        disposed = true;
+        resolve();
+      });
+    });
     await new Promise((resolve, reject) => {
       const timer = setTimeout(() => fail('SSH forwarding did not become ready.'), 15000);
       const fail = message => {
@@ -434,7 +440,7 @@ export class RemoteSshClient {
         }
       });
     });
-    return { localPort, dispose };
+    return { localPort, closed, dispose };
   }
 
   async status(vm) {

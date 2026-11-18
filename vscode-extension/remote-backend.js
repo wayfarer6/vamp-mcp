@@ -255,9 +255,17 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
       const tunnel = await clientFor(normalized).openForward(6080);
       try {
         const panel = vscode.window.createWebviewPanel('vamp.remoteLive', 'VAMP Remote Live Viewer', vscode.ViewColumn.Active, { enableScripts: true });
-        panel.onDidDispose(() => { tunnel.dispose(); liveViewers.delete(key); });
+        let viewerClosed = false;
+        panel.onDidDispose(() => {
+          viewerClosed = true;
+          tunnel.dispose();
+          liveViewers.delete(key);
+        });
         const origin = `http://127.0.0.1:${tunnel.localPort}`;
         panel.webview.html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'unsafe-inline'"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}iframe{display:block;width:100vw;height:100vh;border:0}</style></head><body><iframe title="Remote noVNC viewer" sandbox="allow-scripts allow-same-origin" src="${origin}/vnc.html?autoconnect=1&amp;view_only=1"></iframe></body></html>`;
+        tunnel.closed.then(() => {
+          if (!viewerClosed) panel.webview.html = `<!doctype html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><title>Remote viewer disconnected</title></head><body><p role="status">SSH forwarding disconnected. Close this tab and reopen the live viewer to reconnect.</p></body></html>`;
+        });
         return panel;
       } catch (error) {
         tunnel.dispose();
