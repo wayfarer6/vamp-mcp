@@ -58,7 +58,7 @@ export function isConfigured(config) {
 }
 
 /** Arguments for the ssh binary. The remote command is always the last item. */
-export function sshArgs(config, command) {
+export function sshArgs(config, command, { requireKnownHost = false } = {}) {
   if (!isConfigured(config)) throw new Error('Remote host is not configured.');
   const args = [
     '-T',
@@ -66,7 +66,7 @@ export function sshArgs(config, command) {
     '-o', `ConnectTimeout=${config.connectTimeoutSeconds}`,
     '-o', 'ServerAliveInterval=15',
     '-o', 'ServerAliveCountMax=3',
-    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', `StrictHostKeyChecking=${requireKnownHost ? 'yes' : 'accept-new'}`,
   ];
   if (config.port !== 22) args.push('-p', String(config.port));
   if (config.privateKeyPath) args.push('-i', config.privateKeyPath, '-o', 'IdentitiesOnly=yes');
@@ -147,11 +147,11 @@ export class RemoteSshClient {
   }
 
   /** Run a shell command on the remote host through ssh. */
-  exec(command, { stdinText, timeoutMs = this.timeoutMs } = {}) {
+  exec(command, { stdinText, timeoutMs = this.timeoutMs, requireKnownHost = false } = {}) {
     return new Promise((resolve, reject) => {
       let child;
       try {
-        child = this.spawnImpl('ssh', sshArgs(this.config, command), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+        child = this.spawnImpl('ssh', sshArgs(this.config, command, { requireKnownHost }), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch (error) {
         reject(new RemoteSshError(friendly(error, this.config, ''), { code: error?.code }));
         return;
@@ -208,7 +208,8 @@ export class RemoteSshClient {
   async call(tool, args = {}, { timeoutMs } = {}) {
     const limits = { remote_vm_create: 900000, remote_env_setup: 900000, remote_rpa_run: 900000, remote_env_check: 300000, remote_vm_list: 300000 };
     const limit = timeoutMs || limits[tool] || 180000;
-    const result = await this.exec(remoteCommand(this.config, { tool, args }), { timeoutMs: limit });
+    const requireKnownHost = tool === 'remote_rpa_run' && Boolean(args.vault_destination) && args.dry_run !== true;
+    const result = await this.exec(remoteCommand(this.config, { tool, args }), { timeoutMs: limit, requireKnownHost });
     const data = parseToolOutput(result.stdout);
     if (result.code === 255 || (!data && result.code !== 0)) {
       throw new RemoteSshError(friendly({ code: result.code }, this.config, result.stderr), { code: result.code, stderr: result.stderr, data });

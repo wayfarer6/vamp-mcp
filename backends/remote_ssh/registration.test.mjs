@@ -3,9 +3,23 @@ import assert from 'node:assert/strict';
 import {registerRemoteTools,createMcpHandler} from './server.mjs';
 import {createTools} from './tools.mjs';
 import {resolveConfig} from './config.mjs';
+import {RemoteSshClient, normalizeRemoteConfig, sshArgs} from './client.mjs';
 import {remoteSchema} from './register.mjs';
 import {PYTHON_TOOLS,pythonChildEnvironment} from './python-bridge.mjs';
 function fixture(options={}){const tools=new Map();registerRemoteTools({registerTool:(name,schema,call)=>{assert.ok(!tools.has(name));tools.set(name,{schema,call});}},options);return tools;}
+test('remote credential replay requires a previously trusted SSH host key',async()=>{
+ const config=normalizeRemoteConfig({enabled:true,host:'fixture.invalid'});
+ const client=new RemoteSshClient(config);
+ const options=[];
+ client.exec=async(command,policy)=>{
+  options.push(sshArgs(config,command,policy).find(arg=>arg.startsWith('StrictHostKeyChecking=')));
+  return {code:0,stdout:'{"status":"ok"}',stderr:''};
+ };
+ await client.call('remote_rpa_run',{vault_destination:'fixture'});
+ await client.call('remote_rpa_run',{vault_destination:'fixture',dry_run:true});
+ await client.call('remote_vm_list');
+ assert.deepEqual(options,['StrictHostKeyChecking=yes','StrictHostKeyChecking=accept-new','StrictHostKeyChecking=accept-new']);
+});
 test('catalog registers all original tools without subprocess, filesystem or SSH calls',()=>{
  let connected=0;const tools=fixture({env:{VAMP_REMOTE_CONFIG_JSON:'invalid json'},run:()=>assert.fail('ran'),clientFactory:()=>{connected++;}});
  const old=createTools({config:resolveConfig({env:{}}),run:()=>assert.fail('ran')}).tools;
