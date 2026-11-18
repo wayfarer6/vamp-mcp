@@ -26,6 +26,7 @@ for (const name of ['runtime','notices']) {
   });
 }
 const version=JSON.parse(await readFile(path.join(here,'package.json'),'utf8')).version;
+await copyFile(path.join(root,'backends/remote_ssh/client.mjs'),path.join(here,'runtime/backends/remote_ssh/client.mjs'));
 const checksums=await readFile(path.join(assetsOutput,'SHA256SUMS'),'utf8');
 const [sha256]=checksums.trim().split(/\s+/);
 await writeFile(path.join(here,'runtime/provisioning-assets.json'),JSON.stringify({version,sha256})+'\n');

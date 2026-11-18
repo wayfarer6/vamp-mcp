@@ -14,6 +14,38 @@ const load = async name => import(pathToFileURL(path.join(repo, 'backends/remote
 const VM_A = '11111111-2222-3333-4444-555555555555';
 const VM_B = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
+test('stdio proxy preserves bytes and attempts one SSH probe after session loss', async () => {
+  const { proxyRemoteStdio } = await load('client.mjs');
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const diagnostic = new PassThrough();
+  const attempts = [];
+  const result = proxyRemoteStdio({ host: 'lab-host.local' }, {
+    input, output, diagnostic,
+    spawnImpl: (command, args) => {
+      assert.equal(command, 'ssh');
+      const child = new (require('node:events').EventEmitter)();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      attempts.push({ args, child });
+      if (attempts.length === 2) setImmediate(() => child.emit('close', 255));
+      return child;
+    },
+  });
+  const { child } = attempts[0];
+  const frame = '{"jsonrpc":"2.0", "id":1}\n';
+  input.write(frame);
+  assert.equal(child.stdin.read().toString(), frame);
+  child.stdout.write(frame);
+  assert.equal(output.read().toString(), frame);
+  child.emit('close', 255);
+  assert.equal(await result, 1);
+  assert.equal(attempts.length, 2);
+  assert.match(attempts[1].args.at(-1), /--version$/);
+  assert.match(diagnostic.read().toString(), /^remote_session_lost:/);
+});
+
 function fakeHost() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-remote-test-'));
   const bin = path.join(dir, 'bin');

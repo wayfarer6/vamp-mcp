@@ -3,6 +3,7 @@ import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {existsSync, readFileSync} from 'node:fs';
+import {parseArgs} from 'node:util';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const runtime=path.resolve(here,'../runtime');
 const version=JSON.parse(readFileSync(path.join(here,'../package.json'),'utf8')).version;
@@ -25,6 +26,7 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
   kvm          KVM/libvirt control and Packer OS/post-install setup on Ubuntu
   library      Reviewed RPA search/replay; VAMP_RPA_REGISTRY selects saved RPAs
   remote       KVM/VirtualBox host MCP; pass --backend kvm or --backend virtualbox
+  proxy        Connect to a remote Linux KVM MCP server over SSH; pass --host
   podman       Legacy standalone container server; no separate registration needed
   assets install <archive> [sha256]  Verify and install an offline provisioning archive
   assets download [sha256]           Verify and cache provisioning assets from this release
@@ -32,6 +34,21 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
 Python: RPA_HOST_PYTHON (defaults to python3, or python on Windows).
 Remote controls the host running this process; use SSH to run it on another host.
 No VM, OS, hypervisor, Python environment or Vault is installed automatically.`);
+} else if (command==='proxy') {
+  try {
+    const {values}=parseArgs({args,options:{
+      host:{type:'string'}, port:{type:'string'}, user:{type:'string'}, key:{type:'string'},
+      backend:{type:'string'}, 'libvirt-uri':{type:'string'}, node:{type:'string'},
+    }});
+    const {proxyRemoteStdio}=await import('../runtime/backends/remote_ssh/client.mjs');
+    process.exitCode=await proxyRemoteStdio({
+      host:values.host, port:values.port, username:values.user, privateKeyPath:values.key,
+      backend:values.backend, libvirtUri:values['libvirt-uri'], remoteNodePath:values.node,
+    });
+  } catch(error) {
+    console.error(`vamp-mcp proxy: ${error.message}`);
+    process.exitCode=1;
+  }
 } else if (command==='assets') {
   try {
     const [operation, first, second]=args;

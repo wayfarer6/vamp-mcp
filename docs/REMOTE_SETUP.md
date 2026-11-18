@@ -37,6 +37,12 @@ the VirtualBox remote server with an explicit PowerShell SSH command; see
 [the Windows lab setup](REMOTE_PDF_VALIDATION.md). WSL does not establish native
 Windows VirtualBox SDK support by itself.
 
+After installing the remote server, a standalone MCP client can use
+`vamp-mcp proxy --host lab.example --user dev` as its stdio command. Use
+`--port`, `--key`, `--node`, or `--libvirt-uri` to match the SSH host. When SSH
+disconnects, the proxy checks the same host once and reports
+`remote_session_lost` on stderr. The MCP client starts a new session to continue.
+
 KVM guests need a graphics device for screenshots and an absolute pointing
 device (USB tablet) for clicks. Desktops created by VAMP already have both.
 

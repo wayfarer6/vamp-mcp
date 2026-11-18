@@ -332,3 +332,37 @@ export function remoteStdioDefinition(config, { version = '0.1.7' } = {}) {
     label: `VAMP Remote (SSH) · ${remoteTarget(normalized)}`,
   };
 }
+
+/** Forward MCP bytes unchanged. A broken session must be initialized again by its client. */
+export async function proxyRemoteStdio(config, { input = process.stdin, output = process.stdout, diagnostic = process.stderr, spawnImpl = spawn } = {}) {
+  const normalized = normalizeRemoteConfig(config);
+  if (normalized.backend !== 'kvm') throw new Error('The remote proxy requires a Linux KVM host.');
+  const child = spawnImpl('ssh', sshArgs(normalized, remoteMcpCommand(normalized)), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  let ended = input.readableEnded;
+  const onEnd = () => { ended = true; };
+  input.once('end', onEnd);
+  child.stdin.on('error', () => {});
+  child.stdout.pipe(output, { end: false });
+  child.stderr.resume();
+  const closed = new Promise((resolve, reject) => {
+    child.once('error', reject);
+    child.once('close', resolve);
+  });
+  input.pipe(child.stdin);
+  try {
+    await closed;
+  } finally {
+    input.unpipe(child.stdin);
+    input.removeListener('end', onEnd);
+    input.pause();
+  }
+  if (ended) return 0;
+  const retry = new RemoteSshClient(normalized, { spawnImpl });
+  try {
+    await retry.exec(`exec ${quote(normalized.remoteNodePath)} ${remoteFile('server.mjs')} --version`, { timeoutMs: 15000 });
+  } catch {
+    // The original MCP session is lost even if the remote host is reachable again.
+  }
+  diagnostic.write('remote_session_lost: Start a new MCP session to reconnect. Pending requests were not replayed.\n');
+  return 1;
+}
