@@ -51,6 +51,11 @@ noVNC/websockify service already listening on the Linux host at `127.0.0.1:6080`
 Connect once over SSH and verify the host key before opening the viewer. Closing
 the viewer closes its tunnel. The screenshot viewer does not enable forwarding.
 
+If the Linux host already runs the VAMP script server on `127.0.0.1:8421`,
+add `--verify-setup-server` to `vamp-mcp bootstrap` to check `/healthz` over a
+temporary SSH tunnel. The check closes its tunnel before returning. This checks
+host access from the client. Guest installers use their configured guest network.
+
 KVM guests need a graphics device for screenshots and an absolute pointing
 device (USB tablet) for clicks. Desktops created by VAMP already have both.
 

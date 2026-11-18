@@ -565,6 +565,30 @@ test('KVM bootstrap reports ready after the uploaded server lists desktops', asy
   assert.equal(responses.length, 0);
 });
 
+test('bootstrap closes the setup server tunnel after successful and failed health checks', async t => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  let payload = { status: 'ok', service: 'vamp-script-server', port: 8421 };
+  const server = require('node:http').createServer((request, response) => {
+    assert.equal(request.url, '/healthz');
+    response.end(JSON.stringify(payload));
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }));
+  client.upload = async () => ({ server_version: '0.3.5' });
+  client.list = async () => ({ count: 0 });
+  let closed = 0;
+  client.openForward = async port => {
+    assert.equal(port, 8421);
+    return { localPort: server.address().port, dispose: () => { closed++; } };
+  };
+  const options = { verifySetupServer: true };
+  assert.equal((await client.bootstrap(__filename, options)).status, 'ready');
+  payload = { status: 'ok', service: 'unrelated' };
+  await assert.rejects(client.bootstrap(__filename, options), /healthy VAMP script server/);
+  assert.equal(closed, 2);
+});
+
 test('a truncated upload leaves the installed server intact', {skip:process.platform==='win32' && !process.env.VAMP_TEST_POSIX_SHELL}, async t => {
   const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-upload-'));

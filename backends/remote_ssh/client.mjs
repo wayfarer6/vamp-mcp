@@ -324,10 +324,24 @@ export class RemoteSshClient {
     return this.call('remote_env_check');
   }
 
-  async bootstrap(serverFile) {
+  async bootstrap(serverFile, { verifySetupServer = false } = {}) {
     if (this.config.backend !== 'kvm') throw new Error('Remote bootstrap requires a Linux KVM host.');
     const upload = await this.upload({ serverFile, checkLibvirt: true });
     const desktops = await this.list();
+    if (verifySetupServer) {
+      const tunnel = await this.openForward(8421);
+      try {
+        const response = await fetch(`http://127.0.0.1:${tunnel.localPort}/healthz`, {
+          redirect: 'error', signal: AbortSignal.timeout(5000),
+        });
+        const health = response.ok ? await response.json() : null;
+        if (health?.status !== 'ok' || health.service !== 'vamp-script-server' || health.port !== 8421) {
+          throw new RemoteSshError('The forwarded port did not report a healthy VAMP script server.');
+        }
+      } finally {
+        tunnel.dispose();
+      }
+    }
     return { status: 'ready', server_version: upload.server_version, desktop_count: desktops.count };
   }
 

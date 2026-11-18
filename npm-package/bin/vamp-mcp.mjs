@@ -40,6 +40,7 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     const {values}=parseArgs({args,options:{
       host:{type:'string'}, port:{type:'string'}, user:{type:'string'}, key:{type:'string'},
       backend:{type:'string'}, 'libvirt-uri':{type:'string'}, node:{type:'string'},
+      ...(command==='bootstrap' ? {'verify-setup-server':{type:'boolean'}} : {}),
     }});
     const {proxyRemoteStdio,RemoteSshClient,normalizeRemoteConfig}=await import('../runtime/backends/remote_ssh/client.mjs');
     const config={
@@ -48,7 +49,7 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     };
     if (command==='bootstrap') {
       const client=new RemoteSshClient(normalizeRemoteConfig(config));
-      const result=await client.bootstrap(path.join(runtime,'backends/remote_ssh/server.mjs'));
+      const result=await client.bootstrap(path.join(runtime,'backends/remote_ssh/server.mjs'), { verifySetupServer: values['verify-setup-server'] });
       console.log(JSON.stringify(result));
     } else {
       process.exitCode=await proxyRemoteStdio(config);
