@@ -201,6 +201,29 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
     return result;
   }
 
+  async function exportMcpConfig() {
+    const normalized = requireConfigured();
+    const definition = remoteModule().remoteStdioDefinition(normalized);
+    const fragment = { mcpServers: { 'vamp-remote': { command: definition.command, args: definition.args } } };
+    const file = await vscode.window.showSaveDialog({
+      title: 'Export MCP config for Claude Desktop or Cursor',
+      defaultUri: vscode.Uri.file(path.join(require('node:os').homedir(), 'vamp-remote-connect.json')),
+      filters: { JSON: ['json'] },
+    });
+    if (!file) return;
+    try {
+      await fs.promises.writeFile(file.fsPath, JSON.stringify(fragment, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+    } catch (error) {
+      if (error.code === 'EEXIST') throw new Error('Choose a new file name. The existing MCP configuration was preserved.');
+      throw error;
+    }
+    const action = await vscode.window.showInformationMessage('MCP configuration exported.', 'Verify');
+    if (action === 'Verify') {
+      const result = await clientFor(normalized).verifyStdio();
+      vscode.window.showInformationMessage(`VAMP Remote reported ${result.toolCount} MCP tools.`);
+    }
+  }
+
   async function pickVM({ runningOnly = true, title } = {}) {
     const result = await listVMs();
     const rows = (result.vms || []).filter(vm => !runningOnly || ['running', 'paused'].includes(vm.state));
@@ -342,6 +365,7 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
 
   const commands = {
     'vamp.remote.setupEnvironment': () => setupRemote(),
+    'vamp.remote.exportMcpConfig': () => exportMcpConfig(),
     'vamp.remote.verifyEnvironment': () => verify(),
     'vamp.remote.listVMs': async () => {
       const result = await listVMs();

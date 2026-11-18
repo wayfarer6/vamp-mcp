@@ -14,6 +14,18 @@ const load = async name => import(pathToFileURL(path.join(repo, 'backends/remote
 const VM_A = '11111111-2222-3333-4444-555555555555';
 const VM_B = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
+test('verify uses the exported SSH command and counts its MCP tool results', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig, remoteStdioDefinition } = await load('client.mjs');
+  const config = normalizeRemoteConfig({ host: 'lab-host.local' });
+  const client = new RemoteSshClient(config);
+  client.exec = async (command, { stdinText }) => {
+    assert.equal(command, remoteStdioDefinition(config).args.at(-1));
+    assert.deepEqual(stdinText.trim().split('\n').map(line => JSON.parse(line).method), ['initialize', 'notifications/initialized', 'tools/list']);
+    return { code: 0, stdout: '{"id":1,"result":{"serverInfo":{"version":"test"}}}\n{"id":2,"result":{"tools":[{},{}]}}\n' };
+  };
+  assert.deepEqual(await client.verifyStdio(), { toolCount: 2, serverVersion: 'test' });
+});
+
 test('stdio proxy drains stdin and preserves SSH failure at EOF without reconnecting', async () => {
   const { proxyRemoteStdio } = await load('client.mjs');
   for (const code of [0, 255]) {

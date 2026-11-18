@@ -318,6 +318,26 @@ export class RemoteSshClient {
     return { status: 'ready', server_version: upload.server_version, desktop_count: desktops.count };
   }
 
+  async verifyStdio() {
+    const requests = [
+      { id: 1, method: 'initialize', params: { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'vamp-verify', version: '1' } } },
+      { method: 'notifications/initialized' },
+      { id: 2, method: 'tools/list' },
+    ];
+    const stdinText = requests.map(request => JSON.stringify({ jsonrpc: '2.0', ...request })).join('\n') + '\n';
+    const result = await this.exec(remoteMcpCommand(this.config), { stdinText, timeoutMs: 30000 });
+    if (result.code !== 0) throw new RemoteSshError(friendly({ code: result.code }, this.config, result.stderr), { code: result.code });
+    let initialized;
+    let tools;
+    for (const line of result.stdout.trim().split(/\r?\n/)) {
+      const response = parseToolOutput(line);
+      if (response?.id === 1) initialized = response.result?.serverInfo;
+      if (response?.id === 2) tools = response.result?.tools;
+    }
+    if (!initialized || !Array.isArray(tools)) throw new RemoteSshError('Remote MCP did not complete initialization and tool discovery.');
+    return { toolCount: tools.length, serverVersion: initialized.version };
+  }
+
   async status(vm) {
     return this.call('remote_vm_status', { vm });
   }
