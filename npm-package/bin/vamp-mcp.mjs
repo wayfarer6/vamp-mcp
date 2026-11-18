@@ -52,7 +52,7 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
       const result=await client.bootstrap(path.join(runtime,'backends/remote_ssh/server.mjs'), { verifySetupServer: values['verify-setup-server'] });
       console.log(JSON.stringify(result));
     } else {
-      process.exitCode=await proxyRemoteStdio(config);
+      process.exitCode=await proxyRemoteStdio(config, { expectedVersion:version });
     }
   } catch(error) {
     console.error(`vamp-mcp ${command}: ${error.message}`);

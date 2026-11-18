@@ -467,7 +467,7 @@ export function remoteStdioDefinition(config, { version = '0.1.7' } = {}) {
 }
 
 /** Forward MCP bytes unchanged. A broken session must be initialized again by its client. */
-export async function proxyRemoteStdio(config, { input = process.stdin, output = process.stdout, diagnostic = process.stderr, spawnImpl = spawn } = {}) {
+export async function proxyRemoteStdio(config, { input = process.stdin, output = process.stdout, diagnostic = process.stderr, spawnImpl = spawn, expectedVersion } = {}) {
   const normalized = normalizeRemoteConfig(config);
   if (normalized.backend !== 'kvm') throw new Error('The remote proxy requires a Linux KVM host.');
   const child = spawnImpl('ssh', sshArgs(normalized, remoteMcpCommand(normalized)), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
@@ -481,6 +481,27 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
   if (input.readableEnded) onEnd();
   input.once('end', onEnd);
   child.stdin.on('error', () => {});
+  if (expectedVersion) {
+    let pending = '';
+    const inspectHandshake = chunk => {
+      pending += chunk.toString('utf8');
+      const lines = pending.split('\n');
+      pending = lines.pop();
+      for (const line of lines) {
+        const setup = parseToolOutput(line)?.result;
+        if (!setup?.protocolVersion || typeof setup.serverInfo?.version !== 'string') continue;
+        child.stdout.off('data', inspectHandshake);
+        if (setup.serverInfo.version !== expectedVersion) {
+          const user = normalized.username ? ` --user ${normalized.username}` : '';
+          const port = normalized.port === 22 ? '' : ` --port ${normalized.port}`;
+          diagnostic.write(`Remote VAMP version differs from local VAMP ${expectedVersion}. Run vamp-mcp bootstrap --host ${normalized.host}${user}${port} with the same SSH options.\n`);
+        }
+        return;
+      }
+      if (pending.length > 65536) child.stdout.off('data', inspectHandshake);
+    };
+    child.stdout.on('data', inspectHandshake);
+  }
   child.stdout.pipe(output, { end: false });
   child.stderr.resume();
   const closed = new Promise((resolve, reject) => {

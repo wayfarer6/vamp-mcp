@@ -108,9 +108,11 @@ test('stdio proxy preserves bytes and attempts one SSH probe after session loss'
   const input = new PassThrough();
   const output = new PassThrough();
   const diagnostic = new PassThrough();
+  const forwarded = [];
+  output.on('data', chunk => forwarded.push(chunk.toString()));
   const attempts = [];
   const result = proxyRemoteStdio({ host: 'lab-host.local' }, {
-    input, output, diagnostic,
+    input, output, diagnostic, expectedVersion: '0.3.5',
     spawnImpl: (command, args) => {
       assert.equal(command, 'ssh');
       const child = new (require('node:events').EventEmitter)();
@@ -127,7 +129,14 @@ test('stdio proxy preserves bytes and attempts one SSH probe after session loss'
   input.write(frame);
   assert.equal(child.stdin.read().toString(), frame);
   child.stdout.write(frame);
-  assert.equal(output.read().toString(), frame);
+  assert.equal(forwarded.join(''), frame);
+  const handshake = '{"id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"version":"0.3.4"}}}\n';
+  child.stdout.write(handshake.slice(0, 15));
+  child.stdout.write(handshake.slice(15));
+  child.stdout.write(handshake);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(forwarded.join(''), frame + handshake.repeat(2));
+  assert.match(diagnostic.read().toString(), /^Remote VAMP version differs .*vamp-mcp bootstrap --host lab-host\.local[^\n]*\n$/);
   child.emit('close', 255);
   assert.equal(await result, 1);
   assert.equal(attempts.length, 2);
