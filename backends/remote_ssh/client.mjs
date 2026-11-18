@@ -224,7 +224,7 @@ export class RemoteSshClient {
   }
 
   /** Upload this extension's remote server file and setup script to the remote host. */
-  async upload({ serverFile, setupScript } = {}) {
+  async upload({ serverFile, setupScript, checkLibvirt = false } = {}) {
     if (!serverFile) throw new Error('The bundled remote server file is missing.');
     if (this.config.backend === 'kvm') {
       const probePlatform = async command => {
@@ -247,6 +247,18 @@ export class RemoteSshClient {
       }
     }
     await this.probe();
+    if (checkLibvirt) {
+      const result = await this.exec(`virsh -r -c ${quote(this.config.libvirtUri)} list --name`, { timeoutMs: 30000 });
+      if (result.code !== 0) {
+        let message = result.stderr.trim() || 'Read-only libvirt probe failed.';
+        if (result.code === 255) {
+          message = friendly({ code: result.code }, this.config, result.stderr);
+        } else if (this.config.libvirtUri === 'qemu:///system' && /permission denied|not authorized|authentication/i.test(message)) {
+          message += '\nIf this SSH account lacks libvirt access, have an administrator run `sudo usermod -aG libvirt "$(id -un)"` from the affected account, then reconnect.';
+        }
+        throw new RemoteSshError(message, { code: result.code, stderr: result.stderr });
+      }
+    }
     const bytes = await readFile(serverFile);
     if (!bytes.length) throw new Error('The bundled remote server file is empty.');
     const uploadFile = (name, contents, mode) => {
@@ -291,6 +303,13 @@ export class RemoteSshClient {
 
   async envCheck() {
     return this.call('remote_env_check');
+  }
+
+  async bootstrap(serverFile) {
+    if (this.config.backend !== 'kvm') throw new Error('Remote bootstrap requires a Linux KVM host.');
+    const upload = await this.upload({ serverFile, checkLibvirt: true });
+    const desktops = await this.list();
+    return { status: 'ready', server_version: upload.server_version, desktop_count: desktops.count };
   }
 
   async status(vm) {

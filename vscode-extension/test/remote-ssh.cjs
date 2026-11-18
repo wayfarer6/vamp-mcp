@@ -471,6 +471,21 @@ test('KVM upload reports SSH loss during OS detection', async () => {
   }
 });
 
+test('KVM bootstrap checks read-only libvirt access before uploading', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }));
+  const commands = [];
+  client.exec = async command => {
+    commands.push(command);
+    if (command === 'uname -s') return { code: 0, stdout: 'Linux\n' };
+    if (command.endsWith('--version')) return { code: 0, stdout: 'v22.14.0\n' };
+    return { code: 1, stderr: 'Permission denied' };
+  };
+  await assert.rejects(client.bootstrap(__filename), /usermod -aG libvirt/);
+  assert.equal(commands.length, 3);
+  assert.equal(commands[2], "virsh -r -c 'qemu:///system' list --name");
+});
+
 test('a truncated upload leaves the installed server intact', {skip:process.platform==='win32' && !process.env.VAMP_TEST_POSIX_SHELL}, async t => {
   const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-upload-'));

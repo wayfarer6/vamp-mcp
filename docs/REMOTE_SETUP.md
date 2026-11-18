@@ -37,7 +37,10 @@ the VirtualBox remote server with an explicit PowerShell SSH command; see
 [the Windows lab setup](REMOTE_PDF_VALIDATION.md). WSL does not establish native
 Windows VirtualBox SDK support by itself.
 
-After installing the remote server, a standalone MCP client can use
+Run `vamp-mcp bootstrap --host lab.example --user dev` to check Node.js and
+read-only libvirt access, upload the remote server, and verify that it can list
+desktops. Bootstrap runs without `sudo` and assumes the host dependencies are
+already installed. After that, a standalone MCP client can use
 `vamp-mcp proxy --host lab.example --user dev` as its stdio command. Use
 `--port`, `--key`, `--node`, or `--libvirt-uri` to match the SSH host. When SSH
 disconnects, the proxy checks the same host once and reports

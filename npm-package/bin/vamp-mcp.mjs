@@ -27,6 +27,7 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
   library      Reviewed RPA search/replay; VAMP_RPA_REGISTRY selects saved RPAs
   remote       KVM/VirtualBox host MCP; pass --backend kvm or --backend virtualbox
   proxy        Connect to a remote Linux KVM MCP server over SSH; pass --host
+  bootstrap    Check Linux KVM access and upload the remote server; pass --host
   podman       Legacy standalone container server; no separate registration needed
   assets install <archive> [sha256]  Verify and install an offline provisioning archive
   assets download [sha256]           Verify and cache provisioning assets from this release
@@ -34,19 +35,26 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
 Python: RPA_HOST_PYTHON (defaults to python3, or python on Windows).
 Remote controls the host running this process; use SSH to run it on another host.
 No VM, OS, hypervisor, Python environment or Vault is installed automatically.`);
-} else if (command==='proxy') {
+} else if (command==='proxy' || command==='bootstrap') {
   try {
     const {values}=parseArgs({args,options:{
       host:{type:'string'}, port:{type:'string'}, user:{type:'string'}, key:{type:'string'},
       backend:{type:'string'}, 'libvirt-uri':{type:'string'}, node:{type:'string'},
     }});
-    const {proxyRemoteStdio}=await import('../runtime/backends/remote_ssh/client.mjs');
-    process.exitCode=await proxyRemoteStdio({
+    const {proxyRemoteStdio,RemoteSshClient,normalizeRemoteConfig}=await import('../runtime/backends/remote_ssh/client.mjs');
+    const config={
       host:values.host, port:values.port, username:values.user, privateKeyPath:values.key,
       backend:values.backend, libvirtUri:values['libvirt-uri'], remoteNodePath:values.node,
-    });
+    };
+    if (command==='bootstrap') {
+      const client=new RemoteSshClient(normalizeRemoteConfig(config));
+      const result=await client.bootstrap(path.join(runtime,'backends/remote_ssh/server.mjs'));
+      console.log(JSON.stringify(result));
+    } else {
+      process.exitCode=await proxyRemoteStdio(config);
+    }
   } catch(error) {
-    console.error(`vamp-mcp proxy: ${error.message}`);
+    console.error(`vamp-mcp ${command}: ${error.message}`);
     process.exitCode=1;
   }
 } else if (command==='assets') {
