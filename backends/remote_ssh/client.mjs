@@ -338,8 +338,14 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
   const normalized = normalizeRemoteConfig(config);
   if (normalized.backend !== 'kvm') throw new Error('The remote proxy requires a Linux KVM host.');
   const child = spawnImpl('ssh', sshArgs(normalized, remoteMcpCommand(normalized)), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  let ended = input.readableEnded;
-  const onEnd = () => { ended = true; };
+  let ended = false;
+  let shutdownTimer;
+  const onEnd = () => {
+    ended = true;
+    shutdownTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
+    shutdownTimer.unref();
+  };
+  if (input.readableEnded) onEnd();
   input.once('end', onEnd);
   child.stdin.on('error', () => {});
   child.stdout.pipe(output, { end: false });
@@ -349,14 +355,20 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
     child.once('close', resolve);
   });
   input.pipe(child.stdin);
+  let code;
   try {
-    await closed;
+    code = await closed;
   } finally {
+    clearTimeout(shutdownTimer);
     input.unpipe(child.stdin);
     input.removeListener('end', onEnd);
     input.pause();
   }
-  if (ended) return 0;
+  if (ended) {
+    if (code === 0) return 0;
+    diagnostic.write('remote_session_lost: SSH closed without completing the MCP session.\n');
+    return 1;
+  }
   const retry = new RemoteSshClient(normalized, { spawnImpl });
   try {
     await retry.exec(`exec ${quote(normalized.remoteNodePath)} ${remoteFile('server.mjs')} --version`, { timeoutMs: 15000 });

@@ -14,6 +14,32 @@ const load = async name => import(pathToFileURL(path.join(repo, 'backends/remote
 const VM_A = '11111111-2222-3333-4444-555555555555';
 const VM_B = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
+test('stdio proxy drains stdin and preserves SSH failure at EOF without reconnecting', async () => {
+  const { proxyRemoteStdio } = await load('client.mjs');
+  for (const code of [0, 255]) {
+    const input = new PassThrough();
+    const diagnostic = new PassThrough();
+    let attempts = 0;
+    const result = proxyRemoteStdio({ host: 'lab-host.local' }, {
+      input, diagnostic, output: new PassThrough(),
+      spawnImpl: () => {
+        attempts++;
+        const child = new (require('node:events').EventEmitter)();
+        child.stdin = new PassThrough();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        child.stdin.once('finish', () => child.emit('close', code));
+        return child;
+      },
+    });
+    input.end();
+    assert.equal(await result, code === 0 ? 0 : 1);
+    assert.equal(attempts, 1);
+    if (code !== 0) assert.match(diagnostic.read().toString(), /^remote_session_lost:/);
+    else assert.equal(diagnostic.read(), null);
+  }
+});
+
 test('stdio proxy preserves bytes and attempts one SSH probe after session loss', async () => {
   const { proxyRemoteStdio } = await load('client.mjs');
   const input = new PassThrough();
