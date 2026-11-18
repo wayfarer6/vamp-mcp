@@ -74,6 +74,18 @@ export function sshArgs(config, command, { requireKnownHost = false } = {}) {
   return args;
 }
 
+export function sshForwardArgs(config, localPort, remotePort) {
+  if (!isConfigured(config)) throw new Error('Remote host is not configured.');
+  for (const port of [localPort, remotePort]) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Forwarding ports must be integers between 1 and 65535.');
+  }
+  const prefix = sshArgs(config, '', { requireKnownHost: true }).slice(0, -3);
+  return [
+    '-F', 'none', ...prefix, '-N', '-o', 'ExitOnForwardFailure=yes', '-o', 'GatewayPorts=no',
+    '-L', `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`, '--', remoteTarget(config),
+  ];
+}
+
 const REMOTE_SEGMENT = /^[A-Za-z0-9._-]+$/;
 export const REMOTE_DIR = '"$HOME/.vamp/remote"';
 
@@ -336,6 +348,18 @@ export class RemoteSshClient {
     }
     if (!initialized || !Array.isArray(tools)) throw new RemoteSshError('Remote MCP did not complete initialization and tool discovery.');
     return { toolCount: tools.length, serverVersion: initialized.version };
+  }
+
+  async checkForwardListener(port) {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid remote forwarding port.');
+    const command = `LC_ALL=C ss -H -ltn ${quote(`sport = :${port}`)}`;
+    const result = await this.exec(command, { timeoutMs: 10000, requireKnownHost: true });
+    const listeners = result.stdout.trim().split(/\r?\n/).filter(Boolean).map(line => line.trim().split(/\s+/)[3]);
+    const ipv4 = `127.0.0.1:${port}`;
+    const ipv6 = `[::1]:${port}`;
+    if (result.code !== 0 || !listeners.includes(ipv4) || listeners.some(listener => listener !== ipv4 && listener !== ipv6)) {
+      throw new RemoteSshError('Remote forwarding requires a listener on 127.0.0.1 with no non-loopback listener on the same port.', { code: 'remote_listener_not_private' });
+    }
   }
 
   async status(vm) {

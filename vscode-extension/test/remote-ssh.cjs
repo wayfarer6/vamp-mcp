@@ -14,6 +14,32 @@ const load = async name => import(pathToFileURL(path.join(repo, 'backends/remote
 const VM_A = '11111111-2222-3333-4444-555555555555';
 const VM_B = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
+test('SSH forwarding accepts only explicit private listeners and binds locally to loopback', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig, sshForwardArgs } = await load('client.mjs');
+  const config = normalizeRemoteConfig({ host: 'lab-host.local', username: 'dev', port: 2222 });
+  const args = sshForwardArgs(config, 37591, 6080);
+  assert.deepEqual(args.slice(0, 2), ['-F', 'none']);
+  assert.ok(args.includes('StrictHostKeyChecking=yes'));
+  assert.ok(args.includes('ExitOnForwardFailure=yes'));
+  assert.ok(args.includes('GatewayPorts=no'));
+  assert.deepEqual(args.slice(-4), ['-L', '127.0.0.1:37591:127.0.0.1:6080', '--', 'dev@lab-host.local']);
+  assert.throws(() => sshForwardArgs(config, 0, 6080), /Forwarding ports/);
+
+  const client = new RemoteSshClient(config);
+  const loopback = 'LISTEN 0 128 127.0.0.1:6080 0.0.0.0:*\n';
+  let stdout = loopback;
+  client.exec = async (command, options) => {
+    assert.equal(command, "LC_ALL=C ss -H -ltn 'sport = :6080'");
+    assert.equal(options.requireKnownHost, true);
+    return { code: 0, stdout };
+  };
+  await client.checkForwardListener(6080);
+  for (const unsafe of ['', loopback + 'LISTEN 0 128 [::]:6080 [::]:*\n']) {
+    stdout = unsafe;
+    await assert.rejects(client.checkForwardListener(6080), { code: 'remote_listener_not_private' });
+  }
+});
+
 test('verify uses the exported SSH command and counts its MCP tool results', async () => {
   const { RemoteSshClient, normalizeRemoteConfig, remoteStdioDefinition } = await load('client.mjs');
   const config = normalizeRemoteConfig({ host: 'lab-host.local' });
