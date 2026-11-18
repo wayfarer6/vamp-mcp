@@ -29,7 +29,10 @@ VS Code / AI agent            SSH (22, keys only)          Remote host
 | KVM: libvirt + `virsh` (+ `virt-install`, `qemu-img` to create desktops) | hypervisor control | `remote_env_check` |
 | VirtualBox: `VBoxManage` | hypervisor control | `remote_env_check` |
 
-The extension automatic uploader expects a POSIX shell. Native Windows can run
+KVM automatic setup requires a Linux host. The uploader checks the host OS over
+SSH before writing files and reports `remote_host_unsupported_os` when it cannot
+establish that the host is Linux. The extension automatic uploader expects a
+POSIX shell. Native Windows can run
 the VirtualBox remote server with an explicit PowerShell SSH command; see
 [the Windows lab setup](REMOTE_PDF_VALIDATION.md). WSL does not establish native
 Windows VirtualBox SDK support by itself.

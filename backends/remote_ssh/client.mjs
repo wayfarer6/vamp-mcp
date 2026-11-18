@@ -226,6 +226,23 @@ export class RemoteSshClient {
   /** Upload this extension's remote server file and setup script to the remote host. */
   async upload({ serverFile, setupScript } = {}) {
     if (!serverFile) throw new Error('The bundled remote server file is missing.');
+    if (this.config.backend === 'kvm') {
+      const options = { timeoutMs: 60000 };
+      const unix = await this.exec('uname -s', options);
+      if (unix.code === 255) {
+        throw new RemoteSshError(friendly({ code: unix.code }, this.config, unix.stderr), { code: unix.code, stderr: unix.stderr });
+      }
+      let platform = unix.code === 0 ? unix.stdout.trim() : '';
+      if (!platform) {
+        const windows = await this.exec('cmd.exe /d /c ver', options);
+        if (windows.code === 0 && /Windows/i.test(windows.stdout)) platform = 'Windows';
+      }
+      if (platform !== 'Linux') {
+        throw new RemoteSshError(`Remote KVM setup requires a Linux host. Detected: ${platform || 'unknown'}.`, {
+          code: 'remote_host_unsupported_os',
+        });
+      }
+    }
     await this.probe();
     const bytes = await readFile(serverFile);
     if (!bytes.length) throw new Error('The bundled remote server file is empty.');

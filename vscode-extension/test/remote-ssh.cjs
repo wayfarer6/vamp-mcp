@@ -349,10 +349,12 @@ test('upload refuses a host without Node.js and setup runs the uploaded script',
     return child;
   };
   const blocked = new client.RemoteSshClient(config, { spawnImpl: spawnReturning('', 127) });
+  blocked.exec = async command => command === 'uname -s'
+    ? { code: 0, stdout: 'Linux\n' } : { code: 127, stdout: '', stderr: '' };
   await assert.rejects(() => blocked.upload({ serverFile: __filename }), /Node\.js was not found at "node"/);
 
   const commands = [];
-  const responses = ['v22.14.0\n', '', '', '0.1.7\n'];
+  const responses = ['Linux\n', 'v22.14.0\n', '', '', '0.1.7\n'];
   let step = 0;
   const spy = new client.RemoteSshClient(config, {
     spawnImpl: (command, args) => {
@@ -364,8 +366,9 @@ test('upload refuses a host without Node.js and setup runs the uploaded script',
   });
   const result = await spy.upload({ serverFile: __filename, setupScript: __filename });
   assert.equal(result.server_version, '0.1.7');
-  assert.match(commands[1], /mktemp .*server\.mjs.*cat > "\$tmp".*wc -c.*chmod 600.*mv -f "\$tmp" .*server\.mjs/);
-  assert.match(commands[2], /mktemp .*remote_host_setup\.sh.*cat > "\$tmp".*wc -c.*chmod 700.*mv -f "\$tmp" .*remote_host_setup\.sh/);
+  assert.equal(commands[0], 'uname -s');
+  assert.match(commands[2], /mktemp .*server\.mjs.*cat > "\$tmp".*wc -c.*chmod 600.*mv -f "\$tmp" .*server\.mjs/);
+  assert.match(commands[3], /mktemp .*remote_host_setup\.sh.*cat > "\$tmp".*wc -c.*chmod 700.*mv -f "\$tmp" .*remote_host_setup\.sh/);
 
   const setupCommands = [];
   const runner = new client.RemoteSshClient(config, {
@@ -380,6 +383,23 @@ test('upload refuses a host without Node.js and setup runs the uploaded script',
   assert.ok(setupCommands.at(-1).includes("'/opt/vamp-mcp'"));
 });
 
+test('KVM upload rejects macOS and Windows before writing files', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  for (const platform of ['Darwin', 'Windows']) {
+    const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }));
+    const commands = [];
+    client.exec = async command => {
+      commands.push(command);
+      if (command === 'uname -s') return platform === 'Darwin'
+        ? { code: 0, stdout: 'Darwin\n' } : { code: 127, stdout: '' };
+      assert.equal(command, 'cmd.exe /d /c ver');
+      return { code: 0, stdout: 'Microsoft Windows [Version 10.0]\n' };
+    };
+    await assert.rejects(client.upload({ serverFile: __filename }), { code: 'remote_host_unsupported_os' });
+    assert.deepEqual(commands, platform === 'Darwin' ? ['uname -s'] : ['uname -s', 'cmd.exe /d /c ver']);
+  }
+});
+
 test('a truncated upload leaves the installed server intact', {skip:process.platform==='win32' && !process.env.VAMP_TEST_POSIX_SHELL}, async t => {
   const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-upload-'));
@@ -392,6 +412,7 @@ test('a truncated upload leaves the installed server intact', {skip:process.plat
   const commands = [];
   client.exec = async (command, { stdinText } = {}) => {
     commands.push(command);
+    if (command === 'uname -s') return { code: 0, stdout: 'Linux\n', stderr: '' };
     if (!stdinText) return { code: 0, stdout: process.version, stderr: '' };
     const shell = process.env.VAMP_TEST_POSIX_SHELL || 'sh';
     const child = spawn(shell, ['-c', command], { env: { ...process.env, HOME: home.replaceAll('\\', '/') } });
@@ -402,7 +423,7 @@ test('a truncated upload leaves the installed server intact', {skip:process.plat
   await assert.rejects(client.upload({ serverFile: __filename }), /Could not upload/);
   assert.equal(fs.readFileSync(installed, 'utf8'), 'previous server\n');
   assert.deepEqual(fs.readdirSync(directory), ['server.mjs']);
-  assert.equal(commands.length, 2);
+  assert.equal(commands.length, 3);
 });
 
 test('the SSH client quotes arguments and maps connection failures to plain language', async () => {
