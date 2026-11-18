@@ -94,7 +94,7 @@ Packer guests fetch post-install resources from their build host, not from a uni
 With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from the [GitHub Releases page](https://github.com/wayfarer6/vamp-mcp/releases). Verify the SHA-256 hashes against the release notes, then install from the downloaded files:
 
 ```bash
-npm install -g ./vamp-mcp-0.3.4.tgz ./vamp-mcp-vault-0.1.10.tgz
+npm install -g ./vamp-mcp-0.3.5.tgz ./vamp-mcp-vault-0.1.11.tgz
 ```
 
 Register **VAMP MCP** with command `vamp-mcp` and no arguments, and **VAMP Vault** with command `vamp-mcp-vault` and no arguments. If the client cannot resolve these commands, use their full installed paths. Do not add separate Podman or hypervisor registrations. See [MCP registration](docs/MCP_REGISTRATION.md).

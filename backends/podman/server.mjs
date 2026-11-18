@@ -96,7 +96,7 @@ export function registerPodmanTools(server,{adapter=adapterModule.createPodmanAd
   return server;
 }
 export function createPodmanServer(options={}){
-  const server=new McpServer({name:'VAMP Podman Containers',version:'0.3.4'},{instructions:podmanInstructions});
+  const server=new McpServer({name:'VAMP Podman Containers',version:'0.3.5'},{instructions:podmanInstructions});
   return registerPodmanTools(server,options);
 }
 if(path.basename(path.dirname(process.argv[1]||''))==='podman'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
