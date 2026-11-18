@@ -254,7 +254,13 @@ export class RemoteSshClient {
         if (result.code === 255) {
           message = friendly({ code: result.code }, this.config, result.stderr);
         } else if (this.config.libvirtUri === 'qemu:///system' && /permission denied|not authorized|authentication/i.test(message)) {
-          message += '\nIf this SSH account lacks libvirt access, have an administrator run `sudo usermod -aG libvirt "$(id -un)"` from the affected account, then reconnect.';
+          const identity = this.config.username ? null : await this.exec('id -un', { timeoutMs: 10000 }).catch(() => null);
+          const login = this.config.username || (identity?.code === 0 ? identity.stdout.trim() : '');
+          if (USER_PATTERN.test(login)) {
+            message += `\nIf this account lacks libvirt group membership, have an administrator run \`sudo usermod -aG libvirt -- ${quote(login)}\` on the remote host, then reconnect.`;
+          } else {
+            message += '\nHave an administrator check libvirt permissions for the remote SSH account, then reconnect.';
+          }
         }
         throw new RemoteSshError(message, { code: result.code, stderr: result.stderr });
       }

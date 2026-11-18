@@ -473,7 +473,7 @@ test('KVM upload reports SSH loss during OS detection', async () => {
 
 test('KVM bootstrap checks read-only libvirt access before uploading', async () => {
   const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
-  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }));
+  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local', username: 'labuser' }));
   const commands = [];
   client.exec = async command => {
     commands.push(command);
@@ -481,9 +481,25 @@ test('KVM bootstrap checks read-only libvirt access before uploading', async () 
     if (command.endsWith('--version')) return { code: 0, stdout: 'v22.14.0\n' };
     return { code: 1, stderr: 'Permission denied' };
   };
-  await assert.rejects(client.bootstrap(__filename), /usermod -aG libvirt/);
+  await assert.rejects(client.bootstrap(__filename), /usermod -aG libvirt -- 'labuser'/);
   assert.equal(commands.length, 3);
   assert.equal(commands[2], "virsh -r -c 'qemu:///system' list --name");
+});
+
+test('KVM bootstrap reports ready after the uploaded server lists desktops', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }));
+  const commands = [];
+  const responses = ['Linux\n', 'v22.14.0\n', '', '', '0.3.5\n', '{"status":"ok","count":2}\n'];
+  client.exec = async command => {
+    commands.push(command);
+    return { code: 0, stdout: responses.shift(), stderr: '' };
+  };
+  assert.deepEqual(await client.bootstrap(__filename), { status: 'ready', server_version: '0.3.5', desktop_count: 2 });
+  assert.match(commands[3], /mv -f .*server\.mjs"$/);
+  assert.match(commands[4], /--version$/);
+  assert.match(commands[5], /--call 'remote_vm_list'/);
+  assert.equal(responses.length, 0);
 });
 
 test('a truncated upload leaves the installed server intact', {skip:process.platform==='win32' && !process.env.VAMP_TEST_POSIX_SHELL}, async t => {
