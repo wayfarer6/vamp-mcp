@@ -229,14 +229,19 @@ export class RemoteSshClient {
     await this.probe();
     const bytes = await readFile(serverFile);
     if (!bytes.length) throw new Error('The bundled remote server file is empty.');
-    const command = `umask 077 && mkdir -p ${REMOTE_DIR} && cat > ${remoteFile('server.mjs')} && chmod 600 ${remoteFile('server.mjs')}`;
-    const uploaded = await this.exec(command, { stdinText: bytes.toString('utf8'), timeoutMs: 120000 });
+    const uploadFile = (name, contents, mode) => {
+      const target = remoteFile(name);
+      const command = `umask 077 && mkdir -p ${REMOTE_DIR} && tmp=$(mktemp ${target}.XXXXXX) && `
+        + `trap 'rm -f "$tmp"' EXIT && cat > "$tmp" && test "$(wc -c < "$tmp")" -eq ${contents.length} `
+        + `&& chmod ${mode} "$tmp" && mv -f "$tmp" ${target}`;
+      return this.exec(command, { stdinText: contents, timeoutMs: 120000 });
+    };
+    const uploaded = await uploadFile('server.mjs', bytes, '600');
     if (uploaded.code !== 0) throw new RemoteSshError(`Could not upload the remote server: ${friendly({ code: uploaded.code }, this.config, uploaded.stderr)}`, { stderr: uploaded.stderr });
     let script = null;
     if (setupScript) {
       const setupBytes = await readFile(setupScript);
-      const setupCommand = `umask 077 && mkdir -p ${REMOTE_DIR} && cat > ${remoteFile('remote_host_setup.sh')} && chmod 700 ${remoteFile('remote_host_setup.sh')}`;
-      const result = await this.exec(setupCommand, { stdinText: setupBytes.toString('utf8'), timeoutMs: 120000 });
+      const result = await uploadFile('remote_host_setup.sh', setupBytes, '700');
       if (result.code === 0) script = remoteFile('remote_host_setup.sh');
     }
     const version = await this.exec(`exec ${quote(this.config.remoteNodePath)} ${remoteFile('server.mjs')} --version`, { timeoutMs: 60000 });

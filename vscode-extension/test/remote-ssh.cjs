@@ -364,8 +364,8 @@ test('upload refuses a host without Node.js and setup runs the uploaded script',
   });
   const result = await spy.upload({ serverFile: __filename, setupScript: __filename });
   assert.equal(result.server_version, '0.1.7');
-  assert.ok(commands.some(command => command.includes('cat > "$HOME/.vamp/remote/server.mjs"')), commands.join('\n'));
-  assert.ok(commands.some(command => command.includes('cat > "$HOME/.vamp/remote/remote_host_setup.sh"')));
+  assert.match(commands[1], /mktemp .*server\.mjs.*cat > "\$tmp".*wc -c.*chmod 600.*mv -f "\$tmp" .*server\.mjs/);
+  assert.match(commands[2], /mktemp .*remote_host_setup\.sh.*cat > "\$tmp".*wc -c.*chmod 700.*mv -f "\$tmp" .*remote_host_setup\.sh/);
 
   const setupCommands = [];
   const runner = new client.RemoteSshClient(config, {
@@ -378,6 +378,31 @@ test('upload refuses a host without Node.js and setup runs the uploaded script',
   assert.equal(setup.status, 'ok');
   assert.ok(setupCommands.at(-1).includes('remote_host_setup.sh'));
   assert.ok(setupCommands.at(-1).includes("'/opt/vamp-mcp'"));
+});
+
+test('a truncated upload leaves the installed server intact', {skip:process.platform==='win32' && !process.env.VAMP_TEST_POSIX_SHELL}, async t => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-upload-'));
+  t.after(() => fs.rmSync(home, { recursive: true, force: true }));
+  const directory = path.join(home, '.vamp', 'remote');
+  fs.mkdirSync(directory, { recursive: true });
+  const installed = path.join(directory, 'server.mjs');
+  fs.writeFileSync(installed, 'previous server\n');
+  const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local', username: 'dev' }));
+  const commands = [];
+  client.exec = async (command, { stdinText } = {}) => {
+    commands.push(command);
+    if (!stdinText) return { code: 0, stdout: process.version, stderr: '' };
+    const shell = process.env.VAMP_TEST_POSIX_SHELL || 'sh';
+    const child = spawn(shell, ['-c', command], { env: { ...process.env, HOME: home.replaceAll('\\', '/') } });
+    child.stdin.end(stdinText.subarray(0, 16));
+    const code = await new Promise(resolve => child.once('close', resolve));
+    return { code, stdout: '', stderr: '' };
+  };
+  await assert.rejects(client.upload({ serverFile: __filename }), /Could not upload/);
+  assert.equal(fs.readFileSync(installed, 'utf8'), 'previous server\n');
+  assert.deepEqual(fs.readdirSync(directory), ['server.mjs']);
+  assert.equal(commands.length, 2);
 });
 
 test('the SSH client quotes arguments and maps connection failures to plain language', async () => {
