@@ -1,14 +1,32 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 import { createInterface } from 'node:readline';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { runWithVault } from './vault-replay.mjs';
+import { remoteReplayEndpoint, runWithVault } from './vault-replay.mjs';
+
+test('remote replay discovers only an owner-private live socket descriptor', {skip:process.platform!=='linux'}, async t=>{
+  const directory=await mkdtemp(path.join(os.tmpdir(),'vamp-replay-endpoint-'));
+  const socketPath=path.join(directory,'bridge.sock');
+  const server=net.createServer();
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,resolve);});
+  t.after(async()=>{await new Promise(resolve=>server.close(resolve));await rm(directory,{recursive:true,force:true});});
+  await chmod(socketPath,0o600);
+  const file=path.join(directory,'vamp-vault-replay.json');
+  const endpoint={socketPath,token:'a'.repeat(64)};
+  await writeFile(file,JSON.stringify(endpoint),{mode:0o600});
+  assert.deepEqual(await remoteReplayEndpoint(directory),endpoint);
+  await chmod(file,0o644);
+  assert.equal(await remoteReplayEndpoint(directory),null);
+  await rm(file);
+  await symlink(socketPath,file);
+  assert.equal(await remoteReplayEndpoint(directory),null);
+});
 
 test('reviewed replay stops on denied delivery and resumes on a receipt', {timeout:15000}, async t=>{
   const root=await mkdtemp(path.join(os.tmpdir(),'vamp-replay-'));

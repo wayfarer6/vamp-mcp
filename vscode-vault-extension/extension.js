@@ -125,6 +125,7 @@ async function askPassword(prompt) {
 function startBridge(context, state, output) {
   const token = crypto.randomBytes(32).toString('hex');
   const replayToken = crypto.randomBytes(32).toString('hex');
+  const remoteReplayToken = crypto.randomBytes(32).toString('hex');
   const socketPath = bridgeSocketPath(context);
   const server = net.createServer(socket => {
     const lifetime=new AbortController();
@@ -144,9 +145,9 @@ function startBridge(context, state, output) {
         let request;
         try { request = JSON.parse(line); } catch { continue; }
         const reply = payload => { try { socket.write(`${JSON.stringify({ id: request.id, ...payload })}\n`); } catch {} };
-        const replay=request.token===replayToken && (
-          (['check-replay-destination','deliver-credential'].includes(request.op) && Boolean(request.params?.vmId)) ||
-          request.op==='mount-podman-workspace');
+        const replayOperation=['check-replay-destination','deliver-credential'].includes(request.op) && Boolean(request.params?.vmId);
+        const replay=(request.token===replayToken && (replayOperation || request.op==='mount-podman-workspace')) ||
+          (request.token===remoteReplayToken && replayOperation);
         if (request.token !== token && !replay) { reply({ ok: false, error: 'invalid bridge token' }); continue; }
         try {
           reply({ ok: true, result: await handle(request, context, state, output,replay,lifetime.signal) });
@@ -157,14 +158,29 @@ function startBridge(context, state, output) {
     });
     socket.on('error', () => {});
   });
+  let endpoint;
   const cleanup = () => {
     try { server.close(); } catch {}
     if (process.platform !== 'win32') { try { require('node:fs').unlinkSync(socketPath); } catch {} }
+    if (endpoint) { try { fs.unlinkSync(endpoint); } catch {} }
   };
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(socketPath, () => {
       if (process.platform !== 'win32') { try { require('node:fs').chmodSync(socketPath, 0o600); } catch {} }
+      if (process.platform==='linux' && vscode.workspace.getConfiguration('vampVault').inspect('remoteReplayBridge')?.globalValue===true) {
+        try {
+          const uid=process.getuid();
+          const directory=`/run/user/${uid}`;
+          const info=fs.lstatSync(directory);
+          if (!info.isDirectory() || info.uid!==uid || (info.mode&0o777)!==0o700) throw Error('Private runtime directory unavailable');
+          const file=path.join(directory,'vamp-vault-replay.json');
+          fs.writeFileSync(file,JSON.stringify({socketPath,token:remoteReplayToken}),{flag:'wx',mode:0o600});
+          endpoint=file;
+        } catch {
+          output.appendLine('Remote replay bridge unavailable. Check the private runtime directory and any previous endpoint.');
+        }
+      }
       context.subscriptions.push({ dispose: cleanup });
       resolve({ socketPath, token, replayToken });
     });

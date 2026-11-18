@@ -1,6 +1,30 @@
 import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { constants } from 'node:fs';
+import { lstat, open } from 'node:fs/promises';
+import path from 'node:path';
 import { BridgeClient } from '../../vscode-vault-extension/src/bridge_client.mjs';
+
+export async function remoteReplayEndpoint(directory = `/run/user/${process.getuid?.()}`) {
+  if (process.platform!=='linux') return null;
+  const uid=process.getuid();
+  try {
+    const directoryInfo=await lstat(directory);
+    if (!directoryInfo.isDirectory() || directoryInfo.uid!==uid || (directoryInfo.mode&0o777)!==0o700) return null;
+    const file=await open(path.join(directory,'vamp-vault-replay.json'),constants.O_RDONLY|constants.O_NOFOLLOW|constants.O_NONBLOCK);
+    let endpoint;
+    try {
+      const info=await file.stat();
+      if (!info.isFile() || info.uid!==uid || (info.mode&0o777)!==0o600 || info.nlink!==1 || info.size>1024) return null;
+      endpoint=JSON.parse(await file.readFile('utf8'));
+    } finally { await file.close(); }
+    const {socketPath,token}=endpoint;
+    if (typeof socketPath!=='string' || !path.isAbsolute(socketPath) || !/^[a-f0-9]{64}$/.test(token)) return null;
+    const socket=await lstat(socketPath);
+    if (!socket.isSocket() || socket.uid!==uid || (socket.mode&0o777)!==0o600) return null;
+    return {socketPath,token};
+  } catch { return null; }
+}
 
 export async function runWithVault(python,script,request,{ socketPath,token,timeoutMs=610000 }={}) {
   const unavailable={status:'approval_required',message:'The approved Vault replay bridge is unavailable.'};

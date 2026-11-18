@@ -180,7 +180,22 @@ console.log(`  workdir: ${workdir}`);
 console.log(`  keepassxc-cli: ${keepassCli ?? 'not given (database checks skipped)'}\n`);
 console.log('Activation');
 
+const publishReplay=process.platform==='linux' && process.env.VAULT_TEST_REMOTE_REPLAY_BRIDGE==='1';
+if (publishReplay) configValues.remoteReplayBridge=true;
 const vaultApi=extension.activate(context);
+
+if (publishReplay) await check('remote replay publishes a restricted endpoint for the current Linux user',async()=>{
+  await vaultApi.replayBridge();
+  const {remoteReplayEndpoint}=await import('../../backends/library/vault-replay.mjs');
+  const {BridgeClient}=await import('../src/bridge_client.mjs');
+  const endpoint=await remoteReplayEndpoint();
+  assert.ok(endpoint);
+  const remote=await BridgeClient.connect(endpoint);
+  try {
+    await assert.rejects(remote.request('unlock',{kdbx}),/invalid bridge token/);
+    await assert.rejects(remote.request('mount-podman-workspace',{}),/invalid bridge token/);
+  } finally { remote.close(); }
+});
 
 await check('both sidebar views are registered', () => {
   assert.deepEqual([...views.keys()].sort(), ['vampVault.views.credentials', 'vampVault.views.status']);
@@ -511,6 +526,10 @@ for (const disposable of context.subscriptions) {
   try { disposable?.dispose?.(); } catch {}
 }
 extension.deactivate?.();
+if (publishReplay) {
+  const {remoteReplayEndpoint}=await import('../../backends/library/vault-replay.mjs');
+  assert.equal(await remoteReplayEndpoint(),null);
+}
 await rm(workdir, { recursive: true, force: true });
 
 console.log(`\n${passed}/${results.length} checks passed`);

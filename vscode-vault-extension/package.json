@@ -345,6 +345,12 @@
     "configuration": {
       "title": "VAMP Vault",
       "properties": {
+        "vampVault.remoteReplayBridge": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "description": "Allow same-user Linux SSH replay processes to ask this running editor for Vault credential approval. Reload the extension host after changing this setting."
+        },
         "vampVault.deliveryTargets": {
           "type": "object",
           "default": {},

@@ -5,7 +5,7 @@
 import fs from 'node:fs/promises';
 import hostSupport from '../common/host-support.cjs';
 import packerModule from '../common/packer.cjs';
-import {runWithVault} from '../library/vault-replay.mjs';
+import {remoteReplayEndpoint,runWithVault} from '../library/vault-replay.mjs';
 import path from 'node:path';
 import { describeConfig } from './config.mjs';
 import { clickEvents, parseDomainIds, parseDomainInfo, parseDomainXml, CLICK_BUTTONS } from './libvirt.mjs';
@@ -377,10 +377,11 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     if (vault_destination !== undefined && (typeof vault_destination !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(vault_destination))) {
       throw new Error('Provide a valid destination name from the remote Vault host.');
     }
-    const vaultBridge = vault_destination && dry_run !== true ? {
-      socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN,
-    } : null;
-    if (vaultBridge && (!vaultBridge.socketPath || !vaultBridge.token)) {
+    const needsVault = Boolean(vault_destination) && dry_run !== true;
+    const vaultBridge = !needsVault ? null : process.env.VAULT_RPA_BRIDGE_SOCKET && process.env.VAULT_RPA_BRIDGE_TOKEN
+      ? {socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN}
+      : await remoteReplayEndpoint();
+    if (needsVault && !vaultBridge) {
       return {status:'approval_required',actions_completed:0,message:'The remote host has no approved Vault replay bridge.'};
     }
     const payload = {

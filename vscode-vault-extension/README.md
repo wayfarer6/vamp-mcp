@@ -313,8 +313,13 @@ A mismatch is rejected before requesting approval. With both extensions
 active, local `rpa_run_saved` accepts `vault_destination` to check all
 references before guest input. At each reference, replay waits for VS Code
 approval and receipt from the armed receiver before continuing. The replay
-process receives only the receipt. For `remote_rpa_run`, configure the
-restricted replay bridge on the remote host and pass its destination name.
+process receives only the receipt. For `remote_rpa_run`, run the Vault
+extension on the Linux hypervisor host under the same account used for SSH.
+Enable `vampVault.remoteReplayBridge` in that editor's User settings, reload
+the extension host, unlock its Vault, and configure the VM destination there.
+Pass its name as `vault_destination`. Register the hypervisor SSH host key
+in `known_hosts` before requesting replay. The editor asks for each field.
+Only one editor per Linux account can publish the bridge at a time.
 The SSH request carries references and the destination name. Without a
 reachable remote bridge, the tool stops before guest input.
 For a local CLI, configure a named `vampVault.deliveryTargets` entry with
