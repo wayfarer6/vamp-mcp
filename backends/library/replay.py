@@ -16,14 +16,42 @@ VNC_KEYS={'ctrl':'Ctrl','ctrlright':'Ctrl_R','alt':'Alt','altright':'Alt_R','shi
 EXTRA={'shiftright':54,'ctrlright':0x11d,'altright':0x138,'superright':0x15c,'home':0x147,'end':0x14f,'pageup':0x149,'pagedown':0x151,'insert':0x152,'capslock':58}
 
 
+VAULT_REFERENCE = re.compile(r'(?:\$\{vault:([^{}#\x00-\x1f]+)#(username|password|totp)\}|\{\{vault:([^{}#\x00-\x1f]+)#(username|password|totp)\}\})')
+
+
+def vault_references(actions):
+    references = []
+    for index, action in enumerate(actions):
+        if action.get('op') != 'write':
+            continue
+        text = action['text']
+        if '${vault:' not in text and '{{vault:' not in text:
+            continue
+        match = VAULT_REFERENCE.fullmatch(text) if len(text) <= 1024 else None
+        if match:
+            entry = match[1] or match[3]
+            if all(part.strip() and part not in ('.', '..') for part in entry.split('/')):
+                references.append({'action_index': index, 'entry': entry, 'field': match[2] or match[4],
+                                   'status': 'approval_required'})
+                continue
+        references.append({'action_index': index, 'status': 'placeholder_unresolved'})
+    return references
+
+
 def load(request):
     identifier=str(uuid.UUID(request['id']));folder=Path(request['registry']).resolve()/identifier
     metadata=json.loads((folder/'rpa.json').read_text(encoding='utf8'))
     if metadata.get('id')!=identifier or metadata.get('format')!='vamp-saved-rpa':raise ValueError('Unknown saved RPA')
     if not(folder/'.git').is_dir():raise ValueError('Version history is missing. Edit and save this RPA in the library first')
-    committed=subprocess.run(['git','-C',str(folder),'diff','--quiet','HEAD','--','source.py','actions.json','rpa.json'],capture_output=True,timeout=15)
+    reviewed_files = {'source.py', 'actions.json', 'rpa.json'}
+    tracked = subprocess.run(['git', '-C', str(folder), 'ls-tree', '--name-only', 'HEAD', '--', *sorted(reviewed_files)],
+                             capture_output=True, text=True, timeout=15)
+    if tracked.returncode or set(tracked.stdout.splitlines()) != reviewed_files:
+        raise ValueError('All replay inputs must be committed before replay')
+    committed=subprocess.run(['git','-C',str(folder),'diff','--quiet','HEAD','--',*sorted(reviewed_files)],capture_output=True,timeout=15)
     if committed.returncode:raise ValueError('RPA has uncommitted changes. Save and review a new revision before replay')
-    if metadata.get('reviewed') is not True or request.get('confirmed') is not True:raise ValueError('Review this RPA in the library and explicitly confirm execution first')
+    if metadata.get('reviewed') is not True or (request.get('dry_run') is not True and request.get('confirmed') is not True):
+        raise ValueError('Review this RPA in the library and explicitly confirm execution first')
     if hashlib.sha256((folder/'source.py').read_bytes()).hexdigest()!=metadata['source_sha256']:raise ValueError('RPA source changed; recreate and review it before running')
     raw=(folder/'actions.json').read_bytes()
     if hashlib.sha256(raw).hexdigest()!=metadata['actions_sha256']:raise ValueError('RPA actions changed; recreate and review it before running')
@@ -94,7 +122,18 @@ class VNC:
     def close(self):
         for key in list(self.held):self.up(key)
 
-async def replay(driver,actions,resolution):
+class VaultDeliveryDenied(Exception):
+    completed = 0
+
+
+def vault_dialogue(message):
+    print(json.dumps(message), flush=True)
+    line = sys.stdin.readline(4097)
+    if not line or len(line) > 4096 or json.loads(line).get('ok') is not True:
+        raise VaultDeliveryDenied
+
+
+async def replay(driver,actions,resolution,vault_steps=None):
     completed=0
     try:
         if driver.geometry()!=resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {driver.geometry()}; recalibrate rather than guessing')
@@ -104,8 +143,14 @@ async def replay(driver,actions,resolution):
             elif op=='key_down':driver.down(a['key'])
             elif op=='key_up':driver.up(a['key'])
             elif op=='write':
-                for character in a['text']:
-                    key={'\n':'enter','\t':'tab'}.get(character,character);driver.down(key);driver.up(key);await driver.drain();await asyncio.sleep(a.get('interval',.03))
+                if vault_steps and completed in vault_steps:
+                    if driver.held:
+                        raise VaultDeliveryDenied
+                    await driver.drain()
+                    vault_dialogue({'vault':'deliver',**vault_steps[completed]})
+                else:
+                    for character in a['text']:
+                        key={'\n':'enter','\t':'tab'}.get(character,character);driver.down(key);driver.up(key);await driver.drain();await asyncio.sleep(a.get('interval',.03))
             elif op=='hotkey':
                 try:
                     for key in a['keys']:driver.down(key)
@@ -124,13 +169,26 @@ async def replay(driver,actions,resolution):
                 driver.scroll(a['clicks'])
             else:raise ValueError('Unsupported replay operation: '+op)
             await driver.drain();completed+=1;await asyncio.sleep(.01)
+    except VaultDeliveryDenied as error:
+        error.completed = completed
+        raise
     finally:driver.close()
     return completed
 
-async def run(request):
+async def run(request, dialogue=False):
     metadata,actions=load(request)
+    references=vault_references(actions)
+    unresolved=any(item['status']=='placeholder_unresolved' for item in references)
+    if request.get('dry_run') is True or unresolved or (references and not dialogue):
+        return {
+            'status': 'placeholder_unresolved' if unresolved else 'approval_required' if references else 'validated',
+            'rpa_id': metadata['id'], 'actions_completed': 0, 'references': references,
+        }
+    vault_steps={item['action_index']:item for item in references}
+    if dialogue and references:
+        vault_dialogue({'vault':'preflight','references':references})
     if metadata['backend']=='virtualbox':
-        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'])
+        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps)
     elif metadata['backend']=='kvm':
         import asyncvnc
         uri=request.get('libvirt_uri','qemu:///session')
@@ -145,10 +203,16 @@ async def run(request):
         listen=graphics.find('listen');host=graphics.get('listen') or (listen.get('address') if listen is not None else None) or '127.0.0.1';port=int(graphics.get('port','-1'))
         if host not in ('127.0.0.1','localhost','::1') or not 1<=port<=65535:raise ValueError('Only active localhost VNC is supported')
         async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
-            completed=await replay(VNC(client),actions,metadata['resolution'])
+            completed=await replay(VNC(client),actions,metadata['resolution'],vault_steps)
     else:raise ValueError('This backend has no recorded desktop replay adapter')
-    return {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result; no screenshot or model call was made.'}
+    return {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result; no screenshot or model call was made.'}
 
 if __name__=='__main__':
-    try:print(json.dumps(asyncio.run(asyncio.wait_for(run(json.load(sys.stdin)),timeout=600)),ensure_ascii=False))
+    dialogue=sys.argv[1:]==['--vault-dialogue']
+    try:
+        request=json.loads(sys.stdin.readline()) if dialogue else json.load(sys.stdin)
+        print(json.dumps(asyncio.run(asyncio.wait_for(run(request,dialogue),timeout=600)),ensure_ascii=False))
+    except VaultDeliveryDenied as error:
+        print(json.dumps({'status':'approval_required','actions_completed':error.completed,
+                          'message':'Vault delivery did not receive confirmation. Replay stopped.'}))
     except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)

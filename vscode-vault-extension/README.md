@@ -217,15 +217,12 @@ checks. Nothing it does touches the user's configured vault.
 
 ## Roadmap
 
-### Passkeys (WebAuthn) inside the guest VM
+### Passkeys (WebAuthn) inside a guest
 
-KeePassXC 2.8 already stores passkeys and exposes them through the KeePassXC-Browser extension, but a passkey only works where a browser can reach the native messaging host — so today it would live on the host, next to the agent, which is exactly where a passkey must not be. The planned design moves the authenticator into the guest and treats the host vault as the seed store:
-
-1. **Provisioning (post-install hook).** After VAMP finishes installing a guest OS, a post-install hook runs inside the guest: install KeePassXC and its CLI from the distribution's signed repository, install the KeePassXC-Browser extension into the guest browser by policy (`ExtensionSettings` for Chromium-based guests, `policies.json` for Firefox), and register the native messaging manifest for the guest user so the browser can talk to the guest's KeePassXC.
-2. **Seed transfer.** The host vault exports the passkey entries into the guest database once, over the existing shared folder, and then deletes the export. The guest database is opened with its own password, prompted on the guest screen where the user can see it.
-3. **Unlocking.** The agent can ask the guest to open the guest database only for the duration of a login step; the unlock happens on the guest desktop, not through the MCP channel, so the passkey private key never crosses into the host agent process.
-4. **Attestation and recovery.** The hook records the guest's public keys and a recovery code in the host vault so a rebuilt guest can be re-enrolled without the original device.
-5. **Honest limits.** Passkey support is roadmap work, not implemented in 0.1.0: it depends on the guest hook framework in VAMP, on KeePassXC-Browser's native messaging path inside a VM, and on browser policy support for managed guest profiles. Until it ships, `vault_status` and this section are the only claims made about it.
+A guest browser must connect to its own authenticator. KeePassXC CLI does not
+handle WebAuthn signing requests through the password-delivery path. Browser
+pairing, vault unlock and authenticator confirmation are user actions. See the
+guest passkey setup follow-up below.
 
 ### Shorter term
 
@@ -253,3 +250,198 @@ The remote suite models separate hosts with a stand-in SSH transport. Physical W
 ## Version 0.1.5 icon update
 
 [Download Vault 0.1.5](https://github.com/wayfarer6/vamp-mcp/releases/tag/vamp-vault-v0.1.5) · [Combined VAMP release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.1.8). The Marketplace icon and activity-bar icon show the VAMP bat holding a monitor with the safe inside the screen. Vault functionality remains the same as 0.1.4.
+
+## Send one credential field to a guest desktop
+
+Configure `vampVault.deliveryTargets` in VS Code **User** settings. Each named
+destination uses `host`, `user`, optionally `port`, an absolute SSH
+`identityFile`, and an absolute `knownHostsFile` containing the independently
+verified host key. For Podman, also provide the full `containerId` and use the
+non-root SSH account that owns that container. Keep the Vault master password on
+the host.
+
+Install `guest_setup/vault/vamp-vault-receive` as
+`/usr/local/bin/vamp-vault-receive` with mode 0755 on the Linux VM and install
+`xdotool`. The recorder desktop image includes both. Focus a blank login field
+in the destination X11 session, close VAMP Recorder, and arm the receiver from
+that session with `vamp-vault-receive --listen password` or
+`vamp-vault-receive --listen username` or `vamp-vault-receive --listen totp`.
+It accepts one matching delivery and
+times out after two minutes. It refuses delivery when the original X11 focus
+changes.
+
+In **Browse Credentials**, choose the entry and click **Send to VM or
+Container**. Select the destination and field and review the approval dialog.
+MCP clients can call `vault_deliver_credential` with the entry path,
+destination, and field. Both paths require user approval and return a receipt
+without the value. The receiver types without pressing Enter. After confirming
+the expected page, an agent may submit a routine login as a separate authorized
+action. Pause for human intervention on passkeys, MFA, security keys, CAPTCHA,
+and unfamiliar consent prompts.
+
+### Guest passkey setup follow-up
+
+KeePassXC CLI credential delivery cannot serve WebAuthn requests. A future
+guest setup RPA can install KeePassXC GUI, connect KeePassXC-Browser over native
+messaging, and validate a demo site's passkey request in GUI VMs and containers.
+The user handles vault unlock, browser pairing and authenticator confirmation.
+A copied encrypted KDBX remains locked without a guest-side unlock method.
+
+### Read-only encrypted data for Podman
+
+Mount the VeraCrypt volume in the Debian VM with the VeraCrypt CLI, verify the
+mount and select the dedicated data subdirectory. Start the intended rootless
+container with a read-only bind mount to that subdirectory and verify it can read
+the expected file. For example, use
+`--mount type=bind,source=/mnt/vamp-vault/demo-share,destination=/workspace,ro=true`.
+Configure the mount's ownership for the rootless account and use an appropriate
+user-namespace mapping. Keep the KDBX and VeraCrypt password out of the container.
+Stop the reader before dismounting the volume.
+
+### Vault references and managed volumes
+
+`vault_check_placeholders` checks references such as
+`${vault:Mail/Example#password}` against the configured vault, including
+whether the requested field is present. KeePassXC checks the field locally.
+The tool returns matching paths, field names and statuses. Local
+`vault_deliver_credential` accepts a username, password, or TOTP reference
+in either `${vault:…}` or `{{vault:…}}` form and uses
+the same VS Code approval and waiting receiver. A saved replay fails before
+dispatch if it encounters a Vault reference. For VM-specific delivery, set
+the destination's `vmId` in user settings and pass that UUID as `vm_id`.
+A mismatch is rejected before requesting approval. With both extensions
+active, local `rpa_run_saved` accepts `vault_destination` to check all
+references before guest input. At each reference, replay waits for VS Code
+approval and receipt from the armed receiver before continuing. The replay
+process receives only the receipt. For `remote_rpa_run`, configure the
+restricted replay bridge on the remote host and pass its destination name.
+The SSH request carries references and the destination name. Without a
+reachable remote bridge, the tool stops before guest input.
+For a local CLI, configure a named `vampVault.deliveryTargets` entry with
+an absolute `executable` and fixed `args`. Call `vault_deliver_credential`
+with that name. After a VS Code confirmation the program receives one
+UTF-8 line on stdin. The MCP receipt reports program completion and omits
+its stdout and stderr.
+For a Linux remote Vault, configure `~/.vamp/vault/credential-delivery.json`
+on that host as a `0600` file owned by the SSH account. Each name binds a
+fixed program and arguments to one entry and field.
+
+```json
+{
+  "publish-tool": {
+    "executable": "/usr/local/bin/read-token-from-stdin",
+    "args": [],
+    "entry": "Build/Publish",
+    "field": "password"
+  }
+}
+```
+
+Call the remote `vault_deliver_credential` tool with `destination` set to
+`publish-tool` and `reference` set to `${vault:Build/Publish#password}`.
+Verify the SSH host key and add it to the client's `known_hosts` before
+delivery. The local VS Code asks for approval on each transfer. The remote Vault
+resolves the value on its own host and writes a metadata-only audit row to
+`~/.vamp/vault/credential-delivery.jsonl`.
+Use `dry_run: true` in
+`rpa_run_saved` or `remote_rpa_run` to list reference action indices, entry
+paths and field names from a reviewed replay. A valid reference reports
+`approval_required`. A malformed or embedded reference reports
+`placeholder_unresolved` without returning the action text. The replay
+inspection does not access the Vault or interact with the guest.
+After an approved delivery resolves a field, VAMP Vault records the caller,
+entry path, field, destination name and timestamp in its extension storage
+`credential-delivery.jsonl`. The row records resolution, and delivery still
+requires a receipt from the destination.
+
+`vault_list_groups` lists the default Vault's folder paths and parent paths,
+with direct and descendant credential counts. Empty folders are included.
+Use **Move Folder to Recycle Bin** in the local Vault sidebar or
+`vault_delete_group` in MCP. Confirm `recursive: true` for groups with
+contents. VAMP stages changes in an encrypted copy and applies them only
+after KeePassXC confirms recycling and the original vault still matches.
+Group creation, credential moves and recycling check the installed
+KeePassXC CLI for the required command. When a command is unavailable,
+MCP returns `cli_too_old`. Use **Rename Folder** or `vault_rename_group`
+after installing `pykeepass==4.2.0` in a local Python environment.
+Set `VAULT_KDBX_PYTHON` to that interpreter if it differs from the default
+`python` on Windows or `python3` on Linux. Rename edits the group in place
+in an encrypted staging file, checks that the renamed database can be read
+and verifies its contents before replacing the original.
+
+`vault_create_volume` creates an encrypted file and stores the generated
+password in the default KeePassXC database under `VeraCrypt/`. On Windows,
+set `vampVault.veracryptWslDistribution` (or `VAULT_VERACRYPT_WSL_DISTRO`
+for the CLI) to an installed WSL distribution with the VeraCrypt console
+binary at `/usr/bin/veracrypt`. The CLI can override that path with
+`VAULT_VERACRYPT_WSL_CLI`. Use a Windows drive path for the volume.
+Pass the returned entry path as `credential_entry` to `vault_mount_volume`.
+On Windows this mounts as WSL root inside the configured distribution.
+Pass an existing dedicated empty Linux directory as `mount_point`.
+Use the same directory with `vault_unmount_volume` to dismount. For a
+native Windows drive letter, use the Windows VeraCrypt password dialog.
+The entry is bound to the volume path, and only the result and paths are returned.
+To remove a managed Linux or WSL-backed Windows volume, call `vault_delete_volume` with its
+absolute `volume` path, `entry` and explicit user confirmation. The tool
+verifies the binding, unmounts the volume if needed, removes the active
+credential and deletes the file. If removal stops after moving the file
+aside, the response includes the recovery path. On Windows the tool checks
+the configured WSL distribution and refuses the operation while any native
+VeraCrypt drive is mounted, because its backing path cannot be verified.
+
+On VirtualBox for Linux or Windows with configured WSL, `vault_attach_vm`
+attaches a fixed or dynamic VHD already inside a verified VeraCrypt mount.
+On Windows use the Linux mount path when the Windows WSL file share can see
+the mounted VHD. If the mount lives in a separate Linux mount namespace and
+Windows cannot see the disk, use the managed local guest VHD format below.
+Supply the powered-off VM UUID, SATA controller, secondary port, volume and
+mount paths, and VHD filename. Confirm the exact target before attaching.
+Use `vault_detach_vm` with the same arguments while the VM is powered off
+before dismounting the VeraCrypt volume.
+For KVM, use `backend: "kvm"`, a secondary virtio target such as `vdb`,
+and `libvirt_uri` when using `qemu:///system`. The tools check and change
+the inactive libvirt configuration. The QEMU process needs filesystem
+access to the mounted VHD when the guest starts.
+For Hyper-V on Windows, the attachment preflight takes `backend: "hyperv"`,
+the WSL mount path, the SCSI `controller_number` and a secondary `port`.
+It checks whether Hyper-V itself can open the mounted VHD. On the tested
+Windows host, both WSL UNC aliases were accessible to the Windows user,
+but Hyper-V could not open either alias. In that configuration the tool
+returns `hyperv_medium_unavailable` before changing the VM configuration.
+To create a VHD for guest-side unlocking, call `vault_create_volume` with
+`format: "guest-vhd"` and a local Windows `.vhd` path. The configured WSL
+distribution needs VeraCrypt and `/usr/bin/qemu-img`. The fixed VHD exposes a
+whole VeraCrypt block device. Its password is stored in the managed KeePassXC
+entry. To attach it to a powered-off Hyper-V VM, call `vault_attach_vm` with
+`backend: "hyperv"`, the local `.vhd` path as `volume`, the returned
+`credential_entry`, the VM UUID, and a secondary SCSI `port`. Omit `mount_point`
+and `disk`. Use the same parameters with `vault_detach_vm` before deleting the
+volume. For a powered-off Windows-hosted VirtualBox VM, use
+`backend: "virtualbox"`, the SATA `controller` name and the secondary `port`.
+The Debian guest sees an encrypted whole disk. To unlock it through
+Vault, install VeraCrypt at `/usr/bin/veracrypt`, create a dedicated `/mnt`
+mount directory, and identify the secondary disk's exact `/dev/disk/by-path/`
+name. Configure a named SSH destination in user settings with its verified
+host key, `vmId`, and `guestVolume` containing `entry`, `device`, and
+`mountPoint`. The SSH account needs permission to run the exact following
+command via `sudo -n`. Set the actual device and directory in the guest's
+sudoers rule and avoid wildcard permissions.
+Escape `:` and `=` in the sudoers arguments and check the rule with `visudo`.
+
+```text
+/usr/bin/veracrypt --text --non-interactive --stdin --pim=0 --keyfiles= --protect-hidden=no /dev/disk/by-path/<device> /mnt/<directory>
+```
+
+Call `vault_deliver_credential` with the name of that destination, the
+matching `vm_id`, and the bound entry's `password` field. VS Code shows the
+entry, SSH host, disk and mount directory for approval. VeraCrypt reads the
+password over SSH standard input. Dismount the workspace inside the guest
+before shutting down and calling `vault_detach_vm`.
+If Hyper-V is still using a checkpoint differencing disk in that slot, wait
+for the checkpoint merge to finish before retrying detach.
+If the host reports `needs_elevation`, open VS Code as administrator or
+use an account authorized to manage Hyper-V, then retry.
+The Vault MCP records attachments under `~/.vamp/vault-vm-disks` and
+refuses to dismount or delete a volume while it has a pending or attached
+disk. If an attach was interrupted, rerun the matching detach after shutting
+down the VM. The guard tracks operations performed through these Vault tools.

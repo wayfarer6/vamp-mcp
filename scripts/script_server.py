@@ -143,7 +143,8 @@ def ensure_recorder_zip(folder: Path, recorder_source: Path | None = None) -> Pa
 def stage(source: Path | None = None, destination: Path | None = None,
           port: int = SCRIPT_SERVER_PORT) -> dict:
     """Build the served folder: HTTP bootstraps at the root plus the setup trees."""
-    source = Path(source or ROOT / 'guest_setup').expanduser().resolve()
+    assets = Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or ROOT)
+    source = Path(source or assets / 'guest_setup').expanduser().resolve()
     if not (source / 'recorder' / 'setup.sh').is_file():
         raise FileNotFoundError(f'Guest setup source is incomplete: {source}')
     destination = Path(destination or state_directory() / 'stage').expanduser().resolve()

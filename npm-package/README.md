@@ -167,3 +167,30 @@ Ubuntu KVM profiles read the host's osinfo-db XML, then use `virt-install --dry-
 Windows setup finishes with an elevated direct registry update to 1920x1080 (`PrimSurfSize.cx/cy` and `ActiveSize.cx/cy`) for the guest display configurations, on VirtualBox, KVM and Hyper-V. The Desktop reset script performs the same update before applying the display mode. Previous registry values are backed up under `%ProgramData%\VAMP\display-registry\backups`. A compatible guest display driver is still required.
 
 Debian setup pins the connected DRM output to `1920x1080@60D` using a managed GRUB drop-in and `update-grub`. After automatic GNOME login, it persistently selects Full HD at scale 1 and distributes `monitors.xml` to the desktop users, GDM/GDM3, `/etc/xdg` and `/etc/skel`. Boot services restore these settings. GDM automatically logs in as `vboxuser`; system dconf policy disables idle blanking, dimming, automatic lock and idle sleep, while systemd sleep targets are masked. The first desktop finalization waits 60 seconds.
+
+## Building a provisioning asset candidate
+
+Run `npm pack --pack-destination <package-output-directory>` from this directory.
+The build prints the path to its versioned provisioning archive and
+`SHA256SUMS`. Set `VAMP_RELEASE_ASSETS_OUTPUT` to a new absolute directory
+to choose where they are written. The npm runtime contains JavaScript and
+the JSON metadata it reads directly. Python, shell scripts, templates, skills
+and other operational assets live in the archive. RPA search and details use
+the local registry.
+
+Publish the archive as `vamp-assets-v<version>.tar.gz` on the matching GitHub
+release before distributing the exact npm tarball from that same build.
+To verify the pair before publishing, run `npm test` with
+`VAMP_TEST_TARBALL` set to the npm tarball and `VAMP_TEST_ASSETS_OUTPUT`
+set to the archive directory. The test installs the package and checks
+its pinned digest, the archive contents, and offline cache installation.
+The first operation that needs
+the Packer runner, guest script server start, or recorder media request installs it in
+`~/.vamp/assets/v<version>` (override the cache root with `VAMP_ASSETS_DIR`).
+For an offline machine, copy the archive over and run
+`vamp-mcp assets install <archive>`. The command verifies the archive against
+the digest embedded in the npm package. You can also pass the release digest
+as a second argument to check it against the embedded value.
+Package installation and MCP discovery require no provisioning download.
+Script-server status and stop use an existing cache or configured local
+script path and never fetch an archive.

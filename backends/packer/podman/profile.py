@@ -1,6 +1,7 @@
 """Render-only sibling profile. Never imports/executes the desktop Packer runner."""
 import base64
 import json
+import os
 from pathlib import Path
 import re
 
@@ -96,7 +97,8 @@ d-i grub-installer/bootdev string default
 d-i finish-install/reboot_in_progress note
 '''
     (folder / 'http/preseed.cfg').write_text(preseed + 'd-i preseed/late_command string ' + late + '\n')
-    (folder / 'provision.sh').write_text((HERE / 'provision.sh').read_text())
+    assets = Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or HERE.parents[2])
+    (folder / 'provision.sh').write_text((assets / 'backends/packer/podman/provision.sh').read_text())
     (folder / 'deployment.pub').write_text(deploy_key + '\n')
     (folder / 'box.Vagrantfile').write_text(BOX_TEMPLATE, encoding='utf8')
     builder, plugin, box_provider = ('virtualbox-iso', 'virtualbox', 'virtualbox') if provider == 'virtualbox' else ('qemu', 'qemu', 'libvirt')

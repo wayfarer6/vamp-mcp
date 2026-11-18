@@ -1,5 +1,6 @@
 """Packer owns ISO boot, hardware creation, installation wait and golden export."""
 import json
+import os
 from pathlib import Path
 from xml.sax.saxutils import escape
 from toolchain import POLICY,answer_iso
@@ -106,7 +107,8 @@ def render(request,folder,iso_hash,base,callback):
             'memory':request['memory_mb'],'cpus':request['cpus'],'disk_size':request['disk_mb'],
             'output_directory':str(folder/'artifact')}
     if guest=='debian':
-        text=(ROOT/'guest_setup/http/debian-preseed.cfg').read_text()
+        assets=Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or ROOT)
+        text=(assets/'guest_setup/http/debian-preseed.cfg').read_text()
         text=ensure_openssh_preseed(text)
         if backend=='kvm':
             text+='\nd-i preseed/late_command string '+kvm_late_command(base,callback)+'\n'
@@ -135,8 +137,18 @@ def render(request,folder,iso_hash,base,callback):
     elif backend=='hyperv':
         host=bootstrap_origin(base)
         if guest=='debian':
-            source['http_bind_address']=host
-            source['boot_command']=[command.replace('{{ .HTTPIP }}',host) for command in source['boot_command']]
+            # Use the job's existing switch-bound listener to distinguish a
+            # guest preseed request from a listener that only works on the host.
+            source.pop('http_directory')
+            preseed=callback.replace('/complete/','/preseed/',1)
+            source['boot_command']=[
+                'c<wait>',
+                'linux /install.amd/vmlinuz auto=true priority=critical '
+                'netcfg/link_wait_timeout=15 netcfg/dhcp_timeout=60 '
+                f'preseed/url={preseed} vamp_base={base} --- quiet<enter>',
+                'initrd /install.amd/initrd.gz<enter>',
+                'boot<enter>',
+            ]
         source.update(vm_name='VAMP-build-'+folder.name[:12],generation=2,switch_name=request.get('switch_name','Default Switch'),
                       enable_secure_boot=guest=='windows11',enable_tpm=guest=='windows11',disable_shutdown=True,
                       temp_path=str(folder/'temporary'),skip_compaction=True)

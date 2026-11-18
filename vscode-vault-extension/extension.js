@@ -40,13 +40,13 @@ class VaultView {
     const item = new vscode.TreeItem(node.label, collapsible);
     // A local and a remote vault can hold an entry with the same path, so the
     // id carries the vault a node belongs to.
-    item.id = `${this.kind}:${node.scope ? `${node.scope}/` : ''}${node.path ?? node.id ?? node.label}`;
+    item.id = JSON.stringify([this.kind, node.scope ?? 'local', node.type, node.path ?? node.id ?? node.label]);
     if (node.description) item.description = node.description;
     item.tooltip = node.tooltip || node.description || node.label;
     item.iconPath = node.brand && this.brandIcon ? this.brandIcon : new vscode.ThemeIcon(node.icon || 'circle-outline');
     item.contextValue = node.type === 'entry'
       ? 'vampVault.credential'
-      : node.type === 'group' ? 'vampVault.group' : `vampVault.${node.type}`;
+      : node.type === 'group' ? (node.scope === 'remote' ? 'vampVault.remoteGroup' : 'vampVault.group') : `vampVault.${node.type}`;
     if (node.type === 'entry') item.command = {command:'vampVault.openBrowser',title:'View Credential',arguments:[node]};
     if (node.command) item.command = { command: node.command, title: node.label, arguments: [] };
     item.element = node;
@@ -124,8 +124,14 @@ async function askPassword(prompt) {
  */
 function startBridge(context, state, output) {
   const token = crypto.randomBytes(32).toString('hex');
+  const replayToken = crypto.randomBytes(32).toString('hex');
   const socketPath = bridgeSocketPath(context);
   const server = net.createServer(socket => {
+    const lifetime=new AbortController();
+    const disconnect=()=>lifetime.abort();
+    socket.once('end',disconnect);
+    socket.once('close',disconnect);
+    socket.once('error',disconnect);
     socket.setEncoding('utf8');
     let buffer = '';
     socket.on('data', async chunk => {
@@ -138,9 +144,12 @@ function startBridge(context, state, output) {
         let request;
         try { request = JSON.parse(line); } catch { continue; }
         const reply = payload => { try { socket.write(`${JSON.stringify({ id: request.id, ...payload })}\n`); } catch {} };
-        if (!request.token || request.token !== token) { reply({ ok: false, error: 'invalid bridge token' }); continue; }
+        const replay=request.token===replayToken && (
+          (['check-replay-destination','deliver-credential'].includes(request.op) && Boolean(request.params?.vmId)) ||
+          request.op==='mount-podman-workspace');
+        if (request.token !== token && !replay) { reply({ ok: false, error: 'invalid bridge token' }); continue; }
         try {
-          reply({ ok: true, result: await handle(request, context, state, output) });
+          reply({ ok: true, result: await handle(request, context, state, output,replay,lifetime.signal) });
         } catch (error) {
           reply({ ok: false, error: error?.message ?? String(error) });
         }
@@ -157,7 +166,7 @@ function startBridge(context, state, output) {
     server.listen(socketPath, () => {
       if (process.platform !== 'win32') { try { require('node:fs').chmodSync(socketPath, 0o600); } catch {} }
       context.subscriptions.push({ dispose: cleanup });
-      resolve({ socketPath, token });
+      resolve({ socketPath, token, replayToken });
     });
   });
 }
@@ -175,12 +184,19 @@ async function unlockMasterPassword(context, kdbxPath, output) {
   return { password, source: 'vscode_secret_storage' };
 }
 
-async function handle(request, context, state, output) {
+async function handle(request, context, state, output,replay=false,signal) {
   const config = vscode.workspace.getConfiguration('vampVault');
   const globalStorage = context.globalStorageUri.fsPath;
   const kdbx = config.get('defaultKdbxPath') || path.join(globalStorage, 'vault.kdbx');
 
   switch (request.op) {
+    case 'mount-podman-workspace':
+      return state.mountPodmanWorkspace(request.params,signal);
+    case 'check-replay-destination':
+      return state.checkReplayDestination(request.params?.destination,request.params?.vmId,request.params?.references);
+    case 'deliver-credential':
+      return state.deliverCredential(request.params?.entry, request.params?.destination, request.params?.field,
+        replay?'rpa_run_saved':'vault_deliver_credential',request.params?.vmId,signal);
     case 'state': {
       const map = await readSecretMap(context);
       return { unlocked: Boolean(map[request.params?.kdbx ?? kdbx]), stored_databases: Object.keys(map).length, approval_mode:config.get('approvalMode')||'per-session',cache_minutes:Number(config.get('sessionCacheMinutes')??5),revision:state.revision };
@@ -593,7 +609,7 @@ function activate(context) {
   syncContext(false).catch(() => {});
 
   let bridge = { socketPath: '', token: '' };
-  startBridge(context, state, output)
+  const bridgeReady=startBridge(context, state, output)
     .then(value => {
       bridge = value;
       output.appendLine(`Approval bridge listening on ${value.socketPath}`);
@@ -626,6 +642,13 @@ function activate(context) {
       };
       if (config().get('keepassxcCliPath')) environment.VAULT_KEEPASSXC_CLI = config().get('keepassxcCliPath');
       if (config().get('veracryptCliPath')) environment.VAULT_VERACRYPT_CLI = config().get('veracryptCliPath');
+      const distribution = config().get('veracryptWslDistribution');
+      if (process.platform === 'win32' && distribution) environment.VAULT_VERACRYPT_WSL_DISTRO = distribution;
+      const podman=vscode.workspace.getConfiguration('vamp');
+      const workspaceConfig=podman.inspect('podman.workspaceConfigPath')?.globalValue || process.env.VAMP_WORKSPACE_CONFIG;
+      const desktopImages=podman.inspect('podman.desktopImageIds')?.globalValue;
+      if(workspaceConfig) environment.VAMP_WORKSPACE_CONFIG=workspaceConfig;
+      if(Array.isArray(desktopImages)) environment.VAMP_DESKTOP_IMAGE_IDS=desktopImages.join(',');
       if (bridge.socketPath) {
         environment.VAULT_BRIDGE_SOCKET = bridge.socketPath;
         environment.VAULT_BRIDGE_TOKEN = bridge.token;
@@ -764,13 +787,16 @@ function activate(context) {
    * for first (the same prompt every read uses), then each field in turn; the
    * password never appears in the log, in a message or in the tree.
    */
-  context.subscriptions.push(vscode.commands.registerCommand('vampVault.addCredential', async () => {
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.addCredential', async arg => {
     try {
+      const node=treeNode(arg);
+      if(node?.scope==='remote')return;
       const opened = await openVault();
       if (!opened) return;
       const title = await vscode.window.showInputBox({
         prompt: 'Entry title or path, e.g. github.com or Social/Naver',
         placeHolder: 'github.com',
+        ...(node?.type==='group'?{value:node.path+'/'}:{}),
         ignoreFocusOut: true,
         validateInput: value => (value && value.trim() ? null : 'Enter an entry title.'),
       });
@@ -829,6 +855,56 @@ function activate(context) {
       await handleVaultError(error, kdbxPath());
     }
   }));
+
+  const applyFolderChange=async change=>{
+    try{
+      const opened=await openVault();
+      if(!opened)return;
+      if(await change(opened)){
+        resetVault();
+        credentialView.refresh();
+        statusView.refresh();
+      }
+    }catch(error){await handleVaultError(error,kdbxPath());}
+  };
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.createGroup',arg=>applyFolderChange(async opened=>{
+    const parent=treeNode(arg);
+    if(parent && (parent.type!=='group'||parent.scope==='remote'))return false;
+    const name=await vscode.window.showInputBox({title:'New Vault folder',validateInput:value=>
+      value.trim()===value && value && !/^[.-]|[/\x00-\x1f]/u.test(value)?null:'Enter one folder name.'});
+    if(!name||opened.db!==kdbxPath())return false;
+    await opened.cli.ensureGroup({file:opened.db,group:parent?`${parent.path}/${name}`:name,databasePassword:opened.password});
+    return true;
+  })));
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.renameGroup',arg=>applyFolderChange(async opened=>{
+    const group=treeNode(arg);
+    if(group?.type!=='group'||group.scope==='remote')return false;
+    const name=await vscode.window.showInputBox({title:'Rename Vault folder',value:group.label,validateInput:value=>
+      value.trim()===value&&value&&!/^[.-]|[/\x00-\x1f]/u.test(value)?null:'Enter one folder name.'});
+    if(!name||opened.db!==kdbxPath())return false;
+    return (await opened.cli.renameGroup({file:opened.db,group:group.path,name,databasePassword:opened.password})).status==='renamed';
+  })));
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.recycleGroup',arg=>applyFolderChange(async opened=>{
+    const group=treeNode(arg);
+    if(group?.type!=='group'||group.scope==='remote')return false;
+    const recursive=Boolean(group.children?.length);
+    const label='Move to Recycle Bin';
+    const confirmed=await vscode.window.showWarningMessage(
+      `Move "${group.path}"${recursive?' and all its contents':''} to the Vault recycle bin?`,
+      {modal:true},label);
+    if(confirmed!==label||opened.db!==kdbxPath())return false;
+    await opened.cli.recycleGroup({file:opened.db,group:group.path,recursive,databasePassword:opened.password});
+    return true;
+  })));
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.moveCredential',arg=>applyFolderChange(async opened=>{
+    const entry=treeNode(arg);
+    if(entry?.type!=='entry'||entry.scope==='remote')return false;
+    const listing=await opened.cli.listEntries({file:opened.db,databasePassword:opened.password});
+    const selected=await vscode.window.showQuickPick(['/',...new Set(listing.groups)],{title:`Move ${entry.label} to a Vault folder`});
+    if(!selected||opened.db!==kdbxPath())return false;
+    await opened.cli.moveEntry({file:opened.db,entry:entry.path,group:selected,databasePassword:opened.password});
+    return true;
+  })));
 
   // ------------------------------------------------ remote vault commands
   /**
@@ -1228,6 +1304,104 @@ function activate(context) {
     return picked?.entryPath ?? null;
   }
 
+  const deliveryConfig=()=>config().inspect('deliveryTargets')?.globalValue || {};
+  state.mountPodmanWorkspace=async({volumePath,mountPoint,credentialEntry,veracryptPath}={},signal)=>{
+    const paths=[volumePath,mountPoint,veracryptPath];
+    if(process.platform!=='linux'||/microsoft|wsl/i.test(os.release())||
+      !paths.every(value=>typeof value==='string'&&value.startsWith('/')&&value!=='/'&&value===path.normalize(value)&&!/[\x00-\x20\x7f]/u.test(value))||
+      !/^VeraCrypt\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(credentialEntry||''))throw Error('Invalid local workspace mount.');
+    const opened=await openVault();
+    if(!opened||opened.cli.veracryptCli!==veracryptPath)throw Error('Unlock the Vault and configure the same VeraCrypt CLI for the workspace.');
+    const revision=state.revision;
+    const answer=await vscode.window.showWarningMessage(
+      `Unlock the Podman workspace using "${credentialEntry}"?`,
+      {modal:true,detail:`Mount ${volumePath} read/write at ${mountPoint}.`},'Unlock Workspace');
+    if(answer!=='Unlock Workspace')return {status:'denied'};
+    signal?.throwIfAborted();
+    if(opened.db!==kdbxPath()||revision!==state.revision)throw Error('The vault changed. Review the workspace again.');
+    const [volume,mount]=await Promise.all([fs.promises.lstat(volumePath),fs.promises.lstat(mountPoint)]);
+    if(!volume.isFile()||!mount.isDirectory()||
+      await fs.promises.realpath(volumePath)!==volumePath||await fs.promises.realpath(mountPoint)!==mountPoint||
+      (await fs.promises.readdir(mountPoint)).length)throw Error('Use a regular volume and an empty canonical mount directory.');
+    const input={file:opened.db,entry:credentialEntry,databasePassword:opened.password};
+    const listing=await opened.cli.listEntries(input);
+    if(listing.entries.filter(item=>item.path===credentialEntry).length!==1)throw Error('The workspace credential must be unique.');
+    const record=await opened.cli.showEntry(input);
+    if(!record.password||record.url!==pathToFileURL(volumePath).href)throw Error('The credential is not bound to the configured workspace volume.');
+    if(opened.db!==kdbxPath()||revision!==state.revision)throw Error('The vault changed. Review the workspace again.');
+    signal?.throwIfAborted();
+    const report=await opened.cli.mountVolume({file:volumePath,mountPoint,password:record.password});
+    return {status:report.mounted?'mounted':'mount_unverified'};
+  };
+  state.checkReplayDestination=async(destination,vmId,references)=>{
+    const delivery=await import(pathToFileURL(path.join(runtime,'src/credential_delivery.mjs')).href);
+    if(!vmId||!Array.isArray(references)||references.length<1||references.length>50)throw Error('Invalid replay credential request.');
+    if (delivery.deliveryTarget(destination,deliveryConfig(),vmId).guestVolume) throw Error('Choose a login receiver for replay.');
+    const database=kdbxPath();
+    const password=(await readSecretMap(context))[database];
+    if(!password)throw Error('Unlock the vault before replaying credentials.');
+    const opened=await openVault();
+    if(!opened||opened.db!==database)throw Error('The vault changed.');
+    const listing=await opened.cli.listEntries({file:database,databasePassword:password});
+    for(const {entry,field} of references) {
+      if(typeof entry!=='string'||!['username','password','totp'].includes(field)||
+        listing.entries.filter(item=>item.path===entry).length!==1||
+        !(await opened.cli.placeholderFieldPresent({file:database,entry,field,databasePassword:password}).catch(()=>false))) {
+        throw Error('A replay credential reference could not be resolved.');
+      }
+    }
+    return {status:'ready'};
+  };
+  state.deliverCredential=async (entry,destination,field,caller='vscode_vault_browser',expectedVmId,signal)=>{
+    if(typeof entry!=='string'||!entry.trim()||entry.length>1024||/[\x00-\x1f]/.test(entry))throw Error('Select one credential entry.');
+    if(!['username','password','totp'].includes(field))throw Error('Choose one credential field.');
+    const delivery=await import(pathToFileURL(path.join(runtime,'src/credential_delivery.mjs')).href);
+    const target=delivery.deliveryTarget(destination,deliveryConfig(),expectedVmId);
+    if (target.guestVolume && (target.guestVolume.entry!==entry || field!=='password' || caller==='rpa_run_saved' ||
+        (caller==='vault_deliver_credential' && !expectedVmId))) throw Error('Select the configured guest volume password and VM UUID.');
+    const database=kdbxPath(),revision=state.revision;
+    if(!(await readSecretMap(context))[database])throw Error('Unlock the vault before sending a credential.');
+    const identity=target.executable ? `Local executable: ${target.executable}\nConfigured arguments: ${JSON.stringify(target.args)}`
+      : target.containerId ? `Container ${target.containerId} on ${target.user}@${target.host}:${target.port}`
+      : `SSH VM ${target.vmId ? target.vmId+' at ' : ''}${target.user}@${target.host}:${target.port}`;
+    const effect=target.guestVolume ? `Unlock ${target.guestVolume.device} at ${target.guestVolume.mountPoint} with VeraCrypt. The password is sent on standard input.`
+      : target.executable ? 'The program will receive this field on standard input.'
+      : 'Verify the login page and focused field. This action does not submit the form.';
+    const answer=await vscode.window.showWarningMessage(`Send the ${field} for "${entry}" to "${target.name}"?`,{modal:true,detail:`${identity}\n${effect}`},'Send Credential');
+    if(answer!=='Send Credential')return {status:'denied'};
+    signal?.throwIfAborted();
+    const password=(await readSecretMap(context))[database];
+    if(!password||database!==kdbxPath()||revision!==state.revision||
+      JSON.stringify(target)!==JSON.stringify(delivery.deliveryTarget(destination,deliveryConfig(),expectedVmId)))throw Error('The vault or destination changed. Review the transfer again.');
+    const opened=await openVault();
+    if(!opened||opened.db!==database||revision!==state.revision)throw Error('The vault changed. Review the transfer again.');
+    const listing=await opened.cli.listEntries({file:database,databasePassword:password});
+    const matches=listing.entries.filter(item=>item.path===entry).length;
+    if(matches!==1)throw Error(matches===0?'The credential entry no longer exists.':'The credential path matches multiple entries.');
+    const input={file:database,entry,databasePassword:password};
+    let record;
+    try {
+      record=field==='totp' ? {totp:(await opened.cli.totp(input)).code}
+        : await opened.cli.showEntry({...input,showProtected:field==='password'});
+    } catch {
+      throw Error('Could not resolve the selected credential field.');
+    }
+    if(revision!==state.revision||database!==kdbxPath())throw Error('The vault changed. Review the transfer again.');
+    if(target.guestVolume && record.notes!=='VAMP format: guest-vhd')throw Error('The selected credential is not a managed guest VHD entry.');
+    const value=delivery.validateCredentialField(record,field);
+    signal?.throwIfAborted();
+    const audit={at:new Date().toISOString(),action:'credential_resolved',caller,entry,field,destination:target.name,
+      ...(target.vmId&&{vm_id:target.vmId})};
+    try {
+      await fs.promises.mkdir(globalStorage,{recursive:true,mode:0o700});
+      await fs.promises.appendFile(path.join(globalStorage,'credential-delivery.jsonl'),JSON.stringify(audit)+'\n',{mode:0o600});
+    } catch {
+      throw Error('Could not record the credential delivery audit.');
+    }
+    if(revision!==state.revision||database!==kdbxPath()||
+      JSON.stringify(target)!==JSON.stringify(delivery.deliveryTarget(destination,deliveryConfig(),expectedVmId)))throw Error('The vault or destination changed. Review the transfer again.');
+    return delivery.deliverCredential(target,value,field,signal);
+  };
   browser=require('./vault-browser').registerBrowser(context,{
     async load(){
       const data=await credentialData();
@@ -1243,6 +1417,16 @@ function activate(context) {
     setApproval,
     copyUsername:entry=>vscode.commands.executeCommand('vampVault.copyUsername',{type:'entry',path:entry}),
     copyPassword:entry=>vscode.commands.executeCommand('vampVault.copyPassword',{type:'entry',path:entry}),
+    async sendCredential(entry){
+      const targets=Object.keys(deliveryConfig());
+      if(!targets.length)throw Error('Configure a destination in VAMP Vault user settings first.');
+      const destination=await vscode.window.showQuickPick(targets,{title:'Send credential to a VM or container'});
+      if(destination){
+        const field=await vscode.window.showQuickPick(['username','password','totp'],{title:'Type one credential field'});
+        if(field)return state.deliverCredential(entry,destination,field);
+      }
+      return {status:'denied'};
+    },
     async reveal(entry){
       const answer=await vscode.window.showWarningMessage(`Show the password for "${entry}" for 15 seconds?`,{modal:true},'Show Password');
       if(answer!=='Show Password')return;
@@ -1483,6 +1667,12 @@ function activate(context) {
       'Set Up', 'Later',
     ).then(choice => { if (choice === 'Set Up') vscode.commands.executeCommand('vampVault.setupCli'); });
   }
+  return Object.freeze({
+    async replayBridge() {
+      await bridgeReady;
+      return bridge.replayToken ? {socketPath:bridge.socketPath,token:bridge.replayToken} : null;
+    },
+  });
 }
 
 function deactivate() {}

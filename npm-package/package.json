@@ -42,11 +42,15 @@
   ],
   "scripts": {
     "build": "node build.mjs",
+    "build:assets": "node build-assets.mjs",
     "prepack": "npm run build",
     "test": "node --test test/package.test.mjs"
   },
   "publishConfig": {
     "access": "public",
     "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "tar": "7.5.23"
   }
 }

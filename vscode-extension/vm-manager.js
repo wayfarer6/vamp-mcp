@@ -448,7 +448,8 @@ function renderGolden(message){
  const container=$('golden-images');container.replaceChildren();
  for(const image of message.goldenImages||[]){
   const row=document.createElement('div');row.className='vm';
-  for(const [tag,text] of [['strong',image.name],['p',image.backend+' / '+image.status+(image.guest_setup_completed?' / Guest setup complete':'')+' / '+(image.bytes/1024**3).toFixed(2)+' GiB'],['p',image.path],['small',image.error||image.log_path||'']]){
+  const installer=image.installer_hint||(image.installer_preseed_received===true?'Installer requested its configuration.':image.installer_preseed_received===false?'Waiting for the installer to request its configuration.':'');
+  for(const [tag,text] of [['strong',image.name],['p',image.backend+' / '+image.status+(image.guest_setup_completed?' / Guest setup complete':'')+' / '+(image.bytes/1024**3).toFixed(2)+' GiB'],['p',image.path],['small',installer],['small',image.error||image.log_path||'']]){
    const element=document.createElement(tag);element.textContent=text;element.style.overflowWrap='anywhere';row.appendChild(element);
   }
   if(image.vm_disk_path||image.vm_path){const detail=document.createElement('p');detail.style.overflowWrap='anywhere';detail.textContent='Live VM storage: '+(image.vm_disk_path||image.vm_path);row.appendChild(detail);}

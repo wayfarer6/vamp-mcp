@@ -11,7 +11,8 @@ import assert from 'node:assert/strict';
 import Module, { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
 const here = import.meta.dirname;
@@ -71,6 +72,7 @@ const commandHandlers = new Map();
 const executed = [];
 const contextKeys = new Map();
 const clipboard = { value: '' };
+let mcpProvider;
 const configValues = {
   keepassxcCliPath: keepassCli ?? '',
   veracryptCliPath: process.env.VAULT_TEST_VERACRYPT ?? '',
@@ -109,12 +111,16 @@ const vscode = {
       async readText() { return clipboard.value; },
     },
   },
+  McpStdioServerDefinition: class { constructor(_label, _command, _args, env) { this.env = env; } },
   lm: {
-    registerMcpServerDefinitionProvider: () => ({ dispose() {} }),
-    McpStdioServerDefinition: class {},
+    registerMcpServerDefinitionProvider: (_, provider) => { mcpProvider = provider; return { dispose() {} }; },
+    McpStdioServerDefinition: class { constructor(_label, _command, _args, env) { this.env = env; } },
   },
   workspace: {
-    getConfiguration: () => ({ get: (key, fallback) => (key in configValues ? configValues[key] : fallback) }),
+    getConfiguration: () => ({
+      get: (key, fallback) => (key in configValues ? configValues[key] : fallback),
+      inspect: key => ({ globalValue: configValues[key] }),
+    }),
     onDidChangeConfiguration: () => ({ dispose() {} }),
   },
   window: {
@@ -174,7 +180,7 @@ console.log(`  workdir: ${workdir}`);
 console.log(`  keepassxc-cli: ${keepassCli ?? 'not given (database checks skipped)'}\n`);
 console.log('Activation');
 
-extension.activate(context);
+const vaultApi=extension.activate(context);
 
 await check('both sidebar views are registered', () => {
   assert.deepEqual([...views.keys()].sort(), ['vampVault.views.credentials', 'vampVault.views.status']);
@@ -198,7 +204,9 @@ const statusView = views.get('vampVault.views.status');
 await check('a fresh install shows the first action and no entries', async () => {
   const nodes = await credentials.getChildren();
   assert.ok(nodes.length >= 1);
-  const expected = keepassCli ? 'vampVault.createVault' : 'vampVault.setupCli';
+  const cliStatus = (await statusView.getChildren()).find(node => node.id === 'keepassxc');
+  if (keepassCli) assert.equal(cliStatus.icon, 'pass-filled');
+  const expected = cliStatus.icon === 'pass-filled' ? 'vampVault.createVault' : 'vampVault.setupCli';
   assert.equal(nodes[0].command, expected);
 });
 
@@ -207,8 +215,17 @@ await check('tree items carry an id, a theme icon and a context value', async ()
   const item = credentials.getTreeItem(nodes[0]);
   assert.equal(item.contextValue, 'vampVault.action');
   assert.equal(item.iconPath.id, nodes[0].icon);
-  assert.match(item.id, /^credentials:/);
+  assert.equal(JSON.parse(item.id)[0], 'credentials');
   assert.equal(typeof item.tooltip, 'string');
+});
+
+await check('tree refresh keeps a stable folder identity distinct from entries and remote folders', () => {
+  const group = { type: 'group', label: 'Mail', path: 'Personal/Mail', children: [] };
+  const getId = node => credentials.getTreeItem(node).id;
+  const id = getId(group);
+  assert.equal(getId({ ...group, description: '2 entries' }), id);
+  assert.notEqual(getId({ ...group, type: 'entry' }), id);
+  assert.notEqual(getId({ ...group, scope: 'remote' }), id);
 });
 
 await check('an entry without children is not expandable', async () => {
@@ -227,6 +244,8 @@ await check('the status view reports the database and both CLIs', async () => {
 
 await check('the status view asks the host to refresh without throwing', async () => {
   await commandHandlers.get('vampVault.refreshTree')();
+
+
 });
 
 if (!keepassCli) {
@@ -239,8 +258,109 @@ if (!keepassCli) {
   await cli.createDatabase({ file: kdbx, password: masterPassword });
   await cli.addEntry({ file: kdbx, entry: 'Example', group: 'Mail', username: 'alice', secret: entryPassword, url: 'https://example.com', databasePassword: masterPassword });
   secrets.set('vampVault.masterPasswords', JSON.stringify({ [kdbx]: masterPassword }));
+
+  await check('approved resolution audits metadata only even when the destination is unavailable', async () => {
+    const { BridgeClient } = await import('../src/bridge_client.mjs');
+    const [definition] = await mcpProvider.provideMcpServerDefinitions();
+    const bridge = await BridgeClient.connect({ socketPath: definition.env.VAULT_BRIDGE_SOCKET, token: definition.env.VAULT_BRIDGE_TOKEN });
+    const vmId = '6725c44b-288f-491f-bb75-1d414ba2ee87';
+    configValues.deliveryTargets = { fixture: {
+      host: '127.0.0.1', user: 'desktop', identityFile: path.join(workdir, 'missing-identity'),
+      knownHostsFile: path.join(workdir, 'missing-known-hosts'), vmId,
+    } };
+    const args = { entry: 'Mail/Example', field: 'password', destination: 'fixture' };
+    const auditPath = path.join(storage, 'credential-delivery.jsonl');
+    const replayBridge=await BridgeClient.connect(await vaultApi.replayBridge());
+    try {
+      await assert.rejects(replayBridge.request('unlock', {kdbx}), /invalid bridge token/);
+      const preflight={destination:'fixture',vmId,references:[{entry:args.entry,field:args.field}]};
+      assert.deepEqual(await replayBridge.request('check-replay-destination',preflight),{status:'ready'});
+      await assert.rejects(replayBridge.request('check-replay-destination',{...preflight,references:[{entry:'Missing',field:'password'}]}),/could not be resolved/);
+      const prompts = messages.length;
+      await assert.rejects(bridge.request('deliver-credential', {...args,vmId:'9725c44b-288f-491f-bb75-1d414ba2ee87'}), /does not match the requested VM UUID/);
+      assert.equal(messages.length,prompts);
+      assert.deepEqual(await bridge.request('deliver-credential', args), { status: 'denied' });
+      await assert.rejects(readFile(auditPath), { code: 'ENOENT' });
+      answers.warning.push('Send Credential');
+      await assert.rejects(bridge.request('deliver-credential', {...args,vmId:vmId.toUpperCase()}), /known-hosts file is unavailable/);
+      const raw = (await readFile(auditPath, 'utf8')).trim();
+      assert.ok(!raw.includes(entryPassword) && !raw.includes(masterPassword));
+      const { at, ...metadata } = JSON.parse(raw);
+      assert.ok(Number.isFinite(Date.parse(at)));
+      assert.deepEqual(metadata, { action: 'credential_resolved', caller: 'vault_deliver_credential', ...args,vm_id:vmId });
+      const program=path.join(workdir,'stdin-fixture.mjs');
+      const expected=createHash('sha256').update(entryPassword+'\n').digest('hex');
+      await writeFile(program,`
+        import {createHash} from 'node:crypto';
+        const hash=createHash('sha256');
+        for await(const chunk of process.stdin){hash.update(chunk);process.stdout.write(chunk);}
+        if(hash.digest('hex')!==process.argv[2]||process.argv.length!==3||Object.keys(process.env).some(key=>key.startsWith('VAULT_')))process.exit(2);
+      `);
+      configValues.deliveryTargets.program={executable:process.execPath,args:[program,expected]};
+      await assert.rejects(replayBridge.request('deliver-credential',{...args,destination:'program',vmId}),/cannot be used as a VM destination/);
+      answers.warning.push('Send Credential');
+      const delivered=await bridge.request('deliver-credential',{...args,destination:'program'});
+      assert.deepEqual(delivered,{status:'delivered',destination:'program'});
+      const audit=await readFile(auditPath,'utf8');
+      assert.equal(audit.trim().split('\n').length,2);
+      assert.ok(!audit.includes(entryPassword));
+      let finishDialog;
+      const shown=new Promise(resolve=>answers.warning.push(()=>{
+        resolve();
+        return new Promise(finish=>{finishDialog=finish;});
+      }));
+      const pending=replayBridge.request('deliver-credential',{...args,vmId});
+      const cancelled=assert.rejects(pending,/bridge closed/);
+      await shown;
+      replayBridge.close();
+      await cancelled;
+      await new Promise(resolve=>setTimeout(resolve,100));
+      finishDialog('Send Credential');
+      await new Promise(resolve=>setTimeout(resolve,100));
+      assert.equal(await readFile(auditPath,'utf8'),audit);
+      configValues.deliveryTargets.workspace={...configValues.deliveryTargets.fixture,
+        guestVolume:{entry:'VeraCrypt/Fixture',device:'/dev/disk/by-path/platform-test-scsi-0:0:0:1',mountPoint:'/mnt/vamp-qa'}};
+      const workspace={entry:'VeraCrypt/Fixture',field:'password',destination:'workspace',vmId};
+      const beforeWorkspace=messages.length;
+      await assert.rejects(bridge.request('deliver-credential',{...workspace,vmId:undefined}),/VM UUID/);
+      await assert.rejects(bridge.request('deliver-credential',{...workspace,entry:'Mail/Example'}),/guest volume password/);
+      assert.equal(messages.length,beforeWorkspace);
+      assert.deepEqual(await bridge.request('deliver-credential',workspace),{status:'denied'});
+      assert.equal(await readFile(auditPath,'utf8'),audit);
+    } finally {
+      delete configValues.deliveryTargets;
+      bridge.close();
+      replayBridge.close();
+    }
+  });
   await commandHandlers.get('vampVault.refreshTree')();
 
+  if (process.env.VAULT_TEST_GUEST_VOLUME_CONFIG) {
+    await check('approved Vault delivery unlocks a real guest VeraCrypt volume', async () => {
+      const fixturePath = process.env.VAULT_TEST_GUEST_VOLUME_CONFIG;
+      const target = JSON.parse(await readFile(fixturePath,'utf8'));
+      const password = (await readFile(path.join(path.dirname(fixturePath),'volume-key'),'utf8')).trim();
+      const entry = 'VeraCrypt/GuestFixture';
+      await cli.addEntry({file:kdbx,entry:'GuestFixture',group:'VeraCrypt',secret:password,
+        notes:'VAMP format: guest-vhd',databasePassword:masterPassword});
+      const { BridgeClient } = await import('../src/bridge_client.mjs');
+      const [definition] = await mcpProvider.provideMcpServerDefinitions();
+      const bridge = await BridgeClient.connect({socketPath:definition.env.VAULT_BRIDGE_SOCKET,token:definition.env.VAULT_BRIDGE_TOKEN});
+      configValues.deliveryTargets={workspace:{...target,guestVolume:{...target.guestVolume,entry}}};
+      try {
+        const args={entry,field:'password',destination:'workspace',vmId:target.vmId};
+        assert.deepEqual(await bridge.request('deliver-credential',args),{status:'denied'});
+        answers.warning.push('Send Credential');
+        const result=await bridge.request('deliver-credential',args);
+        assert.deepEqual(result,{status:'delivered',destination:'workspace'});
+        assert.ok(!(await readFile(path.join(storage,'credential-delivery.jsonl'),'utf8')).includes(password));
+      } finally {
+        delete configValues.deliveryTargets;
+        bridge.close();
+        await cli.deleteEntry({file:kdbx,entry,databasePassword:masterPassword});
+      }
+    });
+  }
   await check('an unlocked vault lists its group and entry', async () => {
     const deadline = Date.now() + 10000;
     let entry = null;
@@ -267,7 +387,7 @@ if (!keepassCli) {
     assert.equal(item.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
     const entryItem = credentials.getTreeItem(group.children[0]);
     assert.equal(entryItem.contextValue, 'vampVault.credential');
-    assert.equal(entryItem.id, 'credentials:Mail/Example');
+    assert.deepEqual(JSON.parse(entryItem.id), ['credentials', 'local', 'entry', 'Mail/Example']);
   });
 
   await check('copy username needs no approval', async () => {

@@ -9,17 +9,23 @@
 // Environment:
 //   VAULT_TEST_KEEPASSXC  keepassxc-cli to use (default: keepassxc-cli on PATH)
 //   VAULT_TEST_VERACRYPT  veracrypt to use (optional)
+//   VAULT_TEST_VOLUME_LIFECYCLE=1  exercise real Linux mount and deletion (requires FUSE)
 // The database and volumes are created in a temporary directory and removed at
 // the end; nothing touches the user's real vault.
 import assert from 'node:assert/strict';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
+import { randomBytes } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { parseEntryList, parseMountList, parseShowAll, splitEntryPath, VaultCli } from '../src/vault_cli.mjs';
 import { BridgeClient } from '../src/bridge_client.mjs';
+import { deleteManagedVolume } from '../src/managed_volume.mjs';
+import { hypervVolume, kvmVolume, virtualBoxVolume } from '../src/vm_volume.mjs';
+import { withVmVolumeState } from '../src/vm_volume_state.mjs';
 import { detectPlatform, ensureClis, findOnPath, installCli, installWithWinget, manualInstructions, WINGET_PACKAGES, wingetArgs, wingetCommand, wingetUacNotice } from '../src/downloader.mjs';
 import { buildCredentialTree, buildStatusTree, findNode, flattenTree } from '../src/tree.mjs';
 
@@ -96,6 +102,7 @@ async function connect({ kdbx, volume, env = {}, fallback = true }) {
     env: {
       PATH: process.env.PATH ?? '',
       HOME: process.env.HOME ?? process.env.USERPROFILE ?? '',
+      ...(process.env.VAULT_TEST_HYPERV_VM ? { USERPROFILE: path.dirname(kdbx) } : {}),
       LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH ?? '',
       VAULT_KDBX: kdbx,
       VAULT_VOLUME: volume,
@@ -107,6 +114,11 @@ async function connect({ kdbx, volume, env = {}, fallback = true }) {
       ...(fallback ? { VAULT_MASTER_PASSWORD: masterPassword } : {}),
       ...(process.env.VAULT_TEST_KEEPASSXC ? { VAULT_KEEPASSXC_CLI: process.env.VAULT_TEST_KEEPASSXC } : {}),
       ...(process.env.VAULT_TEST_VERACRYPT ? { VAULT_VERACRYPT_CLI: process.env.VAULT_TEST_VERACRYPT } : {}),
+      ...(process.env.VAULT_TEST_GROUP_RENAME==='1' ? {PYTHONPATH:process.env.PYTHONPATH || ''} : {}),
+      ...(process.env.VAULT_TEST_WSL_CREATE === '1' ? {
+        VAULT_VERACRYPT_WSL_DISTRO: process.env.VAULT_VERACRYPT_WSL_DISTRO,
+        VAULT_VERACRYPT_WSL_CLI: process.env.VAULT_VERACRYPT_WSL_CLI || '/usr/bin/veracrypt',
+      } : {}),
       ...env,
     },
     stderr: 'pipe',
@@ -124,6 +136,84 @@ console.log('VAMP Vault smoke test');
 console.log(`  workdir: ${workdir}`);
 console.log(`  platform: ${process.platform}/${process.arch} → ${detectPlatform().os}/${detectPlatform().cpu}`);
 console.log('\nParsers');
+await check('older KeePassXC reports missing group commands before accessing the vault', async () => {
+  const cli = new VaultCli();
+  let probes = 0;
+  cli.keepass = async args => {
+    assert.deepEqual(args, ['help']);
+    probes++;
+    return 'add   Add a credential\nls    List entries\n';
+  };
+  await assert.rejects(cli.ensureGroup({group:'Example'}),{code:'cli_too_old'});
+  await assert.rejects(cli.moveEntry({entry:'Example',group:'/'}),{code:'cli_too_old'});
+  await assert.rejects(cli.recycleGroup({group:'Example'}),{code:'cli_too_old'});
+  assert.equal(probes,1);
+});
+await check('VirtualBox workspace disk uses a verified secondary slot and refuses a different disk', async () => {
+  const root = await realpath(workdir);
+  const mountPoint=path.join(root,'vhd-mount');
+  const volume=path.join(root,'vhd-volume.hc');
+  await mkdir(mountPoint);
+  await writeFile(volume,'volume fixture');
+  const disk='workspace.vhd';
+  const medium=path.join(mountPoint,disk);
+  const footer=Buffer.alloc(512);
+  footer.write('conectix');
+  footer.writeUInt32BE(3,60);
+  await writeFile(medium,footer);
+  const vm='6725c44b-288f-491f-bb75-1d414ba2ee87';
+  const args={vm,volume,mountPoint,controller:'SATA',port:1,disk};
+  const cli={listVolumes:async()=>({available:true,mounted:[{volume,mount_point:mountPoint}]})};
+  let attached='none', mutations=0;
+  const execute=async argv=>{
+    if(argv[0]==='showvminfo')return {stdout:[
+      `UUID="${vm}"`,'VMState="poweroff"','storagecontrollername0="SATA"','storagecontrollertype0="IntelAhci"',
+      `"SATA-1-0"=${JSON.stringify(attached)}`,
+    ].join('\n')};
+    assert.deepEqual(argv.slice(0,-1),['storageattach',vm,'--storagectl','SATA','--port','1','--device','0','--type','hdd','--medium']);
+    mutations++;
+    attached=argv.at(-1);
+  };
+  assert.equal((await virtualBoxVolume(cli,{...args,operation:'attach'},{execute})).status,'attached');
+  assert.equal(attached,medium);
+  await assert.rejects(virtualBoxVolume(cli,{...args,operation:'attach'},{execute}),/slot does not match/);
+  assert.equal(mutations,1);
+  assert.equal((await virtualBoxVolume(cli,{...args,operation:'detach'},{execute})).status,'detached');
+  assert.equal(attached,'none');
+  await assert.rejects(virtualBoxVolume({listVolumes:async()=>({available:true,mounted:[]})},{...args,operation:'attach'},{execute}),/mount could not be verified/);
+  assert.equal(mutations,2);
+  const libvirt={...args,target:'vdb',uri:'qemu:///system'};
+  let diskState='shut off';
+  let target=null;
+  const virsh=async argv=>{
+    assert.deepEqual(argv.slice(0,2),['-c','qemu:///system']);
+    assert.equal(argv[3],vm);
+    if (argv[2]==='domstate') return {stdout:diskState};
+    if (argv[2]==='domblklist') return {stdout:[' Type Device Target Source',' --------',' file disk vda /boot.img',...(target?[ ` file disk vdb ${target}` ]:[])].join('\n')};
+    if (argv[2]==='attach-disk') {
+      assert.deepEqual(argv.slice(4),[medium,'vdb','--config','--driver','qemu','--subdriver','vpc','--targetbus','virtio','--sourcetype','file','--cache','none']);
+      target=medium;
+    } else {
+      assert.deepEqual(argv.slice(2),['detach-disk',vm,'vdb','--config']);
+      target=null;
+    }
+  };
+  assert.equal((await kvmVolume(cli,{...libvirt,operation:'attach'},{execute:virsh})).status,'attached');
+  diskState='running';
+  await assert.rejects(kvmVolume(cli,{...libvirt,operation:'detach'},{execute:virsh}),/Shut down/);
+  diskState='shut off';
+  assert.equal((await kvmVolume(cli,{...libvirt,operation:'detach'},{execute:virsh})).status,'detached');
+  const stateDir=path.join(root,'vm-volume-state');
+  const guarded=fn=>withVmVolumeState(fn,{directory:stateDir});
+  await guarded(guard=>virtualBoxVolume(cli,{...args,operation:'attach'},{execute,guard}));
+  await assert.rejects(guarded(guard=>guard.assertDetached({volume})),/Detach the VM/);
+  await assert.rejects(guarded(guard=>guard.assertDetached({mountPoint})),/Detach the VM/);
+  await assert.rejects(guarded(guard=>guard.assertDetached()),/Detach the VM/);
+  // A confirmed recovery detach also clears a record when the exact slot is already empty.
+  attached='none';
+  assert.equal((await guarded(guard=>virtualBoxVolume(cli,{...args,operation:'detach'},{execute,guard}))).status,'detached');
+  await guarded(guard=>guard.assertDetached({volume}));
+});
 
 await check('parseShowAll reads fields and custom attributes', () => {
   const record = parseShowAll('Title: Bank\nUserName: alice\nPassword: pw\nURL: https://x\nNotes: \nUuid: {1}\nTags: a,b\nPIM: 4242\n');
@@ -157,6 +247,9 @@ await check('parseMountList reads VeraCrypt slots', () => {
   assert.equal(mounted.length, 1);
   assert.equal(mounted[0].mount_point, '/home/u/VAMP-Vault');
   assert.deepEqual(parseMountList('Error: No volumes mounted.'), []);
+  assert.deepEqual(parseMountList('Slot: 1\nVolume: /tmp/demo volume.hc\nVirtual Device: /dev/mapper/veracrypt1\nMount Directory: /mnt/demo mount\nRead-Only: Yes\n'), [
+    { slot: 1, volume: '/tmp/demo volume.hc', device: '/dev/mapper/veracrypt1', mount_point: '/mnt/demo mount', read_only: true },
+  ]);
 });
 await check('detectPlatform maps Node triples', () => {
   assert.equal(detectPlatform('linux', 'x64').cpu, 'x64');
@@ -228,7 +321,7 @@ await check('VeraCrypt is announced, never installed behind the user', async () 
   const calls = [];
   const fakeRun = async (command, args) => { calls.push([command, args]); return { code: 0, stdout: '', stderr: '' }; };
   const report = await ensureClis({
-    binDir: path.join(workdir, 'veracrypt-bin'), tools: ['veracrypt'], platform: 'win32', arch: 'x64',
+    binDir: path.join(workdir, 'veracrypt-bin'), tools: ['veracrypt'], platform: 'win32', arch: 'x64', force: true,
     runCommand: fakeRun, notify: () => {},
   });
   assert.equal(report.tools.veracrypt.status, 'manual_install_required');
@@ -390,14 +483,26 @@ await fakeHost.close();
 console.log('\nMCP tools');
 const client = await connect({ kdbx, volume });
 
-await check('server lists the ten vault tools', async () => {
+await check('server lists the expected vault tools', async () => {
   const { tools } = await client.listTools();
   const names = tools.map(tool => tool.name).sort();
   assert.deepEqual(names, [
-    'vault_add_credential', 'vault_create', 'vault_delete_credential', 'vault_get_credential',
-    'vault_list_credentials', 'vault_mount_volume', 'vault_set_credential', 'vault_status',
+    'vault_add_credential', 'vault_attach_container', 'vault_attach_vm', 'vault_check_placeholders', 'vault_create', 'vault_create_group', 'vault_create_volume', 'vault_delete_credential', 'vault_delete_group', 'vault_delete_volume', 'vault_deliver_credential', 'vault_detach_vm', 'vault_get_credential',
+    'vault_list_credentials', 'vault_list_groups', 'vault_mount_volume', 'vault_move_credential', 'vault_rename_group', 'vault_set_credential', 'vault_status',
     'vault_unmount_volume', 'vault_update_credential',
   ]);
+});
+
+await check('delivery never releases a credential without the editor approval bridge', async () => {
+  const response = await client.callTool({ name: 'vault_deliver_credential', arguments: {
+    entry: 'QA/Fixture', destination: 'test-vm', field: 'password',
+  } });
+  assert.equal(payload(response).status, 'error');
+  assert.match(payload(response).error, /approve this delivery/);
+  const totp = await client.callTool({ name: 'vault_deliver_credential', arguments: {
+    reference: '{{vault:QA/Fixture#totp}}', destination: 'test-vm',
+  } });
+  assert.match(payload(totp).error, /approve this delivery/);
 });
 
 const status = payload(await client.callTool({ name: 'vault_status', arguments: {} }));
@@ -520,13 +625,142 @@ if (!status.cli.keepassxc.available) {
     assert.equal(missing.code, 'entry_not_found');
   });
 
+  await check('Vault checks references and moves entries without returning their values', async () => {
+    const call = async (name, args) => payload(await client.callTool({ name, arguments: args }));
+    await call('vault_add_credential', {entry:'Mail/FieldFixture',password:'field-only-fixture'});
+    const checks = await call('vault_check_placeholders', { references: ['${vault:Mail/Example#password}', '${vault:Missing#totp}', 'invalid', '{{vault:Mail/Example#totp}}', '${vault:Mail/Example#username}', '${vault:Mail/FieldFixture#username}'] });
+    assert.deepEqual(checks.checks.map(item => item.status), ['placeholder_resolved', 'placeholder_unresolved', 'invalid_placeholder', 'placeholder_unresolved', 'placeholder_resolved', 'placeholder_unresolved']);
+    assert.equal(checks.checks[3].field, 'totp');
+    assert.ok(!JSON.stringify(checks).includes('changed-pw-42'));
+    assert.ok(!JSON.stringify(checks).includes('alice'));
+    assert.equal((await call('vault_create_group', {group:'MoveFixture', confirm:true})).status, 'ok');
+    assert.equal((await call('vault_move_credential', {entry:'Mail/Example', group:'MoveFixture', confirm:true})).path, 'MoveFixture/Example');
+    assert.equal((await call('vault_move_credential', {entry:'MoveFixture/Example', group:'Mail', confirm:true})).path, 'Mail/Example');
+  });
+
+  await check('group listing requires approval and includes nested and empty groups without credentials', async () => {
+    const call = async (name, args) => payload(await client.callTool({ name, arguments: args }));
+    assert.equal((await call('vault_list_groups', {})).status, 'approval_required');
+    await call('vault_create_group', { group: 'MoveFixture/Nested/Empty', confirm: true });
+    await call('vault_move_credential', { entry: 'Mail/Example', group: 'MoveFixture/Nested', confirm: true });
+    const listing = await call('vault_list_groups', { confirm: true });
+    assert.equal(listing.status, 'ok');
+    assert.deepEqual(listing.groups.filter(group => group.path.startsWith('MoveFixture')), [
+      { path: 'MoveFixture', parent: '/', direct_entries: 0, total_entries: 1 },
+      { path: 'MoveFixture/Nested', parent: 'MoveFixture', direct_entries: 1, total_entries: 1 },
+      { path: 'MoveFixture/Nested/Empty', parent: 'MoveFixture/Nested', direct_entries: 0, total_entries: 0 },
+    ]);
+    assert.ok(!JSON.stringify(listing).includes('Example'));
+    const cli = new VaultCli({ keepassxcCli: status.cli.keepassxc.path, kdbxPath: kdbx });
+    await cli.addEntry({ file: kdbx, group: 'MoveFixture/Nested', entry: '[empty]', secret: entryPassword, databasePassword: masterPassword });
+    const scoped = await cli.listEntries({ file: kdbx, group: 'MoveFixture', databasePassword: masterPassword });
+    assert.ok(scoped.entries.some(entry => entry.path === 'Nested/[empty]'));
+    assert.ok(!scoped.entries.some(entry => entry.group === 'Nested/Empty'));
+    await call('vault_move_credential', { entry: 'MoveFixture/Nested/Example', group: 'Mail', confirm: true });
+  });
+
+  await check('a real configured TOTP resolves without returning the seed or generated code',async()=>{
+    const cli=new VaultCli({keepassxcCli:status.cli.keepassxc.path});
+    const xml=path.join(workdir,'totp-fixture.xml');
+    const file=path.join(workdir,'totp-fixture.kdbx');
+    const uuid=()=>randomBytes(16).toString('base64');
+    const seed='JBSWY3DPEHPK3PXP';
+    await writeFile(xml,`<?xml version="1.0" encoding="utf-8"?>
+      <KeePassFile><Meta><DatabaseName>TOTP fixture</DatabaseName></Meta><Root>
+      <Group><UUID>${uuid()}</UUID><Name>Root</Name>
+      <Group><UUID>${uuid()}</UUID><Name>QA</Name>
+      <Entry><UUID>${uuid()}</UUID><String><Key>Title</Key><Value>OTP</Value></String>
+      <String><Key>otp</Key><Value>otpauth://totp/QA?secret=${seed}</Value></String>
+      </Entry></Group></Group></Root></KeePassFile>`,{mode:0o600});
+    try {
+      await cli.keepass(['import','-q','-p','--',xml,file],{databasePassword:masterPassword,prompts:[masterPassword]});
+    } finally {
+      await rm(xml,{force:true});
+    }
+    const otp=await cli.totp({file,entry:'QA/OTP',databasePassword:masterPassword});
+    assert.ok(otp.available && /^\d{6}$/.test(otp.code));
+    const testClient=await connect({kdbx:file,volume});
+    try {
+      const result=payload(await testClient.callTool({name:'vault_check_placeholders',arguments:{references:['${vault:QA/OTP#totp}']}}));
+      assert.deepEqual(result,{status:'ok',checks:[{index:0,entry:'QA/OTP',field:'totp',status:'placeholder_resolved'}]});
+    } finally {await testClient.close();}
+  });
+
   const deleted = payload(await client.callTool({ name: 'vault_delete_credential', arguments: { entry: 'Mail/Example', file: kdbx, confirm: true } }));
   await check('vault_delete_credential recycles the entry', () => {
     assert.equal(deleted.status, 'deleted');
     assert.equal(deleted.recyclable, true);
   });
 
-  if (status.cli.veracrypt.available) {
+  if(process.env.VAULT_TEST_GROUP_RENAME==='1') await check('group rename preserves nested credential contents and rejects collisions',async()=>{
+    const call=async(name,args)=>payload(await client.callTool({name,arguments:args}));
+    await call('vault_add_credential',{entry:'RenameFixture/Child/Entry',username:'fixture',password:entryPassword});
+    await call('vault_create_group',{group:'OccupiedName',confirm:true});
+    const original=await readFile(kdbx);
+    assert.equal((await call('vault_rename_group',{group:'RenameFixture',name:'NewName'})).status,'approval_required');
+    assert.equal((await call('vault_rename_group',{group:'RenameFixture',name:'OccupiedName',confirm:true})).status,'error');
+    assert.deepEqual(await readFile(kdbx),original);
+    const renamed=await call('vault_rename_group',{group:'RenameFixture',name:'NewName',confirm:true});
+    assert.deepEqual(renamed,{status:'renamed',path:'NewName'});
+    const cli=new VaultCli({keepassxcCli:status.cli.keepassxc.path});
+    const record=await cli.showEntry({file:kdbx,entry:'NewName/Child/Entry',databasePassword:masterPassword});
+    assert.equal(record.password,entryPassword);
+  });
+
+  await check('group deletion requires confirmation and preserves already recycled groups', async () => {
+    const call = async (name, args) => payload(await client.callTool({ name, arguments: args }));
+    const group = 'RecycleFixture';
+    assert.equal((await call('vault_create_group', {group:group+'/Nested',confirm:true})).status,'ok');
+    assert.equal((await call('vault_delete_group',{group})).status,'approval_required');
+    const before = await readFile(kdbx);
+    assert.equal((await call('vault_delete_group',{group,confirm:true})).status,'error');
+    assert.deepEqual(await readFile(kdbx),before);
+    assert.equal((await call('vault_delete_group',{group,confirm:true,recursive:true})).status,'recycled');
+    const report = await call('vault_list_groups',{confirm:true});
+    const recycled = report.groups.find(item=>item.path.endsWith('/'+group));
+    assert.ok(recycled && !report.groups.some(item=>item.path===group));
+    const after = await readFile(kdbx);
+    assert.equal((await call('vault_delete_group',{group:recycled.path,confirm:true,recursive:true})).status,'error');
+    assert.deepEqual(await readFile(kdbx),after);
+  });
+
+  await check('managed deletion preserves files on a binding or unmount failure and recycles the matching entry', async () => {
+    const cli = new VaultCli({ keepassxcCli: status.cli.keepassxc.path, kdbxPath: kdbx });
+    const file = path.join(await realpath(workdir), 'delete-fixture.hc');
+    const other = path.join(path.dirname(file), 'unrelated.hc');
+    const fixture = { file: kdbx, entry: 'VeraCrypt/DeleteFixture', databasePassword: masterPassword };
+    await writeFile(file, 'encrypted-volume fixture');
+    await writeFile(other, 'unrelated fixture');
+    await cli.addEntry({ file: kdbx, group: 'VeraCrypt', entry: 'DeleteFixture', secret: entryPassword,
+      url: pathToFileURL(file).href, databasePassword: masterPassword });
+    await assert.rejects(deleteManagedVolume(cli, { ...fixture, volume: other }), /not bound/);
+    assert.equal(await readFile(other, 'utf8'), 'unrelated fixture');
+    let mounted = true;
+    cli.listVolumes = async () => ({ available: true, mounted: mounted ? [{ volume: file, mount_point: 'fixture-mount' }] : [] });
+    cli.unmountVolume = async () => ({ unmounted: false });
+    await assert.rejects(deleteManagedVolume(cli, { ...fixture, volume: file }), /still mounted/);
+    assert.equal(await readFile(file, 'utf8'), 'encrypted-volume fixture');
+    cli.unmountVolume = async ({ mountPoint }) => {
+      assert.equal(mountPoint, 'fixture-mount');
+      mounted = false;
+      return { unmounted: true };
+    };
+    const removeEntry = cli.deleteEntry.bind(cli);
+    cli.deleteEntry = async () => { throw new Error('simulated vault write failure'); };
+    const interrupted = await deleteManagedVolume(cli, { ...fixture, volume: file });
+    assert.equal(interrupted.status, 'recovery_required');
+    assert.equal(interrupted.credential_removed, false);
+    assert.equal(await readFile(interrupted.recovery_path, 'utf8'), 'encrypted-volume fixture');
+    assert.ok((await cli.listEntries(fixture)).entries.some(item => item.path === fixture.entry));
+    await rename(interrupted.recovery_path, file);
+    cli.deleteEntry = removeEntry;
+    const result = await deleteManagedVolume(cli, { ...fixture, volume: file });
+    assert.equal(result.status, 'deleted');
+    await assert.rejects(readFile(file), { code: 'ENOENT' });
+    assert.ok(!(await cli.listEntries(fixture)).entries.some(item => item.path === fixture.entry));
+  });
+
+  if (status.cli.veracrypt.available && process.platform !== 'win32') {
     const volumeReport = payload(await client.callTool({
       name: 'vault_create',
       arguments: { file: path.join(workdir, 'second.kdbx'), master_password: masterPassword, volume_file: volume, volume_size_mb: 8, volume_password: 'volume-pw-99' },
@@ -540,9 +774,191 @@ if (!status.cli.keepassxc.available) {
       assert.ok(['mounted', 'failed'].includes(mount.status));
       if (mount.status === 'failed') assert.ok(mount.hint);
     });
-    const unmount = payload(await client.callTool({ name: 'vault_unmount_volume', arguments: { all: true } }));
+    const unmount = payload(await client.callTool({ name: 'vault_unmount_volume', arguments: { mount_point: path.join(workdir, 'mnt') } }));
     await check('vault_unmount_volume answers with a state', () => {
       assert.ok(['unmounted', 'failed'].includes(unmount.status));
+    });
+  }
+  if (process.env.VAULT_TEST_WSL_CREATE === '1') {
+    if (process.env.VAULT_TEST_WSL_VBOX_MEDIA === '1') {
+      await check('Windows MCP creates and deletes a fixed guest VHD with an encrypted payload', async () => {
+        const volume = path.join(workdir, 'guest volume.vhd');
+        const call = async (name, arguments_) => payload(await client.callTool({ name, arguments: arguments_ }));
+        const created = await call('vault_create_volume', { volume, name:'GuestVhd', size_mb:8, format:'guest-vhd', confirm:true });
+        assert.equal(created.status, 'created', JSON.stringify(created));
+        assert.equal(created.format, 'guest-vhd');
+        let verified=false;
+        try {
+          const bytes = await readFile(volume);
+          assert.equal(bytes.length, 8 * 1024 * 1024 + 512);
+          assert.equal(bytes.toString('ascii', bytes.length - 512, bytes.length - 504), 'conectix');
+          assert.equal(bytes.readUInt32BE(bytes.length - 452), 2);
+          const cli = new VaultCli({keepassxcCli:status.cli.keepassxc.path,kdbxPath:kdbx});
+          const record = await cli.showEntry({file:kdbx,entry:created.entry,databasePassword:masterPassword});
+          assert.match(record.password,/^[A-Za-z0-9_-]{43}$/);
+          assert.ok(!JSON.stringify(created).includes(record.password));
+          const mount = (await cli.wslCommand(['/usr/bin/mktemp','-d'],{root:true})).stdout.trim();
+          let loop;
+          try {
+            const source = await cli.windowsVolumePathInWsl(volume);
+            loop = (await cli.wslCommand(['/usr/sbin/losetup','--find','--show','--sizelimit','8388608',source],{root:true})).stdout.trim();
+            assert.match(loop,/^\/dev\/loop\d+$/);
+            const unlock = () => cli.wslVeraCrypt(['--pim=0','--keyfiles=','--protect-hidden=no',loop,mount],{root:true,password:record.password});
+            await unlock();
+            const marker = `${mount}/vamp-test`;
+            await cli.wslCommand(['/usr/bin/tee',marker],{root:true,input:'guest-vhd fixture\n'});
+            await cli.wslVeraCrypt(['--dismount',mount],{root:true});
+            await unlock();
+            assert.equal((await cli.wslCommand(['/usr/bin/cat',marker],{root:true})).stdout.trim(),'guest-vhd fixture');
+          } finally {
+            if (loop && /^\/dev\/loop\d+$/.test(loop)) {
+              await cli.wslVeraCrypt(['--dismount',mount],{root:true,allowFailure:true});
+              await cli.wslCommand(['/usr/sbin/losetup','--detach',loop],{root:true});
+            }
+            await cli.wslCommand(['/usr/bin/rmdir','--',mount],{root:true});
+          }
+          const testVm=process.env.VAULT_TEST_HYPERV_VM || process.env.VAULT_TEST_VIRTUALBOX_VM;
+          if (testVm) {
+            const backend=process.env.VAULT_TEST_HYPERV_VM?'hyperv':'virtualbox';
+            const target = { vm:testVm, volume, backend, ...(backend==='virtualbox' && {controller:'SATA'}),
+              port:1, credential_entry:created.entry, confirm:true };
+            const attached = await call('vault_attach_vm',target);
+            assert.equal(attached.status,'attached',JSON.stringify(attached));
+            try {
+              const removal = await call('vault_delete_volume',{volume,entry:created.entry,confirm:true});
+              assert.match(JSON.stringify(removal),/Detach the VM workspace disk/);
+              await stat(volume);
+            } finally {
+              const detached = await call('vault_detach_vm',target);
+              assert.equal(detached.status,'detached',JSON.stringify(detached));
+              if (backend==='virtualbox') {
+                const {execFileSync}=await import('node:child_process');
+                const vbox=path.join(process.env.ProgramFiles || 'C:\\Program Files','Oracle/VirtualBox/VBoxManage.exe');
+                const inventory=execFileSync(vbox,['list','hdds'],{encoding:'utf8',timeout:15000});
+                assert.ok(!inventory.includes(volume),'Detached guest disk remained in the VirtualBox registry');
+              }
+            }
+          }
+          verified=true;
+        } finally {
+          const removed=await call('vault_delete_volume',{volume,entry:created.entry,confirm:true});
+          if(verified) {
+            assert.equal(removed.status,'deleted',JSON.stringify(removed));
+            await assert.rejects(stat(volume),{code:'ENOENT'});
+          }
+        }
+      });
+    }
+    await check('Windows MCP creates a managed VeraCrypt volume via WSL and keeps its password out of the result', async () => {
+      assert.equal(process.platform,'win32');
+      const volume = path.join(workdir,'managed wsl fixture.hc');
+      const created = payload(await client.callTool({ name: 'vault_create_volume',
+        arguments: { volume, name:'WslFixture',size_mb:8,confirm:true } }));
+      assert.equal(created.status,'created');
+      assert.equal((await stat(volume)).size,8*1024*1024);
+      const cli = new VaultCli({keepassxcCli:status.cli.keepassxc.path,kdbxPath:kdbx});
+      const record = await cli.showEntry({file:kdbx,entry:created.entry,databasePassword:masterPassword});
+      assert.match(record.password,/^[A-Za-z0-9_-]{43}$/);
+      assert.ok(!JSON.stringify(created).includes(record.password));
+      const mount_point=process.env.VAULT_TEST_WSL_MOUNT_POINT;
+      if (mount_point) {
+        const args={volume,mount_point,credential_entry:created.entry,read_only:true};
+        const call=async(name,arguments_)=>payload(await client.callTool({name,arguments:arguments_}));
+        assert.equal((await call('vault_mount_volume',args)).status,'approval_required');
+        try {
+          const mounted=await call('vault_mount_volume',{...args,confirm:true});
+          assert.equal(mounted.status,'mounted');
+          assert.equal(mounted.backend,'wsl');
+          assert.ok(!JSON.stringify(mounted).includes(record.password));
+        } finally {
+          const closed=await call('vault_unmount_volume',{mount_point});
+          assert.equal(closed.status,'unmounted');
+        }
+        const probeVmDisk=process.env.VAULT_TEST_WSL_VBOX_MEDIA==='1';
+        assert.equal((await call('vault_mount_volume',{...args,read_only:!probeVmDisk,confirm:true})).status,'mounted');
+        const wslCli=new VaultCli({env:process.env});
+        if (probeVmDisk) {
+          const disk='fixture.vhd';
+          await wslCli.wslCommand(['/usr/bin/qemu-img','create','-f','vpc',mount_point+'/'+disk,'4M']);
+          await wslCli.wslCommand(['/usr/bin/test','-f',mount_point+'/'+disk]);
+          const vm='6725c44b-288f-491f-bb75-1d414ba2ee87';
+          let attached='none';
+          const {execFileSync}=await import('node:child_process');
+          const vbox=path.join(process.env.ProgramFiles || 'C:\\Program Files','Oracle/VirtualBox/VBoxManage.exe');
+          const execute=async argv=>{
+            if(argv[0]==='showvminfo')return {stdout:[
+              `UUID="${vm}"`,'VMState="poweroff"','storagecontrollername0="SATA"','storagecontrollertype0="IntelAhci"',
+              `"SATA-1-0"=${JSON.stringify(attached)}`,
+            ].join('\n')};
+            const candidate=argv.at(-1);
+            if(candidate!=='none') {
+              const report=execFileSync(vbox,['showmediuminfo','disk',candidate],{encoding:'utf8',timeout:15000});
+              assert.match(report,/Storage format:\s+VHD/);
+            }
+            attached=candidate;
+          };
+          const target={wsl:true,vm,volume,mountPoint:mount_point,controller:'SATA',port:1,disk};
+          assert.equal((await virtualBoxVolume(wslCli,{...target,operation:'attach'},{execute})).status,'attached');
+          assert.equal((await virtualBoxVolume(wslCli,{...target,operation:'detach'},{execute})).status,'detached');
+          if (process.env.VAULT_TEST_VIRTUALBOX_VM) {
+            const live={ vm:process.env.VAULT_TEST_VIRTUALBOX_VM, volume, mount_point,
+              backend:'virtualbox', controller:'SATA', port:1, disk, confirm:true };
+            const result=await call('vault_attach_vm',live);
+            assert.equal(result.status,'attached',JSON.stringify(result));
+            try {
+              const remove=await call('vault_delete_volume',{volume,entry:created.entry,confirm:true});
+              assert.match(JSON.stringify(remove),/Detach the VM workspace disk/);
+              await stat(volume);
+            } finally {
+              const detach=await call('vault_detach_vm',live);
+              assert.equal(detach.status,'detached',JSON.stringify(detach));
+            }
+          }
+          let hypervMedia=null;
+          const hyperv=async request=>{
+            assert.equal(request.vm,vm);
+            assert.equal(request.controllerNumber,0);
+            assert.equal(request.port,1);
+            assert.match(request.medium,/fixture\.vhd$/);
+            if(request.action==='check')return {empty:hypervMedia===null,matches:hypervMedia===request.medium};
+            if(request.action==='attach')hypervMedia=request.medium;
+            else if(request.action==='detach')hypervMedia=null;
+            else assert.fail('unexpected Hyper-V operation');
+            return {changed:true};
+          };
+          const hv={...target,controllerNumber:0};
+          assert.equal((await hypervVolume(wslCli,{...hv,operation:'attach'},{execute:hyperv})).status,'attached');
+          await assert.rejects(hypervVolume(wslCli,{...hv,operation:'attach'},{execute:hyperv}),/slot does not match/);
+          assert.equal((await hypervVolume(wslCli,{...hv,operation:'detach'},{execute:hyperv})).status,'detached');
+        }
+        const removed=await call('vault_delete_volume',{volume,entry:created.entry,confirm:true});
+        assert.equal(removed.status,'deleted');
+        await assert.rejects(stat(volume),{code:'ENOENT'});
+        assert.ok(!(await cli.listEntries({file:kdbx,databasePassword:masterPassword})).entries
+          .some(item=>item.path===created.entry));
+        assert.ok(!(await wslCli.listWslVolumes()).some(item=>item.mount_point===mount_point));
+      }
+    });
+  }
+  if (process.env.VAULT_TEST_VOLUME_LIFECYCLE === '1') {
+    await check('managed volume is unmounted and deleted through MCP', async () => {
+      assert.ok(status.cli.veracrypt.available && process.platform === 'linux');
+      const call = async (name, args) => payload(await client.callTool({ name, arguments: args }));
+      const file = path.join(workdir, 'managed-live.hc');
+      const mountPoint = path.join(workdir, 'mnt');
+      await mkdir(mountPoint, { recursive: true });
+      const created = await call('vault_create_volume', { volume: file, name: 'ManagedLive', size_mb: 8, confirm: true });
+      assert.equal(created.status, 'created');
+      const target = { volume: file, entry: created.entry };
+      assert.equal((await call('vault_delete_volume', target)).status, 'approval_required');
+      try {
+        const mounted = await call('vault_mount_volume', { volume: file, credential_entry: created.entry, read_only: true, confirm: true });
+        assert.equal(mounted.status, 'mounted');
+        assert.equal((await call('vault_delete_volume', { ...target, confirm: true })).status, 'deleted');
+        await assert.rejects(readFile(file), { code: 'ENOENT' });
+      } finally {
+        await call('vault_unmount_volume', { mount_point: mountPoint });
+      }
     });
   }
 }

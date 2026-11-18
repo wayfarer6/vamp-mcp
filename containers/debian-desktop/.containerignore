@@ -9,3 +9,6 @@
 !view.py
 !chromium-launcher.py
 !chromium.desktop
+!Containerfile.recorder
+!recorder-launcher.sh
+!recorder.desktop

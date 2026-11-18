@@ -20,6 +20,8 @@ test('thin MCP routes existing operations and a read-only plan without startup t
   'node:fs/promises':{readFile:()=>{throw Error('Default asset read during registration');}},
   './browser-viewer.mjs':{createBrowserViewer:()=>{throw Error('Viewer open during registration');}},
   './adapter.cjs':{default:{createPodmanAdapter:()=>adapter}},
+  '../../vscode-vault-extension/src/bridge_client.mjs':{BridgeClient:{connect:()=>assert.fail('unexpected Vault bridge access')}},
+  '../../vscode-vault-extension/src/vm_volume_state.mjs':{withVmVolumeState:()=>assert.fail('unexpected VM state access')},
   './workspace.cjs':{default:require('./workspace.cjs')},
   './debian-host.cjs':{default:{createDebianHost:()=>{throw Error('Default builder constructed before use');}}}
  };
@@ -32,8 +34,8 @@ test('thin MCP routes existing operations and a read-only plan without startup t
  const hostBuilder={prepareDebianHost:async args=>{calls.push({method:'prepareDebianHost',args});return {status:'queued'};},debianHostStatus:async id=>{calls.push({method:'debianHostStatus',id});return {status:'building'};}};
  await mod.evaluate();const server=mod.namespace.createPodmanServer({adapter,hostBuilder,getViewerModule:async()=>'fixture',
   openBrowserViewer:async options=>{calls.push({method:'createViewer',args:[options.containerId,options.mode]});return {url:shown};}});
- assert.equal(calls.length,0);assert.equal(server.tools.size,13);
- assert.deepEqual([...server.tools.keys()],['podman_connections','podman_check','podman_list','podman_debian_vm_build_status','podman_prepare_debian_vm','podman_start','podman_stop','podman_logs','podman_workspace_plan','podman_workspace_check','podman_workspace_attach','podman_capture_container_screen','podman_view_container_screen']);
+ assert.equal(calls.length,0);assert.equal(server.tools.size,17);
+ assert.deepEqual([...server.tools.keys()],['podman_connections','podman_check','podman_list','podman_debian_vm_build_status','podman_prepare_debian_vm','podman_start','podman_stop','podman_logs','podman_workspace_plan','podman_workspace_check','podman_workspace_unlock','podman_workspace_lock','podman_workspace_detach','podman_workspace_attach','vault_attach_container','podman_capture_container_screen','podman_view_container_screen']);
  const readOnly=server.tools.get('podman_workspace_plan');
  assert.equal(readOnly.annotations.readOnlyHint,true);
  const plan=await readOnly.callback({target_id:'demo'});
@@ -51,6 +53,8 @@ test('thin MCP routes existing operations and a read-only plan without startup t
  await server.tools.get('podman_debian_vm_build_status').callback({job_id:'a'.repeat(32)});
  assert.equal(calls.at(-1).method,'debianHostStatus');
  const workspace={connection:'local-linux',binding:'c'.repeat(64),approval_id:'d'.repeat(64),confirmed:true};
+ assert.equal((await server.tools.get('podman_workspace_unlock').callback({...workspace,confirmed:false})).isError,true);
+ assert.equal((await server.tools.get('podman_workspace_lock').callback({...workspace,confirmed:false})).isError,true);
  await server.tools.get('podman_workspace_check').callback(workspace);
  assert.equal(calls.at(-1).method,'workspaceStatus');
  const beforeAttach=calls.length;
@@ -59,6 +63,15 @@ test('thin MCP routes existing operations and a read-only plan without startup t
  await server.tools.get('podman_workspace_attach').callback(workspace);
  assert.equal(calls.at(-1).method,'workspaceAttach');
  assert.equal(calls.at(-1).args[2],workspace.approval_id);
+ assert.equal((await server.tools.get('vault_attach_container').callback({...workspace,confirmed:false})).isError,true);
+ await server.tools.get('vault_attach_container').callback(workspace);
+ assert.deepEqual(calls.at(-1).args,[workspace.connection,workspace.binding,workspace.approval_id]);
+ const detach=server.tools.get('podman_workspace_detach');
+ assert.equal((await detach.callback({...workspace,id:'a'.repeat(64),confirmed:false})).isError,true);
+ assert.equal(calls.at(-1).method,'workspaceAttach');
+ adapter.workspaceDetach=async(...args)=>{calls.push({method:'workspaceDetach',args});return {status:'detached'};};
+ assert.equal(JSON.parse((await detach.callback({...workspace,id:'a'.repeat(64)})).content[0].text).status,'detached');
+ assert.deepEqual(calls.at(-1).args,[workspace.connection,'a'.repeat(64),workspace.binding]);
  const request={connection:'qa',id:'a'.repeat(64),binding:'b'.repeat(64),confirmed:true,mode:'control'};
  const view=await server.tools.get('podman_view_container_screen').callback(request);
  assert.equal(view.structuredContent.url,shown);assert.equal(view.structuredContent.mode,'control');assert.equal(view.structuredContent.container_id,request.id);

@@ -1,9 +1,9 @@
 'use strict';
 const {execFile}=require('node:child_process');
-const path=require('node:path');
+const {resolveRuntimeAsset}=require('../common/packer.cjs');
 function createDebianHost({runtime,python,spawn=execFile}={}){
-  const script=path.join(runtime,'backends/packer/podman/host_job.py');
-  function call(action,request,id){
+  async function call(action,request,id){
+    const script=await resolveRuntimeAsset(runtime,'backends/packer/podman/host_job.py');
     return new Promise((resolve,reject)=>{
       const executable=typeof python==='function'?python():python;
       const options={windowsHide:true,timeout:35000,maxBuffer:128*1024};

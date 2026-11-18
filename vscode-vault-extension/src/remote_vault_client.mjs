@@ -148,7 +148,7 @@ export function isRemoteVaultConfigured(config) {
 }
 
 /** Arguments for ssh; the remote command is always the last item. */
-export function sshArgs(config, command) {
+export function sshArgs(config, command, { requireKnownHost = false } = {}) {
   if (!config?.host) throw new Error('No remote host is configured.');
   const args = [
     '-T',
@@ -156,7 +156,7 @@ export function sshArgs(config, command) {
     '-o', `ConnectTimeout=${config.connectTimeoutSeconds ?? 10}`,
     '-o', 'ServerAliveInterval=15',
     '-o', 'ServerAliveCountMax=3',
-    '-o', 'StrictHostKeyChecking=accept-new',
+    '-o', `StrictHostKeyChecking=${requireKnownHost ? 'yes' : 'accept-new'}`,
   ];
   if (Number(config.port ?? 22) !== 22) args.push('-p', String(config.port));
   if (config.privateKeyPath) args.push('-i', config.privateKeyPath, '-o', 'IdentitiesOnly=yes');
@@ -248,6 +248,7 @@ const CALL_TIMEOUTS = {
   vault_get_credential: 180000,
   vault_list_credentials: 180000,
   vault_status: 120000,
+  vault_delete_volume: 360000,
   vault_mount_volume: 180000,
 };
 
@@ -260,10 +261,10 @@ export class RemoteVaultClient {
   }
 
   /** Run one shell command on the remote host through ssh. */
-  exec(command, { stdinText, timeoutMs = this.timeoutMs } = {}) {
+  exec(command, { stdinText, timeoutMs = this.timeoutMs, requireKnownHost = false } = {}) {
     return new Promise((resolve, reject) => {
       let child;
-      const args = sshArgs(this.config, command);
+      const args = sshArgs(this.config, command, { requireKnownHost });
       // The bridge and any local password must never reach the remote side: the
       // host is headless by design and only ever gets a password on stdin.
       const environment = { ...process.env };
@@ -313,8 +314,9 @@ export class RemoteVaultClient {
     const result = await this.exec(`command -v ${node} >/dev/null 2>&1 && exec ${node} -p ${expression}`, { timeoutMs: 45000 });
     const data = parseRemoteOutput(result.stdout);
     if (result.code !== 0 || !data) {
+      const diagnostic = friendly({ code: result.code }, this.config, result.stderr);
       throw new RemoteVaultError(
-        `SSH reached ${remoteVaultTarget(this.config)} but Node.js could not run there. ${friendly({ code: result.code }, this.config, result.stderr)}`.trim(),
+        result.code === 255 ? diagnostic : `Node.js probe failed on ${remoteVaultTarget(this.config)}. ${diagnostic}`,
         { code: result.code, stderr: result.stderr },
       );
     }
@@ -417,6 +419,7 @@ export class RemoteVaultClient {
     const result = await this.exec(remoteCallCommand(this.config, { tool, args, stdinPassword }), {
       stdinText: stdinPassword ? `${password}\n` : undefined,
       timeoutMs: limit,
+      requireKnownHost: tool === 'vault_deliver_credential',
     });
     if (result.code === 255 && !parseRemoteOutput(result.stdout)) {
       throw new RemoteVaultError(friendly({ code: result.code }, this.config, result.stderr), { code: 255, stderr: result.stderr });

@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -13,7 +14,7 @@ class ConversionTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             marker=Path(directory)/'executed'
             with self.assertRaises(ValueError):
-                parse_recording(f"import os\nos.system('touch {marker}')")
+                parse_recording(f"import os\nos.system({f'touch {marker}'!r})")
             self.assertFalse(marker.exists())
             with self.assertRaises(ValueError):
                 parse_recording("import pyautogui as p\np.click(x=__import__('os').getpid(),y=2)")
@@ -48,7 +49,8 @@ time.sleep(1.5)
             result=generate(source,'example',package_root=root/'rpas')
             package=Path(result['package_path'])
             self.assertIn('PRIVATE_RECORDING_VALUE',(package/'recording.local.json').read_text())
-            self.assertEqual((package/'recording.local.json').stat().st_mode & 0o777,0o600)
+            if os.name == 'posix':
+                self.assertEqual((package/'recording.local.json').stat().st_mode & 0o777,0o600)
             for name in ['workflow.py','run.robot','conversion.json','README.md','manifest.json']:
                 self.assertNotIn('PRIVATE_RECORDING_VALUE',(package/name).read_text())
             with self.assertRaises(ValueError):generate(source,'example',package_root=root/'rpas')

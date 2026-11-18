@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=VAMP Recorder
+Exec=/usr/local/bin/vamp-recorder
+Icon=media-record
+Terminal=false
+Categories=Utility;

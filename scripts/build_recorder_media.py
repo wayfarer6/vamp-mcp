@@ -4,21 +4,23 @@ from pathlib import Path
 import argparse
 import io
 import json
+import os
 import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
 def build(output=None):
     import pycdlib
+    assets = Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or ROOT)
     destination = Path(output or ROOT/'artifacts/recorder-setup.iso').resolve()
     destination.parent.mkdir(parents=True,exist_ok=True)
     payload = io.BytesIO()
     with zipfile.ZipFile(payload,'w',zipfile.ZIP_DEFLATED) as archive:
-        for path in sorted((ROOT/'third_party/pyautogui-recorder').rglob('*')):
+        for path in sorted((assets/'third_party/pyautogui-recorder').rglob('*')):
             if path.is_file():
-                archive.write(path,str(path.relative_to(ROOT/'third_party/pyautogui-recorder')))
+                archive.write(path,str(path.relative_to(assets/'third_party/pyautogui-recorder')))
     files = {'recorder.zip':payload.getvalue()}
-    files.update({p.name:p.read_bytes() for p in (ROOT/'guest_setup/recorder').iterdir() if p.is_file()})
+    files.update({p.name:p.read_bytes() for p in (assets/'guest_setup/recorder').iterdir() if p.is_file()})
     iso = pycdlib.PyCdlib()
     iso.new(interchange_level=3,joliet=3,vol_ident='RPA_RECORDER')
     buffers=[]

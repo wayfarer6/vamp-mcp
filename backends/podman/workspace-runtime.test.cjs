@@ -77,3 +77,15 @@ test('a bind of an ancestor, descendant, or symlink target reserves the workspac
  await assert.rejects(writerAbsent([{Id:cid,Mounts:null}],{directory:'/mnt/work/approved'}),/inventory/);
  await writerAbsent([{Id:cid,Mounts:[{Type:'bind',Source:'/other'}]}],{directory:'/mnt/work/approved'},undefined,async p=>p);
 });
+test('workspace verification accepts the empty capability sets reported by Podman',()=>{
+ const {v,m}=fixture();
+ v.HostConfig.CapDrop=['CAP_CHOWN','CAP_SETUID'];
+ v.BoundingCaps=null;
+ v.EffectiveCaps=null;
+ assert.equal(verifiedMount(v,m,imageId),true);
+ v.BoundingCaps=['CAP_CHOWN'];
+ assert.equal(verifiedMount(v,m,imageId),false);
+ v.BoundingCaps=[];
+ v.EffectiveCaps=['CAP_CHOWN'];
+ assert.equal(verifiedMount(v,m,imageId),false);
+});

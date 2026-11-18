@@ -103,6 +103,13 @@ function listingNodes({ entries = [], groups = [], meta = {}, scope = null } = {
     (parent ? parent.children : roots).push(node);
   }
 
+  const countEntries = node => {
+    if (node.type === 'entry') return 1;
+    const count = node.children.reduce((total, child) => total + countEntries(child), 0);
+    node.description = `${count} ${count === 1 ? 'entry' : 'entries'}`;
+    return count;
+  };
+  for (const node of roots) countEntries(node);
   return roots;
 }
 

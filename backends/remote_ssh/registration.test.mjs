@@ -32,6 +32,17 @@ test('explicit local KVM route retains original authorization checks and schema 
  assert.equal((await tools.get('kvm_vm_create').call({name:'test',iso_path:'/tmp/iso',guest_os:'ubuntu'})).isError,true);
  assert.equal((await tools.get('kvm_vm_mouse_move').call({vm:'test',x:2,y:0})).isError,true);
 });
+test('remote Vault replay without a host bridge never starts the replay interpreter',async t=>{
+ for(const key of ['VAULT_RPA_BRIDGE_SOCKET','VAULT_RPA_BRIDGE_TOKEN']){
+  const current=process.env[key];delete process.env[key];
+  t.after(()=>{if(current!==undefined)process.env[key]=current;});
+ }
+ const tools=createTools({config:resolveConfig({env:{VAMP_REMOTE_REPO:'/fixture/repo'}}),run:()=>assert.fail('guest replay started')});
+ const result=await tools.rpaRun({id:'11111111-2222-3333-4444-555555555555',
+  vm_id:'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee',confirmed:true,vault_destination:'fixture'});
+ assert.equal(result.status,'approval_required');
+ assert.equal(result.actions_completed,0);
+});
 test('schema retains arrays records enums defaults and unknown-field rejection',()=>{
  const catalog=createTools({config:resolveConfig({env:{}}),run:()=>{}}).tools;
  const byName=name=>remoteSchema(catalog.find(t=>t.name===name).inputSchema);

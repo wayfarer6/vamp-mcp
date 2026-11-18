@@ -30,6 +30,9 @@ test('VSIX and npm build sources include the same Podman runtime and bundled gui
   assert.ok(vsix.includes("'vamp-podman'"));
   assert.ok(vsix.includes("'CONTAINERS_WSL.md'") && vsix.includes("'backends/vagrant/podman_handoff.py'"));
   assert.ok(vsix.includes("'containers/debian-desktop'")&&vsix.includes('CONTAINER_DESKTOP.md'));
+  for (const file of ['Containerfile.recorder','recorder-launcher.sh','recorder.desktop']) {
+    assert.ok(vsix.includes("'"+file+"'"));
+  }
   assert.match(read('containers/debian-desktop/Containerfile'),/novnc websockify/);
   assert.equal(read('containers/debian-desktop/.containerignore'),read('containers/debian-desktop/.dockerignore'));
   assert.ok(read('vscode-extension/CONTAINERS_WSL.md').includes('podman-installer-windows-amd64.msi'));

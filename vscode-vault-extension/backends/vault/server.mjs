@@ -21,11 +21,18 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { access } from 'node:fs/promises';
+import { access, realpath } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { sep } from 'node:path';
 import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
+import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeholders.mjs';
+import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
+import { hypervVolume, kvmVolume, virtualBoxVolume } from '../../src/vm_volume.mjs';
+import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
+import { auditRemoteDelivery, deliverCredential, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
+import podmanModule from '../../../backends/podman/adapter.cjs';
 import manifest from '../../package.json' with { type: 'json' };
 
 const VERSION = manifest.version;
@@ -120,6 +127,7 @@ if (settings.remoteHost) {
 }
 instructionLines.push(
   'Prefer vault_list_credentials to find an entry before asking the user which one to use.',
+  'For sign-in, name the entry and destination, focus its matching blank field, and use vault_deliver_credential instead of vault_get_credential. Wait for the user to approve each field. Keep recording and screen capture off during delivery. A receipt confirms typing only; verify the screen without exposing the value. Submit a routine login separately only when the user authorized it. Pause for human action on passkeys, MFA, CAPTCHA, security keys and unexpected consent or authentication screens. Resume only when the user has completed the step and the next screen is verified.',
   'Never put a password into a shell command, a URL, a commit or a chat message; type it into the target page or application directly.',
   'Mount a volume only when a certificate or signing step actually requires it, and unmount it when that step is finished.',
 );
@@ -141,6 +149,7 @@ const scope = {
   approvedThisSession: new Set(),
   cache: new Map(),
   policyRevision:null,
+  workspaceAdapter:null,
 };
 
 const text = value => ({ content: [{ type: 'text', text: JSON.stringify(value) }] });
@@ -412,6 +421,85 @@ tool('vault_get_credential', {
   }
 });
 
+tool('vault_deliver_credential', {
+  title: 'Send a credential to a configured VM or container',
+  description: 'Request VS Code confirmation for one field. Configured programs read it on standard input, a guest receiver can type it, or a configured guest VeraCrypt command can unlock a workspace. Supply the VM UUID for guest VeraCrypt.',
+  inputSchema: {
+    entry: z.string().min(1).max(1024).optional(),
+    reference: z.string().min(1).max(1024).optional(),
+    destination: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/),
+    vm_id: z.string().uuid().optional(),
+    field: z.enum(['username','password','totp']).optional(),
+  },
+}, async args => {
+  try {
+    const selected = args.reference === undefined ? args : parseVaultPlaceholder(args.reference);
+    if (!selected?.entry || !['username','password','totp'].includes(selected.field) ||
+        (args.reference !== undefined && (args.entry !== undefined || args.field !== undefined))) {
+      throw new Error('Choose one username, password or TOTP reference, or provide an entry and field.');
+    }
+    if (settings.remoteHost) {
+      if (cli.mode !== 'call' || !cli.stdinPassword || args.vm_id) throw new Error('Use the approved remote Vault proxy for remote process delivery.');
+      const destination = await remoteProcessTarget(args.destination);
+      if (selected.entry !== destination.entry || selected.field !== destination.field) throw new Error('The field does not match the configured remote destination.');
+      const vault = await getCli();
+      const master = await masterPassword({file:settings.kdbx});
+      const input = {file:settings.kdbx,entry:selected.entry,databasePassword:master.password};
+      const listing = await vault.listEntries(input);
+      if (listing.entries.filter(item=>item.path===selected.entry).length !== 1) throw new Error('The remote credential path did not resolve uniquely.');
+      let record;
+      try {
+        record = selected.field === 'totp' ? {totp:(await vault.totp(input)).code}
+          : await vault.showEntry({...input,showProtected:selected.field==='password'});
+      } catch { throw new Error('Could not resolve the selected remote credential field.'); }
+      const value = validateCredentialField(record,selected.field);
+      await auditRemoteDelivery(destination.directory,{ action:'credential_resolved', caller:'vault_deliver_credential',
+        entry:selected.entry, field:selected.field, destination:args.destination });
+      return text(await deliverCredential(destination.target,value,selected.field));
+    }
+    const bridge = await getBridge();
+    if (!bridge) throw new Error('Open VAMP Vault in VS Code to approve this delivery.');
+    return text(await bridge.request('deliver-credential', {
+      entry: selected.entry, field: selected.field, destination: args.destination, vmId: args.vm_id,
+    },{timeout:180000}));
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+tool('vault_check_placeholders', {
+  title: 'Check Vault placeholder paths',
+  description: 'Check placeholder syntax, exact entry matches and requested field availability in the default vault. Returns paths, field names and statuses only. This does not approve delivery.',
+  inputSchema: { references: z.array(z.string().max(1024)).min(1).max(50) },
+}, async ({ references }) => {
+  try {
+    if (!(await fileExists(settings.kdbx))) throw new Error('No database path configured or database missing.');
+    const cli = await getCli();
+    const master = await masterPassword({ file: settings.kdbx });
+    const listing = await cli.listEntries({ file: settings.kdbx, databasePassword: master.password });
+    const checks = checkVaultPlaceholders(references, listing.entries);
+    const checked = new Map();
+    for (const check of checks) {
+      if (check.status !== 'entry_found') continue;
+      const key = JSON.stringify([check.entry, check.field]);
+      if (!checked.has(key)) {
+        try {
+          const present = await cli.placeholderFieldPresent({
+            file: settings.kdbx, entry: check.entry, field: check.field, databasePassword: master.password,
+          });
+          checked.set(key, present ? 'placeholder_resolved' : 'placeholder_unresolved');
+        } catch {
+          checked.set(key, 'field_check_unavailable');
+        }
+      }
+      check.status = checked.get(key);
+    }
+    return text({ status: 'ok', checks });
+  } catch (error) {
+    return failure(error);
+  }
+});
+
 tool('vault_set_credential', {
   title: 'Add credential',
   description: 'Add a new entry (username, password, URL, notes) to the database, creating its group when needed. Does not overwrite an existing entry; use vault_update_credential for that. TOTP seeds are added in the KeePassXC application, not here.',
@@ -574,6 +662,252 @@ tool('vault_list_credentials', {
   }
 });
 
+const groupPath = z.string().min(1).max(1024).refine(value =>
+  value === '/' || value.split('/').every(part =>
+    part && part.trim() === part && part !== '.' && part !== '..' && !/^-/u.test(part) && !/[\x00-\x1f]/u.test(part)));
+
+tool('vault_list_groups', {
+  title: 'List Vault groups',
+  description: 'List group paths and direct and descendant credential counts, including empty groups. Returns no credential titles or values.',
+  inputSchema: { confirm: z.boolean().default(false) },
+}, async args => {
+  try {
+    const action = 'vault_list_groups';
+    const detail = 'List group paths and credential counts in the default Vault.';
+    const decision = await approve({ action, entry: '/', detail, confirm: args.confirm });
+    if (decision.pending) return approvalNotice('/', detail);
+    if (!decision.approved) return text({ status: 'denied' });
+    const cli = await getCli();
+    const file = settings.kdbx;
+    const master = await masterPassword({ file });
+    const listing = await cli.listEntries({ file, databasePassword: master.password });
+    const groups = new Map();
+    for (const group of listing.groups) {
+      if (group === '/' || groups.has(group)) continue;
+      const separator = group.lastIndexOf('/');
+      const parent = separator < 0 ? '/' : group.slice(0, separator);
+      groups.set(group, { path: group, parent, direct_entries: 0, total_entries: 0 });
+    }
+    for (const entry of listing.entries) {
+      const group = groups.get(entry.group);
+      if (!group) continue;
+      group.direct_entries++;
+      for (let ancestor = group; ancestor; ancestor = groups.get(ancestor.parent)) ancestor.total_entries++;
+    }
+    return text({ status: 'ok', groups: [...groups.values()] });
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+for (const action of ['vault_create_group', 'vault_move_credential']) {
+  const move = action === 'vault_move_credential';
+  tool(action, {
+    title: move ? 'Move a credential to an existing group' : 'Create a credential group',
+    description: 'Update the default KeePassXC vault after approval. Returns paths only.',
+    inputSchema: { group: groupPath, ...(move ? { entry: groupPath } : {}), confirm: z.boolean().default(false) },
+  }, async args => {
+    try {
+      if ((!move && args.group === '/') || (move && args.entry === '/')) throw new Error('Choose a non-root group or entry for this operation.');
+      const detail = move ? `Move "${args.entry}" to "${args.group}".` : `Create the group "${args.group}".`;
+      const entry = move ? `${args.entry} → ${args.group}` : args.group;
+      const decision = await approve({ action, entry, detail, confirm: args.confirm });
+      if (decision.pending) return approvalNotice(entry, detail);
+      if (!decision.approved) return text({ status: 'denied' });
+      const cli = await getCli();
+      const master = await masterPassword({ file: settings.kdbx });
+      const input = { file: settings.kdbx, group: args.group, databasePassword: master.password };
+      if (move) return text({ status: 'moved', path: await cli.moveEntry({ ...input, entry: args.entry }) });
+      await cli.ensureGroup(input);
+      return text({ status: 'ok', group: args.group });
+    } catch (error) {
+      return failure(error);
+    }
+  });
+}
+
+tool('vault_rename_group', {
+  title: 'Rename Vault group',
+  description: 'Rename one existing group in place after approval. Requires the local KDBX Python editor.',
+  inputSchema:{group:groupPath,name:groupPath.refine(value=>!value.includes('/')),confirm:z.boolean().default(false)},
+},async args=>{
+  try{
+    if(args.group==='/')throw Error('Choose a non-root group.');
+    const detail=`Rename "${args.group}" to "${args.name}".`;
+    const decision=await approve({action:'rename_group',entry:detail,detail,confirm:args.confirm});
+    if(decision.pending)return approvalNotice(args.group,detail);
+    if(!decision.approved)return text({status:'denied'});
+    const cli=await getCli();
+    const master=await masterPassword({file:settings.kdbx});
+    const report=await cli.renameGroup({file:settings.kdbx,group:args.group,name:args.name,databasePassword:master.password});
+    scope.cache.clear();
+    return text(report);
+  }catch(error){return failure(error);}
+});
+
+tool('vault_delete_group', {
+  title: 'Move a Vault group to the recycle bin',
+  description: 'Move one group to the KeePassXC recycle bin. Non-empty groups require recursive confirmation.',
+  inputSchema: { group: groupPath, recursive: z.boolean().default(false), confirm: z.boolean().default(false) },
+}, async args => {
+  try {
+    if (args.group === '/') throw new Error('Choose a non-root group.');
+    const detail = `Move "${args.group}"${args.recursive ? ' and all its contents' : ' if empty'} to the Vault recycle bin.`;
+    if (!args.confirm) return text({ status: 'approval_required', group: args.group, detail });
+    const decision = await approve({ action: 'delete_group', entry: detail, detail, confirm: true });
+    if (!decision.approved) return text({ status: 'denied' });
+    const cli = await getCli();
+    const master = await masterPassword({ file: settings.kdbx });
+    const result = await cli.recycleGroup({ file: settings.kdbx, group: args.group, recursive: args.recursive, databasePassword: master.password });
+    scope.cache.clear();
+    return text(result);
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+tool('vault_create_volume', {
+  title: 'Create a managed encrypted volume',
+  description: 'Create a VeraCrypt container, or a guest VHD with an encrypted block device on Windows via WSL. Store the generated password in KeePassXC after approval.',
+  inputSchema: {
+    volume: z.string().min(1).max(4096),
+    name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+    size_mb: z.number().int().min(8).max(32768).default(64),
+    format: z.enum(['container', 'guest-vhd']).default('container'),
+    confirm: z.boolean().default(false),
+  },
+}, async args => {
+  try {
+    if (process.platform !== 'linux' && (process.platform !== 'win32' || !process.env.VAULT_VERACRYPT_WSL_DISTRO)) {
+      throw new Error('Managed volume creation requires Linux or VAULT_VERACRYPT_WSL_DISTRO on Windows.');
+    }
+    const detail = `Create ${args.volume} (${args.size_mb} MiB, ${args.format}) and store its credential as VeraCrypt/${args.name}.`;
+    const decision = await approve({ action: 'create_volume', entry: detail, detail, confirm: args.confirm });
+    if (decision.pending) return approvalNotice(args.volume, detail);
+    if (!decision.approved) return text({ status: 'denied' });
+    const cli = await getCli();
+    const master = await masterPassword({ file: settings.kdbx });
+    return text(await createManagedVolume(cli, {
+      file: settings.kdbx, volume: args.volume, name: args.name,
+      sizeBytes: args.size_mb * 1024 * 1024, databasePassword: master.password, format: args.format,
+    }));
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+tool('vault_delete_volume', {
+  title: 'Delete a managed encrypted volume',
+  description: 'On Linux or Windows with configured WSL, unmount one managed VeraCrypt file, remove its KeePassXC entry and delete the file after explicit confirmation.',
+  inputSchema: {
+    volume: z.string().min(1).max(4096),
+    entry: z.string().regex(/^VeraCrypt\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+    confirm: z.boolean().default(false),
+  },
+}, async args => {
+  try {
+    const wsl = process.platform === 'win32' && Boolean(process.env.VAULT_VERACRYPT_WSL_DISTRO);
+    if (process.platform !== 'linux' && !wsl) throw new Error('Managed volume deletion requires Linux or configured WSL on Windows.');
+    const location = wsl ? ` from WSL ${process.env.VAULT_VERACRYPT_WSL_DISTRO}` : '';
+    const detail = `Unmount${location} and permanently remove the encrypted file ${args.volume} and remove the vault entry ${args.entry}.`;
+    if (!args.confirm) return text({ status: 'approval_required', volume: args.volume, entry: args.entry, detail });
+    const decision = await approve({ action: 'delete_volume', entry: detail, detail, confirm: true });
+    if (decision.pending) return approvalNotice(args.volume, detail);
+    if (!decision.approved) return text({ status: 'denied' });
+    const cli = await getCli();
+    const master = await masterPassword({ file: settings.kdbx });
+    const remove = () => deleteManagedVolume(cli, {
+      file: settings.kdbx, volume: args.volume, entry: args.entry, databasePassword: master.password,wsl,
+    });
+    const result = process.platform==='linux' || wsl ? await withVmVolumeState(async guard=>{
+      await guard.assertDetached({volume:await realpath(args.volume)});
+      return remove();
+    }) : await remove();
+    if (result.credential_removed) cacheForget(args.entry);
+    return result.status === 'deleted' ? text(result) : { ...text(result), isError: true };
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+for (const operation of ['attach','detach']) tool(`vault_${operation}_vm`, {
+  title: `${operation === 'attach' ? 'Attach' : 'Detach'} a VeraCrypt workspace disk`,
+  description: 'Change a secondary disk slot of a powered-off VM. Supply a verified VeraCrypt mount and disk, or a managed guest VHD and its credential entry for Hyper-V or VirtualBox on Windows.',
+  inputSchema: {
+    vm: z.string().uuid(),
+    volume: z.string().min(1).max(4096),
+    mount_point: z.string().min(1).max(4096).optional(),
+    credential_entry: z.string().regex(/^VeraCrypt\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
+    backend: z.enum(['virtualbox','kvm','hyperv']).default('virtualbox'),
+    controller: z.string().min(1).max(64).optional(),
+    port: z.number().int().min(1).max(63).optional(),
+    controller_number: z.number().int().min(0).max(3).optional(),
+    target: z.string().regex(/^vd[b-z]$/).optional(),
+    libvirt_uri: z.enum(['qemu:///session','qemu:///system']).optional(),
+    disk: z.string().min(5).max(68).optional(),
+    confirm: z.boolean().default(false),
+  },
+}, async args => {
+  try {
+    const wsl=process.platform==='win32' && args.backend!=='kvm' && Boolean(process.env.VAULT_VERACRYPT_WSL_DISTRO);
+    const guestVhd=Boolean(args.credential_entry);
+    if (guestVhd ? (process.platform!=='win32' || args.backend==='kvm' || args.mount_point || args.disk)
+        : (!args.mount_point || !args.disk)) {
+      throw new Error('Specify a guest VHD credential entry for Hyper-V or VirtualBox on Windows, or both the mount point and disk filename.');
+    }
+    if (!guestVhd && (process.platform!=='linux' || args.backend==='hyperv') && !wsl) {
+      throw new Error('Use VirtualBox or KVM on Linux, or VirtualBox or Hyper-V with configured WSL on Windows.');
+    }
+    const slot = args.backend==='kvm' ? `${args.libvirt_uri ?? 'qemu:///session'} target ${args.target ?? '(required)'}`
+      : args.backend==='hyperv' ? `SCSI controller ${args.controller_number ?? 0}, slot ${args.port}` : `controller ${args.controller}, port ${args.port}`;
+    const source=guestVhd ? `${args.volume} (${args.credential_entry})` : `${args.disk} in ${args.volume} mounted at ${args.mount_point}`;
+    const detail=`${operation} ${source} on ${args.backend} VM ${args.vm}, ${slot}.`;
+    if (!args.confirm) return text({status:'approval_required',vm:args.vm,detail});
+    const decision=await approve({action:`workspace_${operation}`,entry:detail,detail,confirm:true});
+    if(!decision.approved)return text({status:'denied'});
+    const change = {kvm:kvmVolume,virtualbox:virtualBoxVolume,hyperv:hypervVolume}[args.backend];
+    const cli=await getCli();
+    const credentials=guestVhd ? {
+      file:settings.kdbx, entry:args.credential_entry, databasePassword:(await masterPassword({file:settings.kdbx})).password,
+    } : undefined;
+    return text(await withVmVolumeState(guard=>change(cli,{
+      operation,vm:args.vm,volume:args.volume,mountPoint:args.mount_point,controller:args.controller,port:args.port,disk:args.disk,
+      target:args.target,uri:args.libvirt_uri,controllerNumber:args.controller_number,wsl,credentials,
+    },{guard})));
+  } catch (error) {
+    if (error.code==='hyperv_access_denied') return failure(error,{status:'needs_elevation'});
+    if (['hyperv_medium_unavailable','hyperv_local_medium_unavailable'].includes(error.code)) return failure(error,{status:error.code});
+    return failure(error);
+  }
+});
+
+tool('vault_attach_container', {
+  title: 'Attach encrypted workspace to a Podman desktop',
+  description: 'Check or attach one configured native Linux workspace to a new disposable, network-isolated Podman desktop. The volume must be mounted. Check first, then confirm the exact returned binding and approval ID.',
+  inputSchema: {
+    binding: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    approval_id: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    confirm: z.boolean().default(false),
+  },
+}, async args => {
+  try {
+    if (settings.remoteHost) throw new Error('Use the Podman tools on the workspace host for a remote Vault.');
+    if (process.platform!=='linux') throw new Error('Vault container workspaces require a native Linux rootless Podman host.');
+    const adapter=scope.workspaceAdapter ??= podmanModule.createPodmanAdapter();
+    const connection='local-linux';
+    if(!args.approval_id) {
+      const {binding}=await adapter.check(connection);
+      return text({connection,binding,...await adapter.workspaceStatus(connection,binding)});
+    }
+    if(!args.binding) throw new Error('Provide the exact connection binding returned by the workspace check.');
+    const detail='Create a new network-isolated Podman desktop with write access to the configured VeraCrypt workspace.';
+    if(!args.confirm)return text({status:'approval_required',detail});
+    const decision=await approve({action:'attach_container',entry:args.approval_id,detail,confirm:true});
+    if(!decision.approved)return text({status:'denied'});
+    return text(await adapter.workspaceAttach(connection,args.binding,args.approval_id));
+  } catch(error) { return failure(error); }
+});
+
 tool('vault_mount_volume', {
   title: 'Mount encrypted volume',
   description: 'Mount a VeraCrypt volume so its certificates and credentials appear as a normal folder or virtual USB drive. Mounting needs the VeraCrypt driver on Windows/macOS or FUSE on Linux, and the user must approve the mount.',
@@ -584,23 +918,48 @@ tool('vault_mount_volume', {
     key_files: z.array(z.string()).optional(),
     read_only: z.boolean().default(false),
     slot: z.number().int().min(1).optional(),
+    credential_entry: z.string().regex(/^VeraCrypt\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/).optional(),
     confirm: z.boolean().default(false),
   },
 }, async args => {
   try {
     const cli = await getCli();
-    if (!cli.hasVeracrypt) return failure(new Error('The VeraCrypt CLI is not installed.'), { code: 'veracrypt_missing' });
+    const wsl = process.platform === 'win32' && Boolean(args.credential_entry);
+    if (!wsl && !cli.hasVeracrypt) return failure(new Error('The VeraCrypt CLI is not installed.'), { code: 'veracrypt_missing' });
     const volume = args.volume || settings.volume;
     if (!volume) return failure(new Error('No volume path configured.'), { code: 'path_required' });
     if (!(await fileExists(volume))) return text({ status: 'volume_missing', volume, hint: 'Create it with vault_create (volume_file) or the VeraCrypt application.' });
-    const decision = await approve({ action: 'mount_volume', entry: volume, confirm: args.confirm, detail: `Mount ${volume}${args.read_only ? ' read-only' : ''} so the agent can use the certificates inside.` });
+    if (args.credential_entry && process.platform !== 'linux' && !wsl) throw new Error('Mounting with a Vault credential on stdin requires Linux or WSL.');
+    if (wsl && (!process.env.VAULT_VERACRYPT_WSL_DISTRO || !args.mount_point || args.pim || args.slot || args.key_files?.length)) {
+      throw new Error('Configure the WSL distribution and specify its mount directory. Managed WSL mounts use the generated Vault password.');
+    }
+    const credential = args.credential_entry ? ` using ${args.credential_entry}` : '';
+    const destination = wsl ? ` in WSL ${process.env.VAULT_VERACRYPT_WSL_DISTRO} at ${args.mount_point} (WSL root mount)` : '';
+    const decision = await approve({ action: 'mount_volume', entry: volume + credential + destination, confirm: args.confirm, detail: `Mount ${volume}${args.read_only ? ' read-only' : ''}${credential}${destination}.` });
     if (decision.pending) return approvalNotice(volume, 'Mount this encrypted volume.');
     if (!decision.approved) return text({ status: 'denied', volume, reason: decision.how });
-    const password = process.platform === 'win32' ? {} : await masterPassword({ file: volume, label: 'VeraCrypt volume password' });
+    let password;
+    if (args.credential_entry) {
+      const file = settings.kdbx;
+      const master = await masterPassword({ file });
+      const listing = await cli.listEntries({ file, databasePassword: master.password });
+      if (listing.entries.filter(item => item.path === args.credential_entry).length !== 1) throw new Error('Choose one unique volume credential.');
+      const record = await cli.showEntry({ file, entry: args.credential_entry, databasePassword: master.password });
+      if (!record.password || record.url !== pathToFileURL(await realpath(volume)).href) {
+        throw new Error('The vault entry is not bound to this encrypted volume.');
+      }
+      password = record.password;
+    } else if (process.platform !== 'win32') {
+      password = (await masterPassword({ file: volume, label: 'VeraCrypt volume password' })).password;
+    }
+    if (wsl) {
+      const result = await cli.mountVolumeViaWsl({file:volume,mountPoint:args.mount_point,password,readOnly:args.read_only});
+      return text({status:result.mounted?'mounted':'failed',approved_by:decision.how,...result});
+    }
     const result = await cli.mountVolume({
       file: volume,
       mountPoint: args.mount_point || settings.mountPoint,
-      password: password.password,
+      password,
       pim: args.pim,
       keyFiles: args.key_files,
       readOnly: args.read_only,
@@ -622,8 +981,24 @@ tool('vault_unmount_volume', {
 }, async args => {
   try {
     const cli = await getCli();
+    if (process.platform==='win32' && args.mount_point?.startsWith('/') && !args.all) {
+      const result=await withVmVolumeState(async guard=>{
+        await guard.assertDetached({mountPoint:args.mount_point});
+        return cli.unmountVolumeViaWsl(args.mount_point);
+      });
+      return text({status:result.unmounted?'unmounted':'failed',...result});
+    }
     if (!cli.hasVeracrypt) return failure(new Error('The VeraCrypt CLI is not installed.'), { code: 'veracrypt_missing' });
-    const result = await cli.unmountVolume({ mountPoint: args.mount_point || (args.all ? null : settings.mountPoint), all: args.all });
+    const mountPoint=args.mount_point || (args.all ? null : settings.mountPoint);
+    const unmount=()=>cli.unmountVolume({mountPoint,all:args.all});
+    const result=process.platform==='linux' ? await withVmVolumeState(async guard=>{
+      const canonical=mountPoint&&!args.all ? await realpath(mountPoint).catch(error=>{
+        if(error.code==='ENOENT')return mountPoint;
+        throw error;
+      }) : undefined;
+      await guard.assertDetached({mountPoint:canonical});
+      return unmount();
+    }) : await unmount();
     return text({ status: result.unmounted ? 'unmounted' : 'failed', ...result });
   } catch (error) {
     return failure(error);

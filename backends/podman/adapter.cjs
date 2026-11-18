@@ -67,9 +67,9 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     }
     const exe=binary();return {exe,options:{cwd:injected?undefined:path.dirname(exe),timeout:30000,maxBuffer:MAX,encoding:'utf8',windowsHide:true,shell:false,env}};
   }
-  async function run(args,snapshot){
+  async function run(args,snapshot,{timeout=30000}={}){
     let r;
-    try{const {exe,options}=commandOptions(snapshot);r=await execute(exe,args,options);}
+    try{const {exe,options}=commandOptions(snapshot);r=await execute(exe,args,{...options,timeout});}
     catch{throw Error('Podman command failed or exceeded its limit. Check the explicitly selected target locally.');}
     const out=String(r.stdout||'');
     if(Buffer.byteLength(out)>MAX)throw Error('Podman output exceeds limit');
@@ -184,7 +184,11 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     return snapshot;
   }
   function workspaceOperations(snapshot){
-    const command=async tail=>{await same(snapshot);return run(args(snapshot,tail),snapshot);};
+    const command=async tail=>{
+      await same(snapshot);
+      // Rootless Podman may need to prepare a UID-mapped copy of the image.
+      return run(args(snapshot,tail),snapshot,{timeout:tail[0]==='create'?120000:30000});
+    };
     async function inspect(id){
       if(typeof id!=='string'||!ID.test(id))throw Error('Invalid local Podman container ID');
       const values=parse(await command(['inspect','--type','container','--',id]));
@@ -203,15 +207,28 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
       }
       await writerAbsent(values,m,except);await same(snapshot);
     }
-    return {scan,command,inspect};
+    const present=async id=>(await rows(snapshot)).some(row=>row.id===id);
+    return {scan,command,inspect,present};
   }
   async function workspaceStatus(connection,binding){
     const snapshot=await workspaceSnapshot(connection,binding);
     return workspace.status(snapshot,workspaceOperations(snapshot).scan);
   }
+  async function workspaceUnlock(connection,binding,requestMount){
+    const snapshot=await workspaceSnapshot(connection,binding);
+    return workspace.unlock(snapshot,async target=>{await same(snapshot);return requestMount(target);});
+  }
   async function workspaceAttach(connection,binding,approvalId){
     const snapshot=await workspaceSnapshot(connection,binding);
     return workspace.attach(snapshot,approvalId,workspaceOperations(snapshot));
+  }
+  async function workspaceDetach(connection,id,binding){
+    const snapshot=await workspaceSnapshot(connection,binding);
+    return workspace.detach(snapshot,id,workspaceOperations(snapshot));
+  }
+  async function workspaceLock(connection,binding,assertDetached){
+    const snapshot=await workspaceSnapshot(connection,binding);
+    return workspace.lockWorkspace(snapshot,workspaceOperations(snapshot).scan,assertDetached);
   }
   async function desktop(connection,id,binding){
     const snapshot=await existing(connection,id,binding);
@@ -276,7 +293,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     child.stdout.pause();
     return {...metadata,viewOnly:mode==='view_only',mode,child,close};
   }
-  return {workspaceStatus,workspaceAttach,screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
+  return {workspaceStatus,workspaceUnlock,workspaceLock,workspaceAttach,workspaceDetach,screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
 }
 module.exports={createPodmanAdapter,standardLocations,LOCAL_TARGET};
 

@@ -43,6 +43,9 @@ function ensureVisionServices({runtime,env=process.env,platform=process.platform
   if(!enabled(env)){report.reason='disabled_by_VAMP_PRELOAD_MODELS';return report;}
   // model_daemon relies on fcntl locks and AF_UNIX sockets, which Windows lacks.
   if(platform==='win32'){report.reason='unsupported_platform';return report;}
+  if(runtime && fs.existsSync(path.join(runtime,'provisioning-assets.json'))){
+    report.reason='deferred_until_assets_are_used';return report;
+  }
   const entry=entrypoint(runtime);
   if(!entry){report.status='unavailable';report.reason='model_daemon_not_packaged';return report;}
   const python=python_for(env,platform);

@@ -229,17 +229,20 @@ test('human control stream allows only exact fixed mode flag; default stays view
 
 test('local workspace uses checked binding, pinned image, single disposable container and verified scope',async()=>{
  const imageId='b'.repeat(64),other='d'.repeat(64);
- const m={mountId:'mount',scopeId:'scope',directory:'/mnt/volume/task'};
- const config={imageId,workloadId:'fixture'};
- let created=false,running=false,conflict=false;
+ const m={mountId:'mount',scopeId:'scope',directory:'/mnt/volume/task',mountPoint:'/mnt/volume'};
+ const config={imageId,workloadId:'fixture',volumePath:'/private/fixture.hc',mountPoint:'/mnt/volume',
+  veracryptPath:'/usr/bin/veracrypt',credentialEntry:'VeraCrypt/Fixture'};
+ let created=false,running=false,conflict=false,dismounted=false;
  const calls=[];
  const adapter=createPodmanAdapter({platform:'linux',desktopImageIds:imageId,
   userIdentity:()=>({uid:1000,euid:1000,home:'/home/test'}),workspaceConfigPath:'/private/config',
   workspaceDependencies:{release:()=> '6.8.0',read:async()=>({config,raw:'fixture'}),reserve:async(_uid,fn)=>fn(),
-    sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>{})})},
+    sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>m),inspect:async()=>({state:'verified_mounted_scope'}),
+      dismount:async observed=>{assert.equal(observed,m);dismounted=true;return true;}})},
   execute:async(_exe,argv,options)=>{
     assert.equal(argv[0],'--remote=false');assert.equal(options.shell,false);
     const cmd=argv.slice(1);calls.push(cmd);
+    assert.equal(options.timeout,cmd[0]==='create'?120000:30000);
     let result;
     if(cmd[0]==='info')result={host:{security:{rootless:true},serviceIsRemote:false}};
     else if(cmd[0]==='ps')result=[...(created?[{Id:id,State:running?'running':'created',Labels:{'io.vamp.workspace':'mount.scope'}}]:[]),...(conflict?[{Id:other}]:[])];
@@ -252,10 +255,17 @@ test('local workspace uses checked binding, pinned image, single disposable cont
       Mounts:[{Destination:'/workspace',Type:'bind',Source:m.directory,RW:true,Propagation:'private'}]}];
     else if(cmd[0]==='create'){created=true;return {stdout:id};}
     else if(cmd[0]==='start'){running=true;return {stdout:id};}
+    else if(cmd[0]==='stop'){assert.deepEqual(cmd,['stop','--time','10','--',id]);created=false;running=false;return {stdout:id};}
     else throw Error('Unexpected command');
     return {stdout:JSON.stringify(result)};
   }});
  const {binding}=await adapter.check('local-linux');
+ assert.deepEqual(await adapter.workspaceUnlock('local-linux',binding,async target=>{
+   assert.deepEqual(target,{volumePath:config.volumePath,mountPoint:config.mountPoint,
+     veracryptPath:config.veracryptPath,credentialEntry:config.credentialEntry});
+   return {status:'mounted'};
+ }),{status:'mounted'});
+ assert.deepEqual(await adapter.workspaceUnlock('local-linux',binding,async()=>({status:'denied'})),{status:'denied'});
  await assert.rejects(adapter.workspaceStatus('qa',binding),/native Linux/);
  await assert.rejects(adapter.workspaceStatus('local-linux','f'.repeat(64)),/Connection changed/);
  conflict=true;
@@ -268,4 +278,16 @@ test('local workspace uses checked binding, pinned image, single disposable cont
  assert.equal((await adapter.list('local-linux')).containers[0].workspaceManaged,true);
  await assert.rejects(adapter.start('local-linux',id,binding),/fresh authorized workspace/);
  assert.equal(calls.filter(a=>a[0]==='start').length,1);
+ await assert.rejects(adapter.workspaceDetach('local-linux',other,binding),/managed container/);
+ assert.equal(calls.filter(a=>a[0]==='stop').length,0);
+ assert.deepEqual(await adapter.workspaceDetach('local-linux',id,binding),{status:'detached',id,local_podman_writers_verified_absent:true});
+ assert.equal((await adapter.list('local-linux')).containers.length,0);
+ conflict=true;
+ await assert.rejects(adapter.workspaceLock('local-linux',binding,async()=>{}),/reserves/);
+ assert.equal(dismounted,false);
+ conflict=false;
+ assert.deepEqual(await adapter.workspaceLock('local-linux',binding,async target=>{
+   assert.equal(target.mountPoint,config.mountPoint);assert.equal(target.volume,config.volumePath);
+ }),{status:'unmounted',local_podman_writers_verified_absent:true});
+ assert.equal(dismounted,true);
 });

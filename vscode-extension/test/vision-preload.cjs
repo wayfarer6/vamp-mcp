@@ -30,6 +30,16 @@ test('the service script is preferred over the module fallback',()=>{
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 
+test('a split runtime does not start vision workers during discovery',()=>{
+  const root=runtime_tree();
+  try{
+    fs.writeFileSync(path.join(root,'provisioning-assets.json'),'{}');
+    const result=ensureVisionServices({runtime:root,env:{},platform:'linux',spawnProcess:()=>assert.fail('unexpected worker')});
+    assert.equal(result.status,'skipped');
+    assert.equal(result.reason,'deferred_until_assets_are_used');
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
 test('starting the workers is detached and never waits for a model load',()=>{
   const root=runtime_tree();
   try{

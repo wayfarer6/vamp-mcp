@@ -1,0 +1,12 @@
+ARG VAMP_DESKTOP_BASE=localhost/vamp-debian-desktop:dev
+FROM ${VAMP_DESKTOP_BASE}
+USER 0:0
+RUN apt-get update && apt-get install -y --no-install-recommends python3-tk python3-pynput xdotool \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=recorder vamp-recorder.py RECORDER-LICENSE /opt/vamp-desktop/
+COPY --from=vault vamp-vault-receive /usr/local/bin/vamp-vault-receive
+COPY recorder-launcher.sh /usr/local/bin/vamp-recorder
+COPY recorder.desktop /usr/share/applications/vamp-recorder.desktop
+RUN sed -i 's/\r$//' /usr/local/bin/vamp-recorder /usr/local/bin/vamp-vault-receive \
+    && chmod 0755 /usr/local/bin/vamp-recorder /usr/local/bin/vamp-vault-receive
+USER 1000:1000

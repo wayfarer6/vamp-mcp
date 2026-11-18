@@ -109,6 +109,14 @@ await check('the remote Node.js path rejects anything but a path', () => {
   assert.equal(normalizeRemoteVaultConfig({ host: 'a' }).remoteNodePath, 'node');
 });
 
+await check('the Node.js probe distinguishes SSH failure from a remote command failure', async () => {
+  const client = new RemoteVaultClient({ host: 'host1' });
+  client.exec = async () => ({ code: 255, stdout: '', stderr: 'ssh: Could not resolve hostname host1' });
+  await assert.rejects(client.probe(), { message: 'The host name host1 could not be resolved.' });
+  client.exec = async () => ({ code: 1, stdout: '', stderr: '' });
+  await assert.rejects(client.probe(), /Node\.js probe failed on host1/);
+});
+
 await check('quote survives a single quote in a value', () => {
   assert.equal(quote("it's"), `'it'"'"'s'`);
 });
@@ -127,6 +135,8 @@ await check('ssh arguments keep the command last and pass no secret', () => {
   assert.ok(args.includes('-p') && args.includes('2222'));
   assert.ok(args.includes('-i') && args.includes('/home/me/.ssh/id_ed25519'));
   assert.ok(args.includes('BatchMode=yes'));
+  assert.ok(args.includes('StrictHostKeyChecking=accept-new'));
+  assert.ok(sshArgs(config, 'exec node --version', {requireKnownHost:true}).includes('StrictHostKeyChecking=yes'));
   assert.ok(!args.join(' ').includes('password'));
 });
 
@@ -409,7 +419,9 @@ if (!keepassCli) {
   await check('the proxy advertises the host vault tools under its own name', async () => {
     const list = await proxy.listTools();
     const names = list.tools.map(tool => tool.name).sort();
-    assert.deepEqual(names, ['vault_create', 'vault_delete_credential', 'vault_get_credential', 'vault_list_credentials', 'vault_mount_volume', 'vault_set_credential', 'vault_status', 'vault_unmount_volume', 'vault_update_credential']);
+    const manifest=JSON.parse(await readFile(path.join(remoteRuntime,'vault_tools.json'),'utf8'));
+    assert.deepEqual(names,manifest.tools.map(tool=>tool.name).filter(name=>name!=='vault_attach_container').sort());
+    assert.ok(names.includes('vault_deliver_credential'));
     assert.ok(list.tools.every(tool => tool.inputSchema?.type === 'object'));
   });
 
@@ -445,6 +457,34 @@ if (!keepassCli) {
     assert.equal(result.status, 'denied');
     assert.ok(!('password' in result), 'a declined read returned a secret');
     approveNext = true;
+  });
+
+  await check('remote placeholders use approved process stdin and return a receipt only', async () => {
+    const program=hostOne.path('stdin-test.mjs');
+    const marker=hostOne.path('stdin-test.ok');
+    const digest=createHash('sha256').update(entryPassword+'\n').digest('hex');
+    await writeFile(program, `import {createHash} from 'node:crypto';
+      import {writeFileSync} from 'node:fs';
+      const hash=createHash('sha256');
+      for await(const chunk of process.stdin) { hash.update(chunk); process.stdout.write(chunk); }
+      if(hash.digest('hex')!==${JSON.stringify(digest)} || process.argv.length!==2 || Object.keys(process.env).length) process.exit(2);
+      writeFileSync(${JSON.stringify(marker)},'ok');`);
+    await writeFile(hostOne.path('credential-delivery.json'), JSON.stringify({probe:{
+      executable:process.execPath,args:[program],entry:'Mail/Example',field:'password',
+    }}), {mode:0o600});
+    const input={name:'vault_deliver_credential',arguments:{destination:'probe',reference:'${vault:Mail/Example#password}'}};
+    const count=()=>bridgeCalls.filter(call=>call.op==='approve').length;
+    const before=count();
+    approveNext=false;
+    assert.deepEqual(payload(await proxy.callTool(input)),{status:'denied'});
+    await assert.rejects(stat(marker),{code:'ENOENT'});
+    approveNext=true;
+    assert.deepEqual(payload(await proxy.callTool(input)),{status:'delivered',destination:'probe'});
+    assert.equal(count(),before+2);
+    assert.equal(await readFile(marker,'utf8'),'ok');
+    const audit=await readFile(hostOne.path('credential-delivery.jsonl'),'utf8');
+    assert.ok(!audit.includes(entryPassword) && !audit.includes(passwordOne));
+    assert.equal(JSON.parse(audit).entry,'Mail/Example');
   });
 
   await proxy.close();

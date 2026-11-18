@@ -85,6 +85,22 @@
         "icon": "$(add)"
       },
       {
+        "command": "vampVault.createGroup",
+        "title": "VAMP Vault: New Folder"
+      },
+      {
+        "command": "vampVault.renameGroup",
+        "title": "VAMP Vault: Rename Folder"
+      },
+      {
+        "command": "vampVault.recycleGroup",
+        "title": "VAMP Vault: Move Folder to Recycle Bin"
+      },
+      {
+        "command": "vampVault.moveCredential",
+        "title": "VAMP Vault: Move to Folder"
+      },
+      {
         "command": "vampVault.openDatabase",
         "title": "VAMP Vault: Open Existing Database",
         "icon": "$(folder-opened)"
@@ -279,6 +295,31 @@
       ],
       "view/item/context": [
         {
+          "command": "vampVault.addCredential",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.group",
+          "group": "1_folder@1"
+        },
+        {
+          "command": "vampVault.createGroup",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.group",
+          "group": "1_folder@2"
+        },
+        {
+          "command": "vampVault.renameGroup",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.group",
+          "group": "1_folder@3"
+        },
+        {
+          "command": "vampVault.recycleGroup",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.group",
+          "group": "1_folder@4"
+        },
+        {
+          "command": "vampVault.moveCredential",
+          "when": "view == vampVault.views.credentials && viewItem == vampVault.credential",
+          "group": "2_details@2"
+        },
+        {
           "command": "vampVault.copyUsername",
           "when": "view == vampVault.views.credentials && viewItem == vampVault.credential",
           "group": "1_copy@1"
@@ -304,6 +345,12 @@
     "configuration": {
       "title": "VAMP Vault",
       "properties": {
+        "vampVault.deliveryTargets": {
+          "type": "object",
+          "default": {},
+          "scope": "application",
+          "description": "Named credential delivery destinations. Use an absolute executable and fixed args for local stdin, or configure SSH host, port, user, identityFile and verified knownHostsFile. A VM destination with vmId can also set guestVolume with entry, device and mountPoint for VeraCrypt."
+        },
         "vampVault.keepassxcCliPath": {
           "type": "string",
           "default": "",
@@ -313,6 +360,12 @@
           "type": "string",
           "default": "",
           "description": "Explicit path to the VeraCrypt command line binary. Empty means use the system installation when found, otherwise the copy downloaded into this extension's storage."
+        },
+        "vampVault.veracryptWslDistribution": {
+          "type": "string",
+          "scope": "machine",
+          "default": "",
+          "description": "Installed WSL distribution with the VeraCrypt console CLI for creating managed volumes on Windows."
         },
         "vampVault.defaultKdbxPath": {
           "type": "string",

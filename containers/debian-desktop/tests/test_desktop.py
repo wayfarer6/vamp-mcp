@@ -65,6 +65,7 @@ class DesktopTests(unittest.TestCase):
         self.assertIn('-nolisten', desktop.XVFB)
         self.assertEqual(desktop.XVFB[desktop.XVFB.index('-nolisten') + 1], 'tcp')
         self.assertIn('1920x1080x24', desktop.XVFB)
+        self.assertIn(('-extension', 'RANDR'), tuple(zip(desktop.XVFB, desktop.XVFB[1:])))
         self.assertIn('-auth', desktop.XVFB)
 
     def test_chromium_rejects_sandbox_disabling_arguments(self):

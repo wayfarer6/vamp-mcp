@@ -5,7 +5,7 @@ import { vboxManage, formatError } from "../vbox.js";
 import { resolveScancodes, getAvailableKeys } from "../scancodes.js";
 import { config } from "../types.js";
 
-export function registerInputTools(server: McpServer) {
+export function registerInputTools(server: McpServer, mouseHelper: () => string | Promise<string> = () => config.mouseHelperPath) {
   server.tool(
     "vm_keyboard_scancode",
     "Send named key combinations as PS/2 scancodes (e.g. 'enter', 'ctrl+alt+delete', 'f8', 'tab'). Use this for special keys, shortcuts, and navigation. Numeric-keypad keys are available as kp_0..kp_9, kp_enter, kp_dot, kp_plus, kp_minus, kp_star, kp_slash. For keys not in the named map, pass raw make/break bytes via 'raw'.",
@@ -88,9 +88,10 @@ export function registerInputTools(server: McpServer) {
       doubleClick: z.boolean().default(false).describe("Double click"),
     },
     async ({ vm, x, y, button, doubleClick }) => {
+      const helper = await mouseHelper();
       return new Promise((resolve, reject) => {
         const args = [
-          config.mouseHelperPath,
+          helper,
           vm,
           String(x),
           String(y),

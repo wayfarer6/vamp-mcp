@@ -54,7 +54,7 @@ function activate(context) {
   // One public MCP provider. GUI commands retain their separate, explicit workflows.
   context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.mcp', {
     onDidChangeMcpServerDefinitions: changes.event,
-    provideMcpServerDefinitions() {
+    async provideMcpServerDefinitions() {
       const env = {
         ELECTRON_RUN_AS_NODE:'1',VBOXMANAGE_DEBUG:'false',
         VAMP_WORKSPACE_CONFIG:workspaceConfigPath(),
@@ -80,6 +80,16 @@ function activate(context) {
       const remoteConfig={enabled:Boolean(config().get('remote.enabled'))};
       if(remoteConfig.enabled)for(const key of ['host','port','username','privateKeyPath','backend','libvirtUri','remotePythonPath','remoteNodePath','remoteRepoPath','remoteRegistryPath','remoteVboxManagePath','connectTimeoutSeconds'])remoteConfig[key]=config().get('remote.'+key);
       env.VAMP_REMOTE_CONFIG_JSON=JSON.stringify(remoteConfig);
+      try {
+        const vault=await vscode.extensions?.getExtension('wayfarer6.vamp-vault')?.activate();
+        const bridge=await vault?.replayBridge?.();
+        if(bridge){
+          env.VAULT_RPA_BRIDGE_SOCKET=bridge.socketPath;
+          env.VAULT_RPA_BRIDGE_TOKEN=bridge.token;
+        }
+      }catch{
+        // Vault is optional for workflows that do not deliver credentials.
+      }
       return [new vscode.McpStdioServerDefinition('VAMP MCP',process.execPath,
         [path.join(runtime,'backends/unified/server.mjs')],env,version)];
     }

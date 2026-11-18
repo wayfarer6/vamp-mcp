@@ -10,6 +10,7 @@
 // local vault is never read for a remote call.
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { parseVaultPlaceholder } from './placeholders.mjs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
@@ -56,7 +57,9 @@ const client = new RemoteVaultClient(config);
 
 // Tools whose answer contains a secret, or that change the database, need the
 // user's yes on this computer before anything is sent.
-const APPROVAL_TOOLS = new Set(['vault_get_credential', 'vault_delete_credential', 'vault_mount_volume']);
+const APPROVAL_TOOLS = new Set(['vault_get_credential', 'vault_delete_credential', 'vault_mount_volume',
+  'vault_create_group', 'vault_delete_group', 'vault_list_groups', 'vault_move_credential', 'vault_create_volume',
+  'vault_delete_volume', 'vault_attach_vm', 'vault_detach_vm','vault_rename_group']);
 // vault_create is excluded: it makes its own password through the bridge below.
 const PASSWORD_TOOLS = new Set([
   'vault_get_credential',
@@ -65,6 +68,14 @@ const PASSWORD_TOOLS = new Set([
   'vault_update_credential',
   'vault_delete_credential',
   'vault_mount_volume',
+  'vault_check_placeholders',
+  'vault_create_group',
+  'vault_delete_group',
+  'vault_rename_group',
+  'vault_list_groups',
+  'vault_move_credential',
+  'vault_create_volume',
+  'vault_delete_volume',
 ]);
 
 const session = {
@@ -110,10 +121,10 @@ async function refreshPolicy() {
   }
 }
 
-async function approve({ tool, entry, detail }) {
-  if (approvalMode === 'off') return { approved: true, how: 'approval disabled' };
+async function approve({ tool, entry, detail, always = false }) {
+  if (!always && approvalMode === 'off') return { approved: true, how: 'approval disabled' };
   const key = `${tool}|${entry ?? ''}`;
-  if (approvalMode === 'per-session' && session.approved.has(key)) return { approved: true, how: 'already approved' };
+  if (!always && approvalMode === 'per-session' && session.approved.has(key)) return { approved: true, how: 'already approved' };
   const bridge = await getBridge();
   if (!bridge) {
     return { approved: false, how: 'no approval dialog', unreachable: true };
@@ -121,7 +132,7 @@ async function approve({ tool, entry, detail }) {
   try {
     const result = await bridge.approve({ action: tool, entry: entry ?? '', detail });
     if (!result.approved) return { approved: false, how: 'declined' };
-    if (result.remember || approvalMode === 'per-session') session.approved.add(key);
+    if (!always && (result.remember || approvalMode === 'per-session')) session.approved.add(key);
     return { approved: true, how: 'approved in VS Code' };
   } catch (error) {
     log(`approve: ${error.message}`);
@@ -187,28 +198,78 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = await loadTools();
   return {
-    tools: tools.map(tool => ({
+    tools: tools.filter(tool => tool.name !== 'vault_attach_container').map(tool => ({
       name: tool.name,
       title: tool.title,
-      description: tool.description,
+      description: tool.name === 'vault_deliver_credential'
+        ? 'Ask the local VS Code user to approve a remote Vault field. The remote host resolves it and sends it to a configured local process on that host.'
+        : tool.description,
       inputSchema: tool.inputSchema,
     })),
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async request => {
+server.setRequestHandler(CallToolRequestSchema, async (request, {signal}) => {
   const tool = request.params?.name;
   const args = { ...(request.params?.arguments ?? {}) };
   try {
+    if (tool === 'vault_deliver_credential') {
+      const selected = args.reference === undefined ? args : parseVaultPlaceholder(args.reference);
+      if (!selected?.entry || typeof selected.entry !== 'string' || selected.entry.length > 1024 || /[\x00-\x1f\x7f]/.test(selected.entry) ||
+          !['username','password','totp'].includes(selected.field) || typeof args.destination !== 'string' ||
+          !/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$/.test(args.destination) || args.vm_id !== undefined ||
+          (args.reference !== undefined && (args.entry !== undefined || args.field !== undefined))) {
+        throw new Error('Choose one remote credential field and configured process destination.');
+      }
+      const detail = `Send the ${selected.field} for "${selected.entry}" to the configured process "${args.destination}" on ${remoteVaultTarget(config)}.`;
+      const approval = await approve({tool,entry:selected.entry,detail,always:true});
+      if (approval.unreachable) throw new Error('Open the remote Vault in VS Code to approve this delivery.');
+      if (!approval.approved) return textResult({status:'denied'});
+      signal?.throwIfAborted();
+      const password = await masterPassword();
+      signal?.throwIfAborted();
+      const result = await client.call(tool,{entry:selected.entry,field:selected.field,destination:args.destination},{password}).catch(()=>null);
+      if (result?.status !== 'delivered' || result.destination !== args.destination) {
+        throw new Error('Remote delivery failed. Check the configured entry, process, and audit on the Vault host.');
+      }
+      return textResult({status:'delivered',destination:args.destination});
+    }
+    if (tool === 'vault_attach_container') throw new Error('Use the Podman tools on the workspace host for a remote Vault.');
     await refreshPolicy();
 
+    if (tool === 'vault_delete_group' && args.confirm !== true) {
+      return textResult({status:'approval_required',group:args.group,message:'Confirm moving this group to the recycle bin before retrying.'});
+    }
+    if (tool === 'vault_delete_volume' && args.confirm !== true) {
+      return textResult({ status: 'approval_required', volume: args.volume, entry: args.entry,
+        message: 'Confirm removal of this encrypted volume and vault entry before retrying.' });
+    }
+    if ((tool === 'vault_attach_vm' || tool === 'vault_detach_vm') && args.confirm !== true) {
+      return textResult({status:'approval_required',vm:args.vm,message:'Confirm the exact workspace disk and VM slot before retrying.'});
+    }
     if (APPROVAL_TOOLS.has(tool)) {
-      const subject = tool === 'vault_mount_volume' ? (args.volume || config.volumePath) : args.entry;
+      const subject = tool === 'vault_mount_volume' ? `${args.volume || config.volumePath}${args.read_only ? ' (read-only)' : ''}${args.credential_entry ? ` using ${args.credential_entry}` : ''}`
+        : tool === 'vault_create_group' ? args.group
+        : tool === 'vault_rename_group' ? `Rename "${args.group}" to "${args.name}"`
+        : tool === 'vault_delete_group' ? `Move "${args.group}"${args.recursive ? ' and all its contents' : ' if empty'} to the recycle bin`
+        : tool === 'vault_list_groups' ? 'the default Vault group paths and credential counts'
+        : tool === 'vault_move_credential' ? `${args.entry} → ${args.group}`
+        : tool === 'vault_create_volume' ? `${args.volume} (${args.size_mb ?? 64} MiB, ${args.format ?? 'container'}) → VeraCrypt/${args.name}`
+        : tool === 'vault_delete_volume' ? `${args.volume} and its vault entry ${args.entry}`
+        : tool === 'vault_attach_vm' || tool === 'vault_detach_vm'
+          ? `${args.credential_entry ? `${args.volume} (${args.credential_entry})` : `${args.disk} in ${args.volume} mounted at ${args.mount_point}`}, ${args.backend ?? 'virtualbox'} VM ${args.vm}, ${
+            args.backend==='kvm' ? `${args.libvirt_uri ?? 'qemu:///session'} target ${args.target}`
+              : args.backend==='hyperv' ? `SCSI controller ${args.controller_number ?? 0}, slot ${args.port}` : `controller ${args.controller}, port ${args.port}`}`
+          : args.entry;
       const detail = tool === 'vault_get_credential'
         ? `Release ${(args.fields ?? ['username', 'password']).join(', ')} for "${args.entry}" from the vault on ${remoteVaultTarget(config)}.`
         : tool === 'vault_delete_credential'
           ? `Move "${args.entry}" to the recycle bin in the vault on ${remoteVaultTarget(config)}.`
-          : `Mount ${subject} on ${remoteVaultTarget(config)}.`;
+          : tool === 'vault_mount_volume'
+            ? `Mount ${subject} on ${remoteVaultTarget(config)}.`
+            : tool === 'vault_delete_volume'
+              ? `Unmount and permanently remove ${subject} on ${remoteVaultTarget(config)}.`
+              : `${tool}: ${subject} on ${remoteVaultTarget(config)}.`;
       const decision = await approve({ tool, entry: subject, detail });
       if (decision.unreachable) {
         return textResult({

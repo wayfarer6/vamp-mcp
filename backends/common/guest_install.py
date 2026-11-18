@@ -4,6 +4,7 @@ This module builds plans and renders configuration; it never starts a VM or
 injects input. Backend adapters execute plans using their native APIs.
 """
 import json
+import os
 from pathlib import Path
 import platform
 import sys
@@ -42,7 +43,8 @@ def post_create_notice(guest_os, base_url):
 def virtualbox_preseed():
     # One Debian policy source; only account substitution and the native late
     # command differ for VirtualBox's built-in unattended installer.
-    source=(ROOT/'guest_setup/http/debian-preseed.cfg').read_text()
+    assets=Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or ROOT)
+    source=(assets/'guest_setup/http/debian-preseed.cfg').read_text()
     substitutions={
       'd-i netcfg/get_hostname':'d-i netcfg/get_hostname string @@VBOX_INSERT_HOSTNAME_WITHOUT_DOMAIN@@',
       'd-i passwd/user-fullname':'d-i passwd/user-fullname string @@VBOX_INSERT_USER_FULL_NAME@@',

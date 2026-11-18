@@ -26,9 +26,10 @@ function createHyperVAdapter(context,{runtime,execute=promisify(execFile),platfo
   requireBackendHost('hyperv',platform);
   const storage=path.join(process.env.VAMP_HOME||path.join(require('node:os').homedir(),'.vamp'),'vms/hyperv');
   async function call(action,data={}){
+    const assets=await globalThis[Symbol.for('vamp.provisioningAssets')]?.() || runtime;
     const request=Buffer.from(JSON.stringify({action,...data})).toString('base64');
     let result;
-    try { result=await execute('powershell.exe',['-NoLogo','-NoProfile','-NonInteractive','-File',path.join(runtime,'backends/hyperv/scripts/Manage-Desktop.ps1'),'-RequestBase64',request,'-StoragePath',storage,'-LegacyStoragePath',path.join(context.globalStorageUri.fsPath,'desktops/hyperv')],{timeout:180000,maxBuffer:4*1024**2,encoding:'utf8'}); } catch(error) { throw safeFailure(error); }
+    try { result=await execute('powershell.exe',['-NoLogo','-NoProfile','-NonInteractive','-File',path.join(assets,'backends/hyperv/scripts/Manage-Desktop.ps1'),'-RequestBase64',request,'-StoragePath',storage,'-LegacyStoragePath',path.join(context.globalStorageUri.fsPath,'desktops/hyperv')],{timeout:180000,maxBuffer:4*1024**2,encoding:'utf8'}); } catch(error) { throw safeFailure(error); }
     let value;
     try { value=JSON.parse(result.stdout); } catch { throw safeFailure({}); }
     if(value.status==='error')throw safeFailure({stdout:result.stdout});

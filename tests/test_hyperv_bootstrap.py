@@ -49,8 +49,9 @@ class HyperVBootstrapTests(unittest.TestCase):
     def test_preseed_bind_and_url_agree_download_failure_does_not_run(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp);text=self.render(folder).read_text()
-            self.assertIn('http_bind_address = "172.20.1.1"',text)
-            self.assertIn('preseed/url=http://172.20.1.1:{{ .HTTPPort }}',text)
+            self.assertNotIn('http_directory',text)
+            self.assertIn('preseed/url=http://172.20.1.1:9999/preseed/test',text)
+            self.assertIn('netcfg/link_wait_timeout=15 netcfg/dhcp_timeout=60',text)
             late=next(l for l in (folder/'http/preseed.cfg').read_text().splitlines() if l.startswith('d-i preseed/late_command'))
             self.assertIn('VAMP_BOOTSTRAP_HOST=172.20.1.1',late)
             command=late.split(' string ',1)[1]
@@ -62,6 +63,44 @@ class HyperVBootstrapTests(unittest.TestCase):
         self.assertIn('-TimeoutSec 60 -ErrorAction Stop',s)
         self.assertLess(s.index('Bootstrap script download is empty'),s.index('   & $entry'))
         self.assertLess(s.index('completion was not reported'),s.index('-Method POST'))
+    def test_worker_records_a_guest_preseed_fetch_separately_from_completion(self):
+        from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+        from urllib.request import ProxyHandler, build_opener
+
+        with tempfile.TemporaryDirectory() as tmp, ExitStack() as stack:
+            folder=Path(tmp)
+            iso=folder/'test.iso'
+            iso.write_bytes(b'fixture')
+            request={'backend':'hyperv','guest_os':'debian','iso_path':str(iso),'name':'QA'}
+            (folder/'image.json').write_text('{}')
+            (folder/'request.json').write_text(json.dumps(request))
+            url=[]
+
+            def render(_request,_folder,_sha,_base,callback):
+                url.append(callback.replace('/complete/','/preseed/'))
+                (folder/'http').mkdir()
+                (folder/'http/preseed.cfg').write_bytes(b'fixture preseed')
+                return folder/'guest.pkr.hcl'
+
+            def packer(argv,**_kwargs):
+                if argv[1]=='build':
+                    with build_opener(ProxyHandler({})).open(url[0],timeout=5) as response:
+                        self.assertEqual(response.read(),b'fixture preseed')
+                    state=json.loads((folder/'image.json').read_text())
+                    self.assertTrue(state['installer_preseed_received'])
+                    self.assertNotIn('guest_setup_completed',state)
+
+            for name,value in {'directory':folder,'home':folder,'hyperv_network':{'host_ipv4':'127.0.0.2','execution_policy':'RemoteSigned'},'init':None}.items():
+                stack.enter_context(patch.object(runner,name,return_value=value))
+            stack.enter_context(patch.object(runner,'render',side_effect=render))
+            stack.enter_context(patch.object(runner.subprocess,'run',side_effect=packer))
+            stack.enter_context(patch('script_server.stage',return_value={'directory':folder}))
+            stack.enter_context(patch('script_server.make_server',side_effect=lambda *_:ThreadingHTTPServer(('127.0.0.1',0),BaseHTTPRequestHandler)))
+            runner.worker('0'*32)
+            state=json.loads((folder/'image.json').read_text())
+            self.assertTrue(state['installer_preseed_received'])
+            self.assertEqual(state['status'],'failed')
+            self.assertIn('without the authenticated guest post-install completion signal',state['error'])
     def test_virtualbox_render_keeps_previous_httpip_and_download_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
             folder=Path(tmp);text=self.render(folder,'virtualbox').read_text()

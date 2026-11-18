@@ -26,7 +26,9 @@ def output_folder():
         try:
             if folder.is_dir() and os.access(folder,os.W_OK):return folder,True
         except OSError:pass
-    folder=Path(__file__).resolve().parent/'recordings';folder.mkdir(exist_ok=True)
+    local=os.environ.get('VAMP_LOCAL_RECORDINGS_DIR')
+    folder=Path(local) if local else Path(__file__).resolve().parent/'recordings'
+    folder.mkdir(parents=True,exist_ok=True)
     return folder,False
 
 

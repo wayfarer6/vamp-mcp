@@ -1,0 +1,115 @@
+#!/usr/bin/python3 -I
+"""Type one approved credential field into the armed Linux X11 focus."""
+import json
+import os
+import re
+from pathlib import Path
+import socket
+import stat
+import subprocess
+import sys
+
+LIMIT = 65536
+RECEIPT = b"VAMP_RECEIVED\n"
+
+
+def socket_path():
+    if os.getuid() == 0:
+        raise RuntimeError("An unprivileged account is required")
+    folder = Path("/tmp") / f"vamp-vault-{os.getuid()}"
+    folder.mkdir(mode=0o700, exist_ok=True)
+    identity = folder.lstat()
+    if not stat.S_ISDIR(identity.st_mode) or identity.st_uid != os.getuid() or stat.S_IMODE(identity.st_mode) != 0o700:
+        raise RuntimeError("Invalid receiver directory")
+    return folder / "receive.sock"
+
+
+def read_bounded(stream):
+    data = stream.read(LIMIT + 1)
+    if not data or len(data) > LIMIT:
+        raise ValueError("Invalid delivery length")
+    entry = json.loads(data)
+    if (not isinstance(entry, dict) or set(entry) != {"field", "value"}
+            or entry["field"] not in ("username", "password", "totp")
+            or not isinstance(entry["value"], str) or not entry["value"]
+            or any(ord(char) < 32 or ord(char) == 127 for char in entry["value"])
+            or (entry["field"] == "totp" and not re.fullmatch(r"[0-9]{6,8}", entry["value"]))):
+        raise ValueError("Invalid credential payload")
+    return data
+
+
+def focused_window():
+    if not os.environ.get("DISPLAY") or os.environ.get("XDG_SESSION_TYPE") == "wayland":
+        raise RuntimeError("An X11 desktop is required")
+    window = subprocess.check_output(
+        ["/usr/bin/xdotool", "getwindowfocus", "-f"], stderr=subprocess.DEVNULL, timeout=4
+    ).strip()
+    if not window.isdigit() or int(window) <= 1:
+        raise RuntimeError("No focused window")
+    return window
+
+
+def ensure_recorder_closed():
+    for directory in Path("/proc").glob("[0-9]*"):
+        try:
+            if directory.stat().st_uid != os.getuid():
+                continue
+            arguments = (directory / "cmdline").read_bytes().split(b"\0")
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        if any(argument.rsplit(b"/", 1)[-1] == b"vamp-recorder.py" for argument in arguments):
+            raise RuntimeError("Close VAMP Recorder before typing a credential")
+
+
+def listen(address, expected_field):
+    ensure_recorder_closed()
+    original_focus = focused_window()
+    with socket.socket(socket.AF_UNIX) as server:
+        server.bind(str(address))
+        try:
+            server.settimeout(120)
+            server.listen(1)
+            connection, _ = server.accept()
+            with connection, connection.makefile("rb") as stream:
+                connection.settimeout(8)
+                entry = json.loads(read_bounded(stream))
+                ensure_recorder_closed()
+                if entry["field"] != expected_field or focused_window() != original_focus:
+                    raise RuntimeError("Armed field or X11 focus changed")
+                subprocess.run(
+                    ["/usr/bin/xdotool", "type", "--clearmodifiers", "--file", "-"],
+                    input=entry["value"].encode(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    timeout=7, check=True,
+                )
+                if focused_window() != original_focus:
+                    raise RuntimeError("Focus changed while typing")
+                connection.sendall(RECEIPT)
+        finally:
+            address.unlink(missing_ok=True)
+
+
+def send(address):
+    data = read_bounded(sys.stdin.buffer)
+    with socket.socket(socket.AF_UNIX) as connection:
+        connection.settimeout(8)
+        connection.connect(str(address))
+        connection.sendall(data)
+        connection.shutdown(socket.SHUT_WR)
+        with connection.makefile("rb") as stream:
+            if stream.read(len(RECEIPT) + 1) != RECEIPT:
+                raise RuntimeError("Receipt unavailable")
+    sys.stdout.buffer.write(RECEIPT)
+
+
+if __name__ == "__main__":
+    os.umask(0o077)
+    try:
+        if len(sys.argv) == 3 and sys.argv[1] == "--listen" and sys.argv[2] in ("username", "password", "totp"):
+            listen(socket_path(), sys.argv[2])
+        elif not sys.argv[1:]:
+            send(socket_path())
+        else:
+            raise ValueError("Unexpected argument")
+    except (OSError, RuntimeError, ValueError, TypeError, subprocess.SubprocessError):
+        print("VAMP Vault receiver unavailable.", file=sys.stderr)
+        sys.exit(1)

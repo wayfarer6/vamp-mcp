@@ -42,7 +42,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
     if(!supported(snapshot))throw Error('Workspace attachment is supported only by the native Linux local rootless engine');
     let raw,config;
     try{({raw,config}=await read(configPath,snapshot.uid));}catch{throw Error('An owner-only workspace configuration is required on this Linux host');}
-    if(!config||Array.isArray(config)||Object.keys(config).some(x=>!['veracryptPath','volumePath','mountPoint','directory','imageId','workloadId','protectedPaths'].includes(x))||!ID.test(config.imageId||'')||!allowedImages().includes(config.imageId)||typeof config.workloadId!=='string'||!/^[a-z0-9][a-z0-9-]{0,47}$/.test(config.workloadId))throw Error('Workspace configuration or trusted immutable desktop image is invalid');
+    if(!config||Array.isArray(config)||Object.keys(config).some(x=>!['veracryptPath','volumePath','mountPoint','directory','imageId','workloadId','protectedPaths','credentialEntry'].includes(x))||!ID.test(config.imageId||'')||!allowedImages().includes(config.imageId)||typeof config.workloadId!=='string'||!/^[a-z0-9][a-z0-9-]{0,47}$/.test(config.workloadId))throw Error('Workspace configuration or trusted immutable desktop image is invalid');
     return {config,raw,source:sourceFactory({platform,veracryptPath:config.veracryptPath,protectedPaths:config.protectedPaths,
       selection:{topology:'linux-local',volumePath:config.volumePath,mountPoint:config.mountPoint,directory:config.directory,workloadId:config.workloadId}})};
   }
@@ -56,6 +56,22 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
       while(approvals.size>=32)approvals.delete(approvals.keys().next().value);
       approvals.set(approval_id,{fingerprint:proof(snapshot,ctx,m),expires:now()+300000});
       return {status:'ready_to_attach',destination:DEST,access:'rw',network:'none',approval_id,actual_read_write_verified:false};
+    });
+  }
+  async function unlock(snapshot,requestMount) {
+    return reserve(snapshot.uid,async()=>{
+      const ctx=await context(snapshot);
+      const {volumePath,mountPoint,credentialEntry,veracryptPath}=ctx.config;
+      if(![volumePath,mountPoint,veracryptPath].every(safePath)||
+         typeof credentialEntry!=='string'||!/^VeraCrypt\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(credentialEntry)) {
+        throw Error('Configure the managed Vault credential for this workspace.');
+      }
+      const result=await requestMount({volumePath,mountPoint,credentialEntry,veracryptPath});
+      if(result.status!=='mounted')return {status:result.status==='denied'?'denied':'mount_unverified'};
+      const fresh=await context(snapshot);
+      if(fresh.raw!==ctx.raw)throw Error('The workspace configuration changed during unlock.');
+      const observed=await fresh.source.inspect();
+      return {status:observed.state==='verified_mounted_scope'?'mounted':'mount_unverified'};
     });
   }
   async function attach(snapshot,approvalId,{scan,command,inspect}){
@@ -101,16 +117,52 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
     const ctx=await context(snapshot);
     return ctx.source.readForAttachment(async m=>verifiedMount(value,m,ctx.config.imageId));
   }
-  return {status,attach,verify,supported};
+  async function detach(snapshot,id,{scan,command,inspect,present}){
+    return reserve(snapshot.uid,async()=>{
+      const ctx=await context(snapshot);
+      return ctx.source.readForAttachment(async (mount,revalidate)=>{
+        const container=await inspect(id);
+        if(!verifiedMount(container,mount,ctx.config.imageId)||container.State?.Running!==true)
+          throw Error('Choose a running managed container for the configured workspace');
+        await revalidate();
+        await command(['stop','--time','10','--',id]);
+        if(await present(id))throw Error('Workspace container is still present; writer absence could not be verified');
+        await scan(mount);
+        await revalidate();
+        return {status:'detached',id,local_podman_writers_verified_absent:true};
+      });
+    });
+  }
+  async function lockWorkspace(snapshot,scan,assertDetached){
+    return reserve(snapshot.uid,async()=>{
+      const ctx=await context(snapshot);
+      return ctx.source.readForAttachment(async (mount,revalidate)=>{
+        await assertDetached({mountPoint:mount.mountPoint,volume:ctx.config.volumePath});
+        await scan({...mount,directory:mount.mountPoint});
+        const fresh=await context(snapshot);
+        if(fresh.raw!==ctx.raw)throw Error('The workspace configuration changed during dismount.');
+        const observed=await revalidate();
+        if(!await ctx.source.dismount(observed))throw Error('VeraCrypt mount removal could not be verified.');
+        return {status:'unmounted',local_podman_writers_verified_absent:true};
+      });
+    });
+  }
+  return {status,unlock,lockWorkspace,attach,detach,verify,supported};
 }
 const labelFor=m=>m.mountId+'.'+m.scopeId;
 function verifiedMount(v,m,imageId){
   const host=v?.HostConfig, config=v?.Config;
   const expected=v?.Mounts?.filter?.(row=>row?.Destination===DEST)||[];
   const mount=expected[0];
+  // Podman can expand --cap-drop=all in HostConfig rather than reporting ALL.
+  // Its OCI capability sets use null or an empty array for an empty set.
+  const emptyCaps=caps=>caps===null||(Array.isArray(caps)&&caps.length===0);
+  const noCaps=Object.hasOwn(v||{},'BoundingCaps')
+    ? emptyCaps(v.BoundingCaps)&&(!Object.hasOwn(v,'EffectiveCaps')||emptyCaps(v.EffectiveCaps))
+    : Array.isArray(host?.CapDrop)&&host.CapDrop.some(c=>String(c).toUpperCase()==='ALL');
   return String(v?.Image||'').replace(/^sha256:/,'')===imageId&&config?.Labels?.[LABEL]===labelFor(m)&&
     host?.NetworkMode==='none'&&host?.AutoRemove===true&&host?.ReadonlyRootfs===true&&host?.Privileged===false&&config?.User==='1000:1000'&&
-    Array.isArray(host.CapAdd)&&!host.CapAdd.length&&Array.isArray(host.CapDrop)&&host.CapDrop.some(c=>String(c).toUpperCase()==='ALL')&&
+    Array.isArray(host.CapAdd)&&!host.CapAdd.length&&noCaps&&
     Array.isArray(host.SecurityOpt)&&host.SecurityOpt.some(x=>/^no-new-privileges(?::true|=true)?$/.test(x))&&
     expected.length===1&&mount?.Type==='bind'&&mount.Source===m.directory&&mount.RW===true&&['private','rprivate'].includes(mount.Propagation)&&
     v.Mounts.every(row=>row===mount||(row?.Type==='tmpfs'&&TMPFS.has(row.Destination)&&(!row.Source||row.Source==='tmpfs')))&&

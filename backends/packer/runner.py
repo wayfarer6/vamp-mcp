@@ -15,7 +15,8 @@ import uuid
 
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parents[1]
-sys.path[:0]=[str(HERE),str(ROOT/'backends/common'),str(ROOT/'scripts')]
+ASSETS=Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or ROOT)
+sys.path[:0]=[str(HERE),str(ROOT/'backends/common'),str(ASSETS/'scripts')]
 from toolchain import home,init,environment,executable,POLICY
 from guest_install import require_install_host,post_create_notice
 from templates import render
@@ -184,7 +185,8 @@ def deploy(request,folder):
         run('virt-install',args);vm_id=run('virsh',['-c',uri,'domuuid',name]).strip()
         if run('virsh',['-c',uri,'domstate',vm_id]).strip()!='running':raise RuntimeError('Deployed VM did not reach Running state')
     else:
-        vm_id=run('powershell.exe',['-NoProfile','-NonInteractive','-File',HERE/'deploy-hyperv.ps1','-Artifact',artifact,'-Destination',live,'-Name',name],timeout=1800).strip()
+        assets=Path(os.environ.get('VAMP_PROVISIONING_ASSETS') or ROOT)
+        vm_id=run('powershell.exe',['-NoProfile','-NonInteractive','-File',assets/'backends/packer/deploy-hyperv.ps1','-Artifact',artifact,'-Destination',live,'-Name',name],timeout=1800).strip()
     ownership={'id':vm_id,'name':name,'folder':str(live),'guest_os':request['guest_os'],'golden_image_id':folder.name}
     if backend=='kvm':ownership.update(disk=str(disk),volume=volume,pool='default' if volume else None)
     write(live/'vamp-ui.json',ownership)
@@ -192,16 +194,36 @@ def deploy(request,folder):
 
 def worker(image_id):
     folder=directory(image_id);record=json.loads((folder/'image.json').read_text());request=json.loads((folder/'request.json').read_text());server=None;bootstrap_server=None
+    record_lock=threading.Lock()
+    def update(**fields):
+        with record_lock:
+            record.update(**fields)
+            write(folder/'image.json',record)
     def status(value,**extra):
-        record.update(status=value,**extra);write(folder/'image.json',record)
+        update(status=value,**extra)
     try:
         status('building',worker_pid=os.getpid())
         conflicts(request['backend'])
         token=secrets.token_hex(32);completed=threading.Event()
+        observe_preseed=request['backend']=='hyperv' and request['guest_os']=='debian'
+        if observe_preseed:
+            update(installer_preseed_received=False)
         class Handler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if not observe_preseed or self.path!='/preseed/'+token:
+                    self.send_error(404);return
+                data=(folder/'http/preseed.cfg').read_bytes()
+                if self.client_address[0]!=host:
+                    update(installer_preseed_received=True)
+                self.send_response(200)
+                self.send_header('Content-Type','text/plain; charset=utf-8')
+                self.send_header('Content-Length',str(len(data)))
+                self.send_header('Cache-Control','no-store')
+                self.end_headers()
+                self.wfile.write(data)
             def do_POST(self):
                 if self.path!='/complete/'+token:self.send_error(404);return
-                record.update(guest_setup_completed=True,stage='golden_export');write(folder/'image.json',record);completed.set();self.send_response(200);self.end_headers();self.wfile.write(b'OK')
+                update(guest_setup_completed=True,stage='golden_export');completed.set();self.send_response(200);self.end_headers();self.wfile.write(b'OK')
             def log_message(self,*args):pass
         host='10.0.2.2'
         if request['backend']=='hyperv':
@@ -261,6 +283,8 @@ def worker(image_id):
         result=deploy(request,folder)
         status('completed',**result)
     except Exception as exc:
+        if record.get('installer_preseed_received') is False and (folder/'packer.log').is_file():
+            update(installer_hint='No guest preseed request was observed. Check the installer network screen and the selected Hyper-V switch.')
         status('failed',error=str(exc),partial_files_preserved=True)
     finally:
         if bootstrap_server:bootstrap_server.shutdown();bootstrap_server.server_close()

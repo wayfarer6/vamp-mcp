@@ -35,10 +35,11 @@ export function scriptServerPython(): string {
 }
 
 /** Locate scripts/script_server.py in the repository, the VSIX runtime or the npm runtime. */
-export function scriptServerPath(): string {
+export function scriptServerPath(assets?: string | null): string {
   const here = dirname(fileURLToPath(import.meta.url));
   const candidates: string[] = [];
   if (process.env.VAMP_SCRIPT_SERVER_PATH) candidates.push(process.env.VAMP_SCRIPT_SERVER_PATH);
+  if (assets) candidates.push(join(assets, "scripts", "script_server.py"));
   // Walk up from the module: the bundle lives in dist/runtime/backends/virtualbox, the
   // TypeScript build in dist/tools, and the source in src/tools.
   let directory = here;
@@ -66,12 +67,17 @@ export interface ScriptServerCallOptions {
 }
 
 /** Run one script_server.py subcommand and parse its JSON document. */
-export function callScriptServer(
+export async function callScriptServer(
   command: "start" | "stop" | "status" | "stage",
   extra: string[] = [],
   options: ScriptServerCallOptions = {},
 ): Promise<ScriptServerInfo> {
-  const script = scriptServerPath();
+  const loadAssets = process.env.VAMP_SCRIPT_SERVER_PATH ? undefined : Reflect.get(globalThis, Symbol.for("vamp.provisioningAssets"));
+  const assets = await loadAssets?.(command === "status" || command === "stop");
+  if (loadAssets && !assets) {
+    throw new Error("The provisioning cache is not installed. Install the matching assets to check or stop a script server.");
+  }
+  const script = scriptServerPath(assets);
   const port = options.port ?? SCRIPT_SERVER_PORT;
   const args = [script, command, "--port", String(port), "--json", ...extra];
   return new Promise<ScriptServerInfo>((resolve, reject) => {

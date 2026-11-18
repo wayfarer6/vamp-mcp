@@ -1,5 +1,5 @@
 'use strict';
-// Read-only Linux-local evidence source. No mount/unmount, passwords, file-content
+// Linux-local evidence source and checked dismount. No passwords, file-content
 // scanning, remote execution or automatic executable discovery. Trusted host code
 // supplies the selected paths and complete protected-path policy; never MCP JSON.
 const nativeFs=require('node:fs/promises');
@@ -98,6 +98,14 @@ function createMountedWorkspaceSource({selection,veracryptPath,protectedPaths,pl
   // Local privileged races cannot be made atomic by a pathname-only Node API.
   return callback(snapshot,revalidate);
  }
- return Object.freeze({inspect,readForAttachment});
+ async function dismount(expected){
+  const fresh=await observe();
+  if(fresh.mountId!==expected.mountId||fresh.scopeId!==expected.scopeId)fail();
+  await execute(veracryptPath,['--text','--non-interactive','--unmount',fresh.mountPoint],{
+   cwd:'/',env:{LANG:'C',LC_ALL:'C',PATH:'/usr/bin:/bin'},encoding:'utf8',timeout:120000,maxBuffer:256*1024,shell:false,windowsHide:true});
+  const mounts=mountRows(await fs.readFile('/proc/self/mountinfo','utf8'));
+  return !mounts.some(m=>m.mount===fresh.mountPoint||inside(m.mount,fresh.mountPoint));
+ }
+ return Object.freeze({inspect,readForAttachment,dismount});
 }
 module.exports={createMountedWorkspaceSource};

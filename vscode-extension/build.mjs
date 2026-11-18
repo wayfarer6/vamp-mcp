@@ -1,9 +1,12 @@
 import {build} from 'esbuild';
+import {execFileSync} from 'node:child_process';
 import {cp,mkdir,rm,copyFile,readFile,writeFile,readdir,stat} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const root=path.dirname(here);
+const virtualbox=path.join(root,'third_party/mcp-virtualbox');
+execFileSync(process.execPath,[path.join(virtualbox,'node_modules/typescript/bin/tsc')],{cwd:virtualbox,stdio:'inherit'});
 const manifest=JSON.parse(await readFile(path.join(here,'package.json'),'utf8'));
 if ((await stat(path.join(here,manifest.icon))).size>1024*1024) {
   throw new Error('Marketplace icon must be at most 1024 KB. Resize/compress it before packaging.');
@@ -43,7 +46,7 @@ await copyFile(path.join(here,'CONTAINERS_WSL.md'),path.join(runtime,'skills/vam
 await copyFile(path.join(root,'docs/CONTAINER_DESKTOP.md'),path.join(runtime,'skills/vamp-podman/CONTAINER_DESKTOP.md'));
 const desktopRecipe=path.join(runtime,'containers/debian-desktop');
 await mkdir(desktopRecipe,{recursive:true});
-for (const name of ['Containerfile','Containerfile.nvidia','Containerfile.amd','.containerignore','.dockerignore','desktop.py','healthcheck.py','helper_common.py','capture.py','view.py','chromium-launcher.py','chromium.desktop','README.md','GPU.md']) {
+for (const name of ['Containerfile','Containerfile.nvidia','Containerfile.amd','Containerfile.recorder','.containerignore','.dockerignore','desktop.py','healthcheck.py','helper_common.py','capture.py','view.py','chromium-launcher.py','chromium.desktop','recorder-launcher.sh','recorder.desktop','README.md','GPU.md']) {
   await copyFile(path.join(root,'containers/debian-desktop',name),path.join(desktopRecipe,name));
 }
 // Preserve native Windows files; normalize only Unix shell scripts.

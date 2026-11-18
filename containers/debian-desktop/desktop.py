@@ -13,7 +13,7 @@ import time
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from healthcheck import RUNTIME, display_environment, measure
 
-XVFB = ['Xvfb', ':99', '-screen', '0', '1920x1080x24', '-nolisten', 'tcp',
+XVFB = ['Xvfb', ':99', '-screen', '0', '1920x1080x24', '-extension', 'RANDR', '-nolisten', 'tcp',
         '-auth', str(RUNTIME / 'Xauthority'), '-noreset']
 SESSION = ['dbus-run-session', '--', 'xfce4-session', '--disable-tcp']
 

@@ -54,7 +54,8 @@ for account in vboxuser vagrant; do
  chmod 0440 "/etc/sudoers.d/90-vamp-$account"
 done
 if command -v visudo >/dev/null 2>&1; then visudo -cf /etc/sudoers >/dev/null; fi
-apt-get install -y dconf-cli build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot task-gnome-desktop xorg gnome-session-xsession
+apt-get install -y dconf-cli build-essential python3-venv python3-tk python3-dev python3-dbus x11-xserver-utils xdg-user-dirs scrot xdotool task-gnome-desktop xorg gnome-session-xsession
+install -m 0755 /opt/rpa-recorder-setup/vault/vamp-vault-receive /usr/local/bin/vamp-vault-receive
 python3 /opt/rpa-recorder-setup/recorder/configure-gdm.py
 python3 /opt/rpa-recorder-setup/recorder/configure-debian-display.py prepare
 # Debian 13 uses a static gdm.service; enabling gdm3 alone does not create

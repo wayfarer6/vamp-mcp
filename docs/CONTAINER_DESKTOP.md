@@ -10,9 +10,30 @@ When you have a rootless Podman engine, open a shell that targets that engine. F
 podman build -t localhost/vamp-debian-desktop:dev -f containers/debian-desktop/Containerfile containers/debian-desktop
 ```
 
+To add the VAMP Recorder, build the non-root recorder image from the desktop
+image. Run these commands from the repository root:
+
+```sh
+podman build --pull=never --build-context recorder=guest_setup/recorder \
+  --build-context vault=guest_setup/vault \
+  -f containers/debian-desktop/Containerfile.recorder \
+  -t localhost/vamp-debian-recorder:dev containers/debian-desktop
+```
+
+Use the recorder image ID in your viewer allowlist. Open a standalone MCP
+desktop link in `control` mode, then launch **VAMP Recorder** from the XFCE
+Applications menu. Press F8 to start and stop, then choose **Save Python**.
+The recording stays in `/home/desktop/Recordings`. With the disposable tmpfs
+home, copy out the individual reviewed file before stopping the container.
+VS Code's embedded viewer supports viewing and capture.
+
 The same recipe can be used with `docker build` on a separately configured Docker host. The default base is the official Debian trixie-slim image; before distributing a golden image, supply its independently verified digest through the `DEBIAN_BASE` build argument and record the produced image digest. Do not copy work documents, browser state, credentials, a Vault database, or key files into the image or its build context.
 
 The image installs a minimal XFCE desktop, Chromium, LibreOffice, Korean fonts, noVNC and websockify from Debian packages. The virtual display is 1920×1080. **The container does not listen on a VNC or websockify port.** Its fixed screen helpers pass pixels over a managed subprocess only. Do not publish raw VNC or websockify on a public or LAN interface, and do not disable Chromium's sandbox to make it run.
+
+Xvfb disables RandR so guest applications cannot resize the framebuffer. The
+noVNC client scales to fit the browser window. Capture and viewer readiness
+continue to require the native 1920×1080 framebuffer.
 
 ## Create a separate Debian VM for Podman
 
@@ -36,6 +57,17 @@ This prerelease requires an independently verified immutable desktop image ID. R
 Local browser listeners are restricted to `127.0.0.1` and allocate the lowest open port from 6080 through 6111. Knowledge of the port is not access; the private URL contains a session capability. Browser and VS Code viewer paths are still awaiting real engine/UI testing; clipboard and file transfer are disabled in the fixed screen helper.
 
 ## Native Linux: attach an already-opened VeraCrypt workspace
+
+With both VAMP and VAMP Vault running in VS Code, set the owner-only workspace
+configuration's optional `credentialEntry` to the managed `VeraCrypt/…`
+entry bound to the volume. Call `podman_workspace_unlock` on the checked local
+connection and approve the exact volume and mount directory in VS Code.
+Then run `podman_workspace_check` and approve the resulting attachment.
+In the unified MCP server, `vault_attach_container` is an alias of
+`podman_workspace_attach`. In the standalone Vault server, first call
+`vault_attach_container` without arguments to check the workspace. To attach,
+call the same Vault server with the returned `binding`, `approval_id`
+and `confirm: true`.
 
 This prerelease adds a narrow source implementation for **native Linux, same-user rootless Podman, `local-linux` only**. WSL and SSH targets, including an engine in a remote Debian VM, are unavailable for this attachment flow. A Debian VM can use it only when VAMP and rootless Podman both run locally inside that native Linux guest. Engine connection, mounted-volume identity, desktop readiness and real application read/write are separate checks.
 
@@ -69,6 +101,13 @@ Attachment reserves the local operation, checks same-user Podman writers, and cr
 The writer check covers the same user's Podman containers, **not every host process, another user or another engine**. The reservation prevents overlapping managed attach operations; it is not a system-wide file lock. Keep unrelated writers closed. `actual_read_write_verified: false` remains honest even after an attachment reports success: real file-write and full OCI/desktop integration have not yet been verified. Do not tell the user that a document was saved or the workspace is fully ready without checking the actual result.
 
 ### Finish before dismounting
+
+For MCP, save and close applications, confirm the exact managed container,
+then call `podman_workspace_detach` with its full ID and checked connection
+binding. A successful response verifies that the container and overlapping
+same-user Podman mounts are absent. Then confirm `podman_workspace_lock`
+to dismount. It rechecks same-user Podman mounts across the entire volume
+and any disk attachments registered by Vault before calling VeraCrypt.
 
 Save and close applications, stop the newly created workload, then refresh and verify that it is gone and the attachment is released **before manually dismounting VeraCrypt**. The workload is disposable; stopping it does not delete files saved in the approved task directory. Do not dismount while a workload might still write. If attachment fails or its state is uncertain, inspect the local container inventory before retrying or dismounting; do not assume rollback completed.
 

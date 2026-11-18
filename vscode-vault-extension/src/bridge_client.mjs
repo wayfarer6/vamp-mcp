@@ -86,6 +86,7 @@ export class BridgeClient {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         reject(new BridgeUnavailable(`bridge request "${op}" timed out`));
+        if (op==='deliver-credential' || op==='mount-podman-workspace') this.close();
       }, timeout);
       this.pending.set(id, { resolve, reject, timer });
       this.socket.write(`${JSON.stringify({ id, token: this.token, op, params })}\n`);
@@ -116,7 +117,7 @@ export class BridgeClient {
 
   close() {
     if (this.closed) return;
-    this.closed = true;
-    try { this.socket.end(); } catch {}
+    this.#failAll('bridge closed');
+    this.socket.destroy();
   }
 }

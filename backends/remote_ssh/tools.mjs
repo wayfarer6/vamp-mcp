@@ -5,6 +5,7 @@
 import fs from 'node:fs/promises';
 import hostSupport from '../common/host-support.cjs';
 import packerModule from '../common/packer.cjs';
+import {runWithVault} from '../library/vault-replay.mjs';
 import path from 'node:path';
 import { describeConfig } from './config.mjs';
 import { clickEvents, parseDomainIds, parseDomainInfo, parseDomainXml, CLICK_BUTTONS } from './libvirt.mjs';
@@ -310,7 +311,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       const { width, height } = measured.text;
       const px = Math.round(positiveNumber(x, 0.5, 0, 1) * (width - 1));
       const py = Math.round(positiveNumber(y, 0.5, 0, 1) * (height - 1));
-      const script = path.join(config.repo, 'backends', 'virtualbox', 'mouse_click.py');
+      const script = await packerModule.resolveRuntimeAsset(config.repo, 'backends/virtualbox/mouse_click.py');
       const result = await exec(config.python, [script, target, String(px), String(py), button, ...(double ? ['--double'] : [])]);
       if (!result.ok) throw new Error(`VirtualBox mouse input failed: ${detail(result)}`);
       return { status: 'ok', vm: target, backend: 'virtualbox', pixels: [px, py],
@@ -354,45 +355,61 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     } else {
       if (!config.repo) return {status:'unsupported',message:'VirtualBox move requires --repo and a matching Python SDK'};
       const measured = await screenshot({vm:target, include_image:false});
-      const result = await exec(config.python, [path.join(config.repo,'backends','virtualbox','mouse_move.py'),target,
+      const script = await packerModule.resolveRuntimeAsset(config.repo, 'backends/virtualbox/mouse_move.py');
+      const result = await exec(config.python, [script,target,
         String(Math.round(fx*(measured.text.width-1))),String(Math.round(fy*(measured.text.height-1)))]);
       if (!result.ok) throw new Error(`VirtualBox mouse move failed: ${detail(result)}`);
     }
     return {status:'ok',vm:target,x:fx,y:fy,action:'move',note:'Input dispatched; observe the guest to verify.'};
   }
 
-  async function rpaRun({ registry, id, vm_id, inputs = {}, confirmed = false, timeout_ms }) {
+  async function rpaRun({ registry, id, vm_id, inputs = {}, confirmed = false, dry_run = false, timeout_ms, vault_destination }) {
     const registryPath = String(registry || config.registry || '');
     if (!config.repo) throw new Error('The VAMP repository path is not configured on the remote host (remoteRepo). Run remote_env_setup or set vamp.remote.remoteRepo.');
-    const script = path.join(config.repo, 'backends', 'library', 'replay.py');
     if (!UUID_PATTERN.test(String(id || ''))) throw new Error('A saved RPA UUID is required.');
     if (!UUID_PATTERN.test(String(vm_id || ''))) throw new Error('A target VM UUID is required.');
-    if (!confirmed) {
+    if (confirmed !== true && dry_run !== true) {
       return {
         status: 'needs_confirmation',
         message: 'Replaying a saved RPA drives the guest. Ask the user for authorization, confirm the declared inputs, then call again with confirmed=true.',
       };
     }
+    if (vault_destination !== undefined && (typeof vault_destination !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(vault_destination))) {
+      throw new Error('Provide a valid destination name from the remote Vault host.');
+    }
+    const vaultBridge = vault_destination && dry_run !== true ? {
+      socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN,
+    } : null;
+    if (vaultBridge && (!vaultBridge.socketPath || !vaultBridge.token)) {
+      return {status:'approval_required',actions_completed:0,message:'The remote host has no approved Vault replay bridge.'};
+    }
     const payload = {
       id,
       vm_id,
       inputs,
-      confirmed: true,
+      confirmed: dry_run !== true,
+      dry_run: dry_run === true,
       registry: registryPath,
       libvirt_uri: config.libvirtUri,
+      ...(vaultBridge && {vault_destination}),
     };
-    const result = await exec(config.python, [script], {
-      input: JSON.stringify(payload),
-      timeoutMs: Math.min(Number(timeout_ms) || 610000, 900000),
-    });
+    const script = await packerModule.resolveRuntimeAsset(config.repo, 'backends/library/replay.py');
     let parsed = null;
-    try {
-      parsed = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')));
-    } catch {
-      parsed = null;
-    }
-    if (!parsed) {
-      throw new Error(`RPA replay did not return a result: ${detail(result, 'no output')}`);
+    if (vaultBridge) {
+      parsed=await runWithVault(config.python,script,payload,{
+        ...vaultBridge,timeoutMs:Math.max(1000,Math.min(Number(timeout_ms)||610000,610000)),
+      });
+    } else {
+      const result = await exec(config.python, [script], {
+        input: JSON.stringify(payload),
+        timeoutMs: Math.min(Number(timeout_ms) || 610000, 900000),
+      });
+      try {
+        parsed = JSON.parse(result.stdout.slice(result.stdout.indexOf('{')));
+      } catch {
+        throw new Error(`RPA replay did not return a result: ${detail(result, 'no output')}`);
+      }
+      if (!parsed) throw new Error('RPA replay did not return a result.');
     }
     return {
       status: parsed.status || 'unknown',
@@ -431,7 +448,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       add('vbox-vms', 'VirtualBox inventory readable', listed.ok ? 'ok' : 'failed', listed.ok ? `${parseVmList(listed.stdout).length} VM(s)` : 'could not list VMs', listed.ok ? undefined : 'The SSH user must be able to run VBoxManage for the account that owns the VMs.');
     }
 
-    const replay = config.repo ? path.join(config.repo, 'backends', 'library', 'replay.py') : '';
+    const replay = config.repo ? await packerModule.resolveRuntimeAsset(config.repo, 'backends/library/replay.py', {cacheOnly:true}) : '';
     let replayOk = false;
     if (replay) {
       replayOk = await fsx.access(replay).then(() => true).catch(() => false);
@@ -566,7 +583,8 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
           : { fix: 'Install VirtualBox on the remote host (https://www.virtualbox.org/wiki/Downloads), then set remoteVboxManage if it is not on PATH.' });
     }
 
-    const packerScript=path.join(config.repo||config.workdir,'backends/packer/runner.py');
+    const runtime=config.repo||config.workdir;
+    const packerScript=dry_run?'backends/packer/runner.py':await packerModule.resolveRuntimeAsset(runtime,'backends/packer/runner.py');
     await runStep('packer','Install HashiCorp Packer CLI and official hypervisor plugin',[config.python||'python3',packerScript,'prepare','--backend',config.backend],600000);
     const failed = steps.filter(step => step.status === 'failed');
     const manual = steps.filter(step => step.status === 'needs_manual');
@@ -760,6 +778,8 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
           inputs: { type: 'object', description: 'Exact declared input values.', additionalProperties: { type: 'string' } },
           registry: { type: 'string', description: 'Optional RPA registry folder on the remote host.' },
           confirmed: { type: 'boolean', description: 'True only after the user authorized this run.', default: false },
+          dry_run: { type: 'boolean', description: 'Check reviewed Vault references on the remote host without starting replay.', default: false },
+          vault_destination: { type:'string', description:'Destination name in the Vault configured on the remote RPA host.', pattern:'^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$' },
           timeout_ms: { type: 'number', description: 'Replay timeout in milliseconds.' },
         },
         required: ['id', 'vm_id'],

@@ -2,12 +2,21 @@
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath, pathToFileURL} from 'node:url';
-import {readFileSync} from 'node:fs';
+import {existsSync, readFileSync} from 'node:fs';
 const here=path.dirname(fileURLToPath(import.meta.url));
 const runtime=path.resolve(here,'../runtime');
+const version=JSON.parse(readFileSync(path.join(here,'../package.json'),'utf8')).version;
+const manifestPath=path.join(runtime,'provisioning-assets.json');
+function readAssetManifest() {
+  const manifest=JSON.parse(readFileSync(manifestPath,'utf8'));
+  if (manifest?.version!==version || typeof manifest.sha256!=='string' || !/^[0-9a-f]{64}$/.test(manifest.sha256)) {
+    throw new Error('Invalid provisioning asset manifest for this package version.');
+  }
+  return manifest;
+}
 const [command='unified',...args]=process.argv.slice(2);
 if (command==='--version' || command==='-v') {
-  console.log(JSON.parse(readFileSync(path.join(here,'../package.json'),'utf8')).version);
+  console.log(version);
 } else if (command==='--help' || command==='-h') {
   console.log(`VAMP MCP — unified VM, RPA and container tool server
 Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
@@ -17,10 +26,32 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
   library      Reviewed RPA search/replay; VAMP_RPA_REGISTRY selects saved RPAs
   remote       KVM/VirtualBox host MCP; pass --backend kvm or --backend virtualbox
   podman       Legacy standalone container server; no separate registration needed
+  assets install <archive> [sha256]  Verify and install an offline provisioning archive
+  assets download [sha256]           Verify and cache provisioning assets from this release
   --version    Package version
 Python: RPA_HOST_PYTHON (defaults to python3, or python on Windows).
 Remote controls the host running this process; use SSH to run it on another host.
 No VM, OS, hypervisor, Python environment or Vault is installed automatically.`);
+} else if (command==='assets') {
+  try {
+    const [operation, first, second]=args;
+    const offline=operation==='install' && (args.length===2 || args.length===3);
+    const download=operation==='download' && (args.length===1 || args.length===2);
+    if (!offline && !download) {
+      throw new Error('Usage: vamp-mcp assets install <archive> [sha256] or assets download [sha256]');
+    }
+    const manifest=readAssetManifest();
+    const supplied=offline?second:first;
+    if (supplied!==undefined && supplied.toLowerCase()!==manifest.sha256) {
+      throw new Error('SHA-256 mismatch with the digest embedded in this package.');
+    }
+    const { installAssets }=await import('./assets.mjs');
+    const cache=await installAssets({...manifest, archive:offline?first:undefined});
+    console.log(cache);
+  } catch (error) {
+    console.error(`vamp-mcp: ${error.message}`);
+    process.exitCode=1;
+  }
 } else {
   const entries={unified:'unified',virtualbox:'virtualbox',library:'library',kvm:'remote_ssh',remote:'remote_ssh',podman:'podman'};
   if (!Object.hasOwn(entries,command) || (!['remote','kvm'].includes(command) && args.length)) {
@@ -32,6 +63,31 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     process.env.VAMP_RPA_REGISTRY ||= path.join(os.homedir(),'.vamp','rpa-catalog');
     process.env.VAMP_REMOTE_REPO ||= runtime;
     process.env.VAMP_REMOTE_PYTHON ||= process.env.RPA_HOST_PYTHON;
+    if (existsSync(manifestPath)) {
+      const manifest=readAssetManifest();
+      let pending;
+      globalThis[Symbol.for('vamp.provisioningAssets')]=(cacheOnly=false) => {
+        if (cacheOnly) return import('./assets.mjs').then(({installAssets}) => installAssets({...manifest,cacheOnly}));
+        pending ??= import('./assets.mjs').then(async ({installAssets}) => {
+          const assets=await installAssets(manifest);
+          process.env.VAMP_PROVISIONING_ASSETS=assets;
+          process.env.PYTHONDONTWRITEBYTECODE='1';
+          if (command!=='podman') {
+            try {
+              const vision=(await import(pathToFileURL(path.join(runtime,'backends/common/vision-preload.cjs')).href)).default;
+              vision.ensureVisionServices({runtime:assets,logger:message=>process.stderr.write(message+'\n')});
+            } catch {
+              // Optional worker startup must not affect asset availability.
+            }
+          }
+          return assets;
+        }).catch(error => {
+          pending=undefined;
+          throw error;
+        });
+        return pending;
+      };
+    }
     // Keep discovery for the unified server and the container-only server free of worker startup.
     if (command !== 'unified' && command !== 'podman') try {
       const vision = (await import(pathToFileURL(path.join(runtime, 'backends/common/vision-preload.cjs')).href)).default;

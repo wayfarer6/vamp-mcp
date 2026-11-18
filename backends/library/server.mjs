@@ -9,6 +9,9 @@ import {promisify} from 'node:util';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import os from 'node:os';
 import visionPreload from '../common/vision-preload.cjs';
+import packerModule from '../common/packer.cjs';
+import {runWithVault} from './vault-replay.mjs';
+const runtime=fileURLToPath(new URL('../../',import.meta.url));
 const runGit=promisify(execFile);
 const root=process.env.VAMP_RPA_REGISTRY;
 export const libraryInstructions = 'RPA-FIRST WORKFLOW: Before using repeated CUA, screenshots, OCR, YOLO or multimodal reasoning, search saved skills with rpa_search using the task goal keywords. Match title, description, when_to_use, backend and input names. Read rpa_details for a likely match. Prefer a reviewed reusable RPA when it satisfies the user task and authorization. Run it with rpa_run_saved only with an explicit VM UUID, exact declared inputs and confirmed=true after authorization. Never run unreviewed or changed source. Read the compact result first; no screenshot is emitted automatically. Token efficiency: run reusable RPA and outcome checks locally; on success return compact status, verification and evidence paths. Do not forward full OCR text, YOLO arrays, unchanged screenshots, base64 images, full logs or source into the model context by default. For failure, ambiguity, UI changes or requested inspection, read only a targeted region/query/page first. Local OCR/YOLO reduces model tokens only when outputs stay local or compact; do not claim a measured saving without a comparable benchmark. When authoring or repairing GUI RPAs, include task-specific local OCR/YOLO verification in Python and assert its result in Robot by default; add artifact checks when available. Input dispatch or an arbitrary detection alone is not success. completed_unverified means actions completed, not proof of application success. Use the expected result to verify, and fall back to targeted CUA/multimodal only when no suitable RPA exists, execution fails or verification needs it. Do not force a mismatched workflow just to save tokens. When a saved RPA fails and the user authorizes repair, use rpa_revision to inspect its latest source and commit a validated update with an expected commit. Never overwrite uncommitted user edits. Repairs require user review before another run. Hyper-V desktop replay is unsupported.';
@@ -23,13 +26,18 @@ server.tool('rpa_search','Find reusable saved RPA skills by title, description, 
  return result({status:'observed',total_matches:rows.length,rpas:rows.slice(0,limit).map(row=>summary(row.item)),next_step:'Read rpa_details for the best match; use reviewed RPA skills before repeated CUA.'});
 });
 server.tool('rpa_details','Read a saved skill’s purpose, input contract, guest resolution, review state and expected result. Does not return source or recorded text.',{id:identifier},{readOnlyHint:true,destructiveHint:false},async({id})=>{const i=await definition(id);return result({...summary(i),description:i.description,when_to_use:i.when_to_use,expected_result:i.expected_result,resolution:i.resolution,action_count:i.action_count,execution_status:'not_requested'});});
-server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices without model-per-action CUA. Never executes Python recorder source on the host. Explicit authorization and target VM UUID required.',{id:identifier,vm_id:identifier,inputs:z.record(z.string()).default({}),confirmed:z.boolean().default(false)},{readOnlyHint:false,destructiveHint:true},async request=>{
- const metadata=await definition(request.id);if(!metadata.reviewed||!request.confirmed)return result({status:'needs_review_or_confirmation',message:'Review and approve this definition in the VAMP RPA Library, then explicitly authorize execution.'});
+server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices. Explicit authorization and target VM UUID required for execution. Use dry_run to inspect reviewed Vault references without guest input or secret reads. An authenticated Vault replay bridge is required to use vault_destination.',{id:identifier,vm_id:identifier,inputs:z.record(z.string()).default({}),confirmed:z.boolean().default(false),dry_run:z.boolean().default(false),vault_destination:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/).optional()},{readOnlyHint:false,destructiveHint:true},async request=>{
+ const metadata=await definition(request.id);if(!metadata.reviewed||(!request.confirmed&&!request.dry_run))return result({status:'needs_review_or_confirmation',message:'Review and approve this definition in the VAMP RPA Library, then explicitly authorize execution.'});
  const python=metadata.backend==='virtualbox'?(process.env.RPA_REPLAY_PYTHON||process.env.RPA_HOST_PYTHON):process.env.RPA_HOST_PYTHON;
  if(!python)return result({status:'needs_setup',message:'Run VAMP Python setup in VS Code first.'});
+ const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/replay.py');
+ const payload={...request,registry:root,libvirt_uri:process.env.VAMP_LIBVIRT_URI||'qemu:///session'};
+ if(request.vault_destination&&!request.dry_run)return result(await runWithVault(python,script,payload,{
+  socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN,
+ }));
  return result(await new Promise(resolve=>{
-  const child=execFile(python,[fileURLToPath(new URL('../library/replay.py',import.meta.url))],{timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
-  child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify({...request,registry:root,libvirt_uri:process.env.VAMP_LIBVIRT_URI||'qemu:///session'}));
+  const child=execFile(python,[script],{timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
+  child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));
  }));
 });
 server.tool('rpa_revision','Inspect a saved skill’s local Git history, read its latest committed source only when repair is needed, or validate and commit an authorized repair. Repairs become unreviewed and do not run automatically.',{
@@ -49,7 +57,8 @@ server.tool('rpa_revision','Inspect a saved skill’s local Git history, read it
  try{
   const source=path.join(temporary,'source.py');await writeFile(source,request.source,{mode:0o600});
   const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name};
-  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[fileURLToPath(new URL('../library/registry.py',import.meta.url))],{timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
+  const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/registry.py');
+  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[script],{timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
   return result(repaired.status==='registered'?{status:'committed_needs_review',id:item.id,version:repaired.definition.version,commit:repaired.commit,reviewed:false}:repaired);
  }finally{await rm(temporary,{recursive:true,force:true});}
 });

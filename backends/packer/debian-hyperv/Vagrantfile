@@ -1,0 +1,47 @@
+require "json"
+
+job = File.expand_path(ENV.fetch("VAMP_DEBIAN_HYPERV_JOB"))
+deployment = JSON.parse(File.read(File.join(job, "deployment.json")))
+name = deployment.fetch("vm_name")
+box = File.join(job, "debian-hyperv.box")
+profile = ENV.fetch("VAMP_DEBIAN_HYPERV_PROFILE", "recorder")
+unless ["recorder", "headless", "podman"].include?(profile)
+  raise ArgumentError, "VAMP_DEBIAN_HYPERV_PROFILE must be recorder, headless, or podman"
+end
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "vamp/debian-hyperv-#{name.downcase}"
+  config.vm.box_url = box
+  config.vm.box_check_update = false
+  config.vm.synced_folder ".", "/vagrant", disabled: true
+  config.vm.network "public_network", bridge: deployment.fetch("switch"), auto_config: false
+  config.ssh.host = deployment.fetch("guest_ip")
+  config.ssh.username = "vboxuser"
+  config.ssh.private_key_path = File.expand_path(ENV.fetch("VAMP_DEBIAN_HYPERV_SSH_KEY"))
+  config.ssh.insert_key = false
+  config.vm.provider "hyperv" do |hyperv|
+    hyperv.vmname = name
+    hyperv.memory = 4096
+    hyperv.cpus = 2
+  end
+  if profile == "recorder"
+    config.vm.provision "shell", inline: "install -d -m 0700 -o vboxuser -g vboxuser /var/tmp/vamp-provision"
+    config.vm.provision "file", source: File.join(job, "provision", "vamp-guest-setup.tar.gz"),
+      destination: "/var/tmp/vamp-provision/vamp-guest-setup.tar.gz"
+    config.vm.provision "file", source: File.join(job, "provision", "postdeb.sh"),
+      destination: "/var/tmp/vamp-provision/postdeb.sh"
+    config.vm.provision "shell", path: File.join(job, "provision", "hyperv-provision.sh")
+  else
+    config.vm.provision "file", source: File.join(job, "provision", "recorder", "configure-debian-mirrors.py"),
+      destination: "/var/tmp/vamp-configure-debian-mirrors.py"
+    config.vm.provision "shell", inline: <<~SHELL
+      set -eu
+      python3 /var/tmp/vamp-configure-debian-mirrors.py
+      apt-get -o APT::Update::Error-Mode=any update
+      systemctl set-default multi-user.target
+    SHELL
+    if profile == "podman"
+      config.vm.provision "shell", path: File.expand_path("provision-podman.sh", __dir__)
+    end
+  end
+end
