@@ -9,7 +9,7 @@ const { PassThrough } = require('node:stream');
 
 const root = path.resolve(__dirname, '..');
 
-function harness(overrides = {}) {
+function harness(overrides = {}, { exportPath } = {}) {
   const settings = {
     'remote.enabled': true,
     'remote.host': 'lab-host.local',
@@ -67,12 +67,12 @@ function harness(overrides = {}) {
     window: {
       createWebviewPanel: () => panel,
       withProgress: async (_options, task) => task({ report() {} }),
-      showInformationMessage: async (...args) => { notices.push(args); return undefined; },
+      showInformationMessage: async (...args) => { notices.push(args); return exportPath && args.includes('Verify') ? 'Verify' : undefined; },
       showWarningMessage: async (...args) => { notices.push(args); return undefined; },
       showErrorMessage: async (...args) => { notices.push(args); return undefined; },
       showInputBox: async () => 'lab-host.local',
       showQuickPick: async items => items[0],
-      showSaveDialog: async () => undefined,
+      showSaveDialog: async () => exportPath ? { fsPath: exportPath } : undefined,
     },
     Uri: { joinPath: (...parts) => ({ fsPath: parts.join('/') }), file: value => value },
     ProgressLocation: { Notification: 15, Window: 10 },
@@ -91,6 +91,7 @@ function harness(overrides = {}) {
     stop: async (name, options) => { calls.push(['stop', name, options]); return { status: 'stop_requested' }; },
     screenshot: async name => ({ status: 'ok', width: 2, height: 1, png: Buffer.from([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]) }),
     upload: async () => ({ server_version: '0.1.7', setup_script: null }),
+    verifyStdio: async () => { calls.push(['verifyStdio']); return { toolCount: 15 }; },
     call: async (tool) => { calls.push(['call', tool]); return { status: 'ok', steps: [] }; },
   };
   const module = { exports: {} };
@@ -104,6 +105,7 @@ function harness(overrides = {}) {
       RemoteSshClient: class { constructor() { return fakeClient; } },
       sshArgs: (config, command) => ['-T', '-o', 'BatchMode=yes', '--', `${config.username}@${config.host}`, command],
       remoteMcpCommand: () => 'node ~/.vamp/remote/server.mjs',
+      remoteStdioDefinition: () => ({ command: 'ssh', args: ['-T', '--', 'dev@lab-host.local', 'node ~/.vamp/remote/server.mjs'] }),
     };
     return require(name);
   };
@@ -120,6 +122,26 @@ function harness(overrides = {}) {
     dispose: () => disposePanel?.(),
   };
 }
+
+test('configuration export writes a mergeable fragment and preserves existing files', async t => {
+  const folder = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'vamp-remote-export-'));
+  t.after(() => fs.rmSync(folder, { recursive: true, force: true }));
+  const exportPath = path.join(folder, 'mcp.json');
+  const { commands, calls, notices } = harness({}, { exportPath });
+  const save = commands.get('vamp.remote.exportMcpConfig');
+  await save();
+  const fragment = JSON.parse(fs.readFileSync(exportPath, 'utf8'));
+  assert.deepEqual(fragment, { mcpServers: { 'vamp-remote': { command: 'ssh', args: ['-T', '--', 'dev@lab-host.local', 'node ~/.vamp/remote/server.mjs'] } } });
+  assert.deepEqual(calls, [['verifyStdio']]);
+  assert.ok(notices.some(([message]) => message.includes('15 MCP tools')));
+
+  const existing = '{"mcpServers":{"existing":{"command":"other"}}}\n';
+  fs.writeFileSync(exportPath, existing);
+  await save();
+  assert.equal(fs.readFileSync(exportPath, 'utf8'), existing);
+  assert.deepEqual(calls, [['verifyStdio']]);
+  assert.ok(notices.some(([message]) => message.includes('existing MCP configuration was preserved')));
+});
 
 test('the MCP provider stays quiet until remote is enabled and configured', () => {
   const disabled = harness({ 'remote.enabled': false });
