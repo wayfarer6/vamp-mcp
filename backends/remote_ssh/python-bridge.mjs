@@ -22,7 +22,7 @@ async function connectPython(config,env){
   import('../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/client/index.js'),
   import('../../third_party/mcp-virtualbox/node_modules/@modelcontextprotocol/sdk/dist/esm/client/stdio.js'),
  ]);
- const client=new Client({name:'VAMP optional Python bridge',version:'0.3.3'});
+ const client=new Client({name:'VAMP optional Python bridge',version:'0.3.4'});
  const childEnv=pythonChildEnvironment(config,env);
  const transport=new StdioClientTransport({command:config.python,
   args:[path.join(config.repo,'vm_mcp_server.py')],cwd:config.repo,env:childEnv,stderr:'pipe'});
