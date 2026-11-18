@@ -19,10 +19,12 @@ function activate(context) {
   const output = vscode.window.createOutputChannel('VAMP');
   const containersSource=path.join(__dirname,'src/containers-panel.cjs');
   const containersUI=require(fs.existsSync(containersSource)?containersSource:'./dist/containers_panel.cjs');
+  // Machine/user value only: workspace folders cannot redirect this privileged config.
+  const workspaceConfigPath=()=>config().inspect('podman.workspaceConfigPath')?.globalValue||process.env.VAMP_WORKSPACE_CONFIG||'';
   const createContainersBackend=()=>{
     const development=path.join(__dirname,'../backends/podman/adapter.cjs');
-    const adapter=require(fs.existsSync(development)?development:path.join(runtime,'backends/podman/adapter.cjs')).createPodmanAdapter({desktopImageIds:config().get('podman.desktopImageIds')||[]});
-    return {connections:()=>adapter.connections(),status:name=>adapter.check(name),list:name=>adapter.list(name),
+    const adapter=require(fs.existsSync(development)?development:path.join(runtime,'backends/podman/adapter.cjs')).createPodmanAdapter({workspaceConfigPath:workspaceConfigPath(),desktopImageIds:config().get('podman.desktopImageIds')||[]});
+    return {workspaceStatus:(name,binding)=>adapter.workspaceStatus(name,binding),workspaceAttach:(name,binding,approvalId)=>adapter.workspaceAttach(name,binding,approvalId),connections:()=>adapter.connections(),status:name=>adapter.check(name),list:name=>adapter.list(name),
       start:(name,id,binding)=>adapter.start(name,id,binding),stop:(name,id,binding)=>adapter.stop(name,id,binding),logs:(name,id,binding)=>adapter.logs(name,id,100,binding),detectLocal:()=>adapter.detectLocal(),capture:(name,id,binding)=>adapter.capture(name,id,binding),openScreenStream:(name,id,binding)=>adapter.openScreenStream(name,id,binding),screenTarget:(name,id,binding)=>adapter.screenTarget(name,id,binding)};
   };
   const openContainerDesktop=options=>{
@@ -30,7 +32,18 @@ function activate(context) {
     const {createContainerViewerBridge}=require('./dist/container_viewer_bridge.cjs');
     return require(fs.existsSync(source)?source:'./dist/container_viewer.cjs').openViewer(vscode,context,{...options,createBridge:createContainerViewerBridge});
   };
-  containersUI.registerContainers(context,{vscode,output,createBackend:createContainersBackend,openDesktop:openContainerDesktop,openCapture:result=>{
+  let debianEngineHost;
+  const debianHost=()=>{
+    if(!debianEngineHost){
+      const development=path.join(__dirname,'../backends/podman/debian-host.cjs');
+      debianEngineHost=require(fs.existsSync(development)?development:path.join(runtime,'backends/podman/debian-host.cjs')).createDebianHost({runtime,python:pythonPath()});
+    }
+    return debianEngineHost;
+  };
+  containersUI.registerContainers(context,{vscode,output,createDebianHost:isActive=>{
+    const source=path.join(__dirname,'src/debian-engine-create.cjs');
+    return require(fs.existsSync(source)?source:'./dist/debian_engine_create.cjs').createDebianEngine(vscode,{isActive,prepareDebianHost:req=>debianHost().prepareDebianHost(req)});
+  },debianHostStatus:id=>debianHost().debianHostStatus(id),createBackend:createContainersBackend,openDesktop:openContainerDesktop,openCapture:result=>{
     const source=path.join(__dirname,'src/container-capture.cjs');
     context.subscriptions.push(require(fs.existsSync(source)?source:'./dist/container_capture.cjs').showCapture(vscode,result));
   }});
@@ -44,6 +57,7 @@ function activate(context) {
     provideMcpServerDefinitions() {
       const env = {
         ELECTRON_RUN_AS_NODE:'1',VBOXMANAGE_DEBUG:'false',
+        VAMP_WORKSPACE_CONFIG:workspaceConfigPath(),
         VAMP_DESKTOP_IMAGE_IDS:(config().get('podman.desktopImageIds')||[]).join(','),
         RPA_HOST_PYTHON:pythonPath(),RPA_REPLAY_PYTHON:config().get('mousePythonExecutable')||pythonPath(),
         MOUSE_HELPER_PATH:path.join(runtime,'backends/virtualbox/mouse_click.py'),

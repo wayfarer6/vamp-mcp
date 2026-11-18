@@ -10,6 +10,16 @@ const bootstrapEngine = require('./guest-bootstrap');
 const {SCRIPT_SERVER_PORT, createScriptServer} = require('./script-server');
 const run = promisify(execFile);
 
+function hyperVFeatureIssue(code) {
+  if(code==='hyperv_module_missing')return 'Hyper-V management tools are missing. Open Windows Features and enable Hyper-V Management Tools (including the PowerShell module), if supported on this Windows edition.';
+  if(code==='hyperv_service_missing')return 'Hyper-V host service is missing. Open Windows Features and enable Hyper-V Platform, if supported on this Windows edition.';
+  return '';
+}
+
+function unavailableEngineLabel(backend,platform=process.platform,release=()=>os.release()) {
+  return backend==='hyperv' && platform==='win32' ? 'Hyper-V · Windows '+release() : undefined;
+}
+
 function buildNetworkOptions(backend, message) {
   if (!['hyperv','kvm'].includes(backend)) return {};
   const options={};
@@ -48,6 +58,8 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
   const executable=()=>cfg().get('vboxManagePath') || (process.platform==='win32'
     ? path.join(process.env.ProgramFiles || 'C:/Program Files','Oracle/VirtualBox/VBoxManage.exe') : 'VBoxManage');
   const vbox=args=>adapters.command('virtualbox',args);
+  let hypervUac;
+  let hypervFeatureIssue='';
   let backend=context.globalState?.get('vamp.manager.backend') || 'virtualbox';
   const scriptServer=createScriptServer({
     runtime,
@@ -173,22 +185,30 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
     const currentBackend=backend;
     const currentConnection=cfg().get('libvirtUri') || 'qemu:///session';
     try {
-      let version,problem,rows=[];
+      let version,problem,engineLabel,rows=[];
       try {
         if(currentBackend==='remote'){
           const info=remote?remote.summary():{configured:false,detail:'Remote support is not loaded.'};
           if(!info.configured)throw Error(info.detail);
           version=info.detail;rows=await inventory('remote');
+        } else if(currentBackend==='hyperv') {
+          // Displaying this tab never probes Get-VMHost or claims readiness.
+          engineLabel=unavailableEngineLabel(currentBackend);
+          try { rows=await inventory(currentBackend); } catch { rows=[]; }
         } else {
           version=currentBackend==='virtualbox'?(await vbox(['--version'])).trim():await adapters.check(currentBackend);rows=await inventory(currentBackend);
         }
-      }catch(error){problem=error.message;}
+      }catch(error){
+        version=undefined;
+        engineLabel=unavailableEngineLabel(currentBackend);
+        problem=engineLabel?undefined:error.message;
+      }
       if(currentBackend!==backend || currentConnection!==(cfg().get('libvirtUri') || 'qemu:///session'))return;
       if(!fs.existsSync(pythonPath()))environment={state:'missing',message:'Not prepared'};
       if(environment.state==='unknown')await verifyEnvironment();
       if(!serverBusy){try{serverState=await scriptServer.status();}catch(error){serverState={status:'failed',error:error.message};}}
       let goldenImages=[],goldenError='';try{goldenImages=(await packer('images')).images;}catch(error){goldenError=error.message;}
-      post({type:'state',goldenImages,goldenError,scriptServer:serverState,serverBusy,environment,capabilities:adapters.capabilities(),backend,connection:currentConnection,version,problem,pythonReady:fs.existsSync(pythonPath()),vms:rows,
+      post({type:'state',goldenImages,goldenError,scriptServer:serverState,serverBusy,environment,capabilities:adapters.capabilities(),backend,connection:currentConnection,version,problem,engineLabel,engineReady:!!version,hypervFeatureIssue:backend==='hyperv'?hypervFeatureIssue:'',pythonReady:fs.existsSync(pythonPath()),vms:rows,
         remote:remote?{...remote.summary(),report:remote.state?.report||null,error:remote.state?.error||''}:{configured:false,detail:'Remote support is not loaded.'},
         resources:recommendedResources(),iso:selectedISO ? path.basename(selectedISO) : '',busy});
     } finally {refreshing=false;if(currentBackend!==backend || currentConnection!==(cfg().get('libvirtUri') || 'qemu:///session'))refresh();}
@@ -207,6 +227,14 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
     }
   }
   async function action(message) {
+    if(message.type==='hypervUac'){
+      if(backend!=='hyperv'||process.platform!=='win32')return;
+      const answer=await vscode.window.showWarningMessage('Open a read-only Hyper-V permission diagnosis with Windows UAC?',{modal:true,detail:'Only a fixed Windows diagnosis window is elevated. No VM, policy, account membership, VS Code or MCP server is changed. This is not an elevated VM build broker.'},'Open Diagnosis');
+      if(answer!=='Open Diagnosis')return;
+      hypervUac ||= require(path.join(runtime,'backends/hyperv/uac.cjs')).createHyperVUac();
+      const result=await hypervUac.request({confirmed:true});
+      progress(result.message||result.status);return;
+    }
     if(message.type==='refresh'){await refresh();return;}
     if(message.type==='guide'){await vscode.commands.executeCommand('vamp.openGuide');return;}
     if(message.type==='resolutionGuide'){await vscode.commands.executeCommand('vamp.openResolutionGuide');return;}
@@ -242,7 +270,7 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
     }
     if(message.type==='backend'){
       if(!['virtualbox','kvm','hyperv','remote'].includes(message.backend))return;
-      backend=message.backend;await context.globalState?.update('vamp.manager.backend',backend);selectedISO=undefined;await refresh();return;
+      hypervFeatureIssue='';backend=message.backend;await context.globalState?.update('vamp.manager.backend',backend);selectedISO=undefined;await refresh();return;
     }
     busy=true;post({type:'busy',value:true});
     try {
@@ -276,7 +304,10 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
         const resources=recommendedResources();
         if(message.os==='windows11')resources.memory_mb=Math.max(4096,resources.memory_mb);
         if(os.totalmem()/1024**2 < resources.memory_mb+2048)throw new Error('Not enough host memory for this preset. Close other VMs or use a host with more RAM.');
-        if(backend==='virtualbox')await vbox(['--version']);else await adapters.check(backend);
+        if(backend==='virtualbox')await vbox(['--version']);else {
+          try { await adapters.check(backend); if(backend==='hyperv')hypervFeatureIssue=''; }
+          catch(error) { if(backend==='hyperv')hypervFeatureIssue=hyperVFeatureIssue(error.code); throw error; }
+        }
         await checkOtherHypervisor();
         const connectionDetails=[network.switch_name&&'Hyper-V switch: '+network.switch_name,network.bootstrap_host&&'Bootstrap host IPv4: '+network.bootstrap_host].filter(Boolean).join(' · ');
         const choice=await vscode.window.showInformationMessage(
@@ -391,7 +422,7 @@ body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);backgr
 <div class="row spread"><div class="row">${logoUri?`<img src="${logoUri}" width="36" height="36" alt="VAMP purple bat and VM">`:""}<div><h1>Virtual Machines</h1></div></div><button class="secondary" data-action="guide">Setup guide</button></div>
 <aside class="display-warning" role="note"><strong>Before automation: set the guest display to 1920×1080 at 100% scaling.</strong><p>Finish guest setup and keep the VM awake and unlocked.</p><button class="secondary" data-action="resolutionGuide">1920×1080 guide · Linux / Windows</button><p>Reset the guest display: Windows Desktop - double-click Set-Resolution-1920x1080.cmd. Debian home folder - run ~/set-resolution-1920x1080.sh.</p></aside>
 <aside id="creation-notice" role="alert" hidden><h2 id="creation-title"></h2><p id="creation-message"></p><pre id="creation-command"></pre><p id="resolution-note"></p><pre id="resolution-command"></pre></aside>
-<section><h2>Connection</h2><label>Virtualization platform<select id="backend"><option value="virtualbox">VirtualBox · Linux / Windows / macOS</option><option value="kvm">KVM / QEMU · Linux · live VNC screen</option><option value="hyperv">Hyper-V · Windows · management only</option><option value="remote">Remote server · SSH · screenshots</option></select></label><label id="connection-label" hidden>KVM connection<select id="connection"><option value="qemu:///session">My desktops · no administrator needed</option><option value="qemu:///system">System desktops · libvirt permission needed</option></select></label><p id="backend-note"></p>
+<section><h2>Connection</h2><label>Virtualization platform<select id="backend"><option value="virtualbox">VirtualBox · Linux / Windows / macOS</option><option value="kvm">KVM / QEMU · Linux · live VNC screen</option><option value="hyperv">Hyper-V · Windows · management only</option><option value="remote">Remote server · SSH · screenshots</option></select></label><label id="connection-label" hidden>KVM connection<select id="connection"><option value="qemu:///session">My desktops · no administrator needed</option><option value="qemu:///system">System desktops · libvirt permission needed</option></select></label><p id="backend-note"></p><button id="hyperv-uac" class="secondary" data-action="hypervUac" hidden>Check permissions (UAC)</button>
 <div id="remote-panel" class="remote" hidden>
 <div class="row spread"><h3>Remote server · SSH</h3><span class="badge">screenshots only</span></div>
 <p id="remote-status" role="status">Connect to the host that owns the desktops. This computer only runs the SSH client.</p>
@@ -428,14 +459,14 @@ function renderGolden(message){
 function send(type,id){api.postMessage({type,id,backend:$('backend').value,connection:$('connection').value,name:$('name').value,os:$('os').value,...(type==='create'?{bootstrapHost:$('packer-bootstrap').value,switchName:$('packer-switch').value}:{}),host:$('remote-host').value,port:$('remote-port').value,user:$('remote-user').value,key:$('remote-key').value,remoteBackend:$('remote-backend').value,uri:$('remote-uri').value});}
 document.addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(button)send(button.dataset.action,button.dataset.id);});
 const filled={};function setField(id,value){const el=$(id);if(!el)return;const next=value===undefined||value===null?'' : String(value);if(document.activeElement===el)return;if(el.value!==''&&filled[id]!==undefined&&el.value!==filled[id])return;el.value=next;filled[id]=next;}
-function controls(){document.querySelectorAll('.mutating').forEach(b=>b.disabled=busy || serverBusy || b.dataset.unavailable==='true');const validName=/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test($('name').value.trim());$('create').disabled=busy || serverBusy || state.backend==='remote' || !state.iso || !state.version || !validName;$('create-hint').textContent=busy?'Working… keep this window open.':state.backend==='remote'?'Desktops are created on the remote host; manage them here.':!state.version?'Prepare the selected hypervisor first.':!validName?'Enter a valid desktop name.':!state.iso?'Choose an installation ISO to continue.':state.backend==='hyperv'?'Ready. Your VM will start; open VMConnect for its screen.':'Ready. Packer will build a golden image, then deploy the VM.';$('remote-panel').hidden=state.backend!=='remote';$('env-step').hidden=state.backend==='remote';$('create-section').hidden=state.backend==='remote';$('backend').disabled=busy;$('connection').disabled=busy;$('name').disabled=busy;$('os').disabled=busy;$('packer-network').hidden=!['hyperv','kvm'].includes(state.backend);$('packer-switch-label').hidden=state.backend!=='hyperv';$('packer-switch').disabled=busy||state.backend!=='hyperv';$('packer-bootstrap').disabled=busy;$('packer-network-help').textContent=state.backend==='hyperv'?'Leave blank to detect an IPv4 on this switch. Set the address explicitly if the switch has more than one.':'Leave blank for the QEMU build NAT default (10.0.2.2). This does not set the deployed VM’s network.';serverControls();}
+function controls(){document.querySelectorAll('.mutating').forEach(b=>b.disabled=busy || serverBusy || b.dataset.unavailable==='true');const validName=/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test($('name').value.trim());$('create').disabled=busy || serverBusy || state.backend==='remote' || !state.iso || (!state.version && !(state.backend==='hyperv' && state.engineLabel)) || !validName;$('create-hint').textContent=busy?'Working… keep this window open.':state.backend==='remote'?'Desktops are created on the remote host; manage them here.':!state.version&&!(state.backend==='hyperv'&&state.engineLabel)?'Prepare the selected hypervisor first.':!validName?'Enter a valid desktop name.':!state.iso?'Choose an installation ISO to continue.':state.backend==='hyperv'?'Hyper-V permissions will be checked when you create. Open VMConnect for the VM screen.':'Ready. Packer will build a golden image, then deploy the VM.';$('remote-panel').hidden=state.backend!=='remote';$('env-step').hidden=state.backend==='remote';$('create-section').hidden=state.backend==='remote';$('hyperv-uac').hidden=state.backend!=='hyperv'||!state.engineLabel;$('hyperv-uac').disabled=busy;$('backend').disabled=busy;$('connection').disabled=busy;$('name').disabled=busy;$('os').disabled=busy;$('packer-network').hidden=!['hyperv','kvm'].includes(state.backend);$('packer-switch-label').hidden=state.backend!=='hyperv';$('packer-switch').disabled=busy||state.backend!=='hyperv';$('packer-bootstrap').disabled=busy;$('packer-network-help').textContent=state.backend==='hyperv'?'Leave blank to detect an IPv4 on this switch. Set the address explicitly if the switch has more than one.':'Leave blank for the QEMU build NAT default (10.0.2.2). This does not set the deployed VM’s network.';serverControls();}
 function serverControls(){const running=serverState.status==='running';$('script-server-start').disabled=busy||serverBusy||running||serverState.status==='port_in_use';$('script-server-stop').disabled=busy||serverBusy||!running;$('script-server-status').textContent=serverBusy?'Web server: working...':running?'Web server: Running on port 8421':serverState.status==='stopped'?'Web server: Stopped':'Web server: '+(serverState.error||serverState.status||'checking');}
 function resources(){const r=state.resources;if(r)$('resources').textContent=(($('os').value==='windows11'?Math.max(4096,r.memory_mb):r.memory_mb)/1024)+' GB memory · '+r.cpus+' CPUs · 64 GB expanding disk (uses space as needed)';}
 for(const id of ['remote-host','remote-port','remote-user','remote-key','remote-uri']){$(id).addEventListener('input',()=>{filled[id]=$(id).value;});}
 $('remote-backend').addEventListener('change',()=>{filled['remote-backend']=$('remote-backend').value;});
 $('name').addEventListener('input',controls);$('os').addEventListener('change',resources);$('connection').addEventListener('change',()=>send('connection'));$('backend').addEventListener('change',()=>{$('packer-switch').value='';$('packer-bootstrap').value='';$('packer-network').open=false;send('backend');});
 window.addEventListener('message',event=>{const m=event.data;if(m.type==='scriptServerState'){serverState=m.server||{};serverBusy=!!m.busy;controls();}if(m.type==='creationNotice'){const notice=m.notice;$('creation-title').textContent=notice.title;$('creation-message').textContent=notice.message;$('creation-command').textContent=notice.setup_command;$('resolution-note').textContent=notice.resolution_note||'';$('resolution-command').textContent=notice.resolution_command||'';$('resolution-note').hidden=!notice.resolution_note;$('resolution-command').hidden=!notice.resolution_command;$('creation-notice').hidden=false;$('creation-notice').scrollIntoView({behavior:'smooth',block:'start'});}if(m.type==='busy'){busy=m.value;controls();}if(m.type==='progress'||m.type==='error'){$('notice').textContent=m.message;$('notice').className=m.type==='error'?'error':'';}
-if(m.type==='state'){renderGolden(m);state=m;busy=m.busy;serverState=m.scriptServer||{};serverBusy=!!m.serverBusy;for(const option of $('backend').options){const capability=m.capabilities?.[option.value];option.disabled=!!capability&&(!capability.hostSupported||!capability.implemented);}$('backend').value=m.backend;$('connection-label').hidden=m.backend!=='kvm';$('connection').value=m.connection;$('host-label').textContent={virtualbox:'VirtualBox',kvm:'KVM / QEMU',hyperv:'Hyper-V',remote:'Remote host'}[m.backend];$('host').textContent=m.backend==='remote'?(m.version?'Connected over SSH · '+m.version:(m.problem||'Set the remote host, then verify.')):(m.version?'Ready · '+m.version:(m.problem||'Install the selected hypervisor, then refresh.'));$('vbox-download').hidden=m.backend!=='virtualbox'||!!m.version;$('backend-note').textContent=m.backend==='remote'?'Desktops run on the remote host. This window takes screenshots over SSH and can start or stop them; there is no live screen stream.':m.backend==='hyperv'?'Manage Hyper-V desktops here. Embedded VM screen is unsupported; use VMConnect. Windows Hyper-V permissions are required.':m.backend==='kvm'?'Linux host: install KVM, libvirt, virt-install and qemu-img. New desktops use local VNC for the embedded live viewer.':'Start a desktop to open its screen in the editor automatically.';$('python').textContent=m.environment?.message||'Not verified';$('env-check').hidden=m.environment?.state!=='ready';document.querySelector('[data-action=setup]').hidden=m.environment?.state==='ready';document.querySelector('[data-action=pythonDownloads]').hidden=m.environment?.state==='ready';$('install-note').textContent='HashiCorp Packer installs Debian or Windows and post-install scripts, waits 60 seconds after reboot, then exports a golden image and deploys the VM.';$('iso').textContent=m.iso||'No ISO selected';
+if(m.type==='state'){renderGolden(m);state=m;busy=m.busy;serverState=m.scriptServer||{};serverBusy=!!m.serverBusy;for(const option of $('backend').options){const capability=m.capabilities?.[option.value];option.disabled=!!capability&&(!capability.hostSupported||!capability.implemented);}$('backend').value=m.backend;$('connection-label').hidden=m.backend!=='kvm';$('connection').value=m.connection;$('host-label').textContent={virtualbox:'VirtualBox',kvm:'KVM / QEMU',hyperv:'Hyper-V',remote:'Remote host'}[m.backend];$('host').className=m.hypervFeatureIssue?'error':'';$('host').textContent=m.hypervFeatureIssue?'× '+m.engineLabel+' · '+m.hypervFeatureIssue:m.engineLabel|| (m.backend==='remote'?(m.version?'Connected over SSH · '+m.version:(m.problem||'Set the remote host, then verify.')):(m.version?'Ready · '+m.version:(m.problem||'Install the selected hypervisor, then refresh.')));$('vbox-download').hidden=m.backend!=='virtualbox'||!!m.version;$('backend-note').textContent=m.backend==='remote'?'Desktops run on the remote host. This window takes screenshots over SSH and can start or stop them; there is no live screen stream.':m.backend==='hyperv'?'Manage Hyper-V desktops here. Embedded VM screen is unsupported; use VMConnect. Windows Hyper-V permissions are required.':m.backend==='kvm'?'Linux host: install KVM, libvirt, virt-install and qemu-img. New desktops use local VNC for the embedded live viewer.':'Start a desktop to open its screen in the editor automatically.';$('python').textContent=m.environment?.message||'Not verified';$('env-check').hidden=m.environment?.state!=='ready';document.querySelector('[data-action=setup]').hidden=m.environment?.state==='ready';document.querySelector('[data-action=pythonDownloads]').hidden=m.environment?.state==='ready';$('install-note').textContent='HashiCorp Packer installs Debian or Windows and post-install scripts, waits 60 seconds after reboot, then exports a golden image and deploys the VM.';$('iso').textContent=m.iso||'No ISO selected';
 if(m.backend==='remote'&&m.remote){setField('remote-host',m.remote.host);setField('remote-port',m.remote.port);setField('remote-user',m.remote.username);setField('remote-key',m.remote.privateKeyPath);setField('remote-backend',m.remote.backend);setField('remote-uri',m.remote.libvirtUri);$('remote-status').textContent=m.problem?m.problem:(m.remote.configured?(m.remote.report?(m.remote.report.ready?'Environment verified · ':'Needs attention · ')+m.remote.detail:'Configured · '+m.remote.detail):m.remote.detail);$('remote-status').className=m.problem||m.remote.error?'error':'';}
 resources();controls();const signature=m.backend+JSON.stringify(m.vms);if(signature===inventorySignature)return;inventorySignature=signature;$('vms').replaceChildren();
 if(!m.vms.length){const p=document.createElement('p');p.textContent=m.version?'No desktops yet. Create your first one above.':'VMs appear here after the selected hypervisor is ready.';$('vms').append(p);}
@@ -455,4 +486,4 @@ function sidebarHTML(logoUri,cspSource){
  const nonce=crypto.randomBytes(16).toString('hex');
  return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource}; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><style nonce="${nonce}">body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-sideBar-background);padding:16px;line-height:1.6}img{display:block;margin:8px auto;width:80px;height:80px;object-fit:contain}h2{text-align:center;font-size:17px}p{color:var(--vscode-descriptionForeground)}button{display:block;width:100%;margin:12px 0;border:1px solid var(--vscode-button-border,transparent);border-radius:3px;padding:9px 8px;background:var(--vscode-button-background);color:var(--vscode-button-foreground);cursor:pointer}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:2px}small{color:var(--vscode-descriptionForeground)}</style></head><body><img src="${logoUri}" alt="VAMP bat with a virtual machine"><h2>VAMP</h2><p>RPAs, virtual machines and credentials.</p><button data-type="library">RPA Library</button><button class="secondary" data-type="manager">Open VM Manager</button><button class="secondary" data-type="vault">Browse Credentials</button><button class="secondary" data-type="screen">View Running VM</button><button class="secondary" data-type="remote">Remote Server (SSH)</button><button class="secondary" data-type="guide">Setup Guide</button><small>VirtualBox and KVM: screen inside VS Code.<br>Hyper-V: management only; use VMConnect.<br>Remote: screenshots over SSH.</small><script nonce="${nonce}">const api=acquireVsCodeApi();function select(type){document.querySelectorAll('button[data-type]').forEach(button=>{const active=button.dataset.type===type;button.classList.toggle('secondary',!active);button.setAttribute('aria-current',active?'page':'false');});api.setState({selected:type});}select(api.getState()?.selected||'library');document.addEventListener('click',e=>{const b=e.target.closest('button[data-type]');if(b){select(b.dataset.type);api.postMessage({type:b.dataset.type});}});</script></body></html>`;
 }
-module.exports={registerManager,buildNetworkOptions,parseInventory,parseInfo,recommendedResources,managerHTML,screenHTML,sidebarHTML,bootstrapGuestEngine:bootstrapEngine};
+module.exports={registerManager,hyperVFeatureIssue,unavailableEngineLabel,buildNetworkOptions,parseInventory,parseInfo,recommendedResources,managerHTML,screenHTML,sidebarHTML,bootstrapGuestEngine:bootstrapEngine};

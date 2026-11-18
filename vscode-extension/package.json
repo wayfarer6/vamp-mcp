@@ -1,8 +1,8 @@
 {
   "name": "vamp-mcp-tools",
-  "displayName": "VAMP MCP Tools — VM Automation & Vault",
+  "displayName": "VAMP MCP Tools \u2014 VM Automation & Vault",
   "description": "Packer-powered VM setup, post-install automation and golden image management over MCP. Includes VM GUI automation and VAMP Vault.",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -112,27 +112,27 @@
       },
       {
         "command": "vamp.remote.setupEnvironment",
-        "title": "VAMP: Remote · Prepare Environment on the Remote Host"
+        "title": "VAMP: Remote \u00b7 Prepare Environment on the Remote Host"
       },
       {
         "command": "vamp.remote.verifyEnvironment",
-        "title": "VAMP: Remote · Verify Remote Environment"
+        "title": "VAMP: Remote \u00b7 Verify Remote Environment"
       },
       {
         "command": "vamp.remote.listVMs",
-        "title": "VAMP: Remote · List Desktops"
+        "title": "VAMP: Remote \u00b7 List Desktops"
       },
       {
         "command": "vamp.remote.captureScreenshot",
-        "title": "VAMP: Remote · Capture Desktop Screenshot"
+        "title": "VAMP: Remote \u00b7 Capture Desktop Screenshot"
       },
       {
         "command": "vamp.remote.configure",
-        "title": "VAMP: Remote · Set Host and User"
+        "title": "VAMP: Remote \u00b7 Set Host and User"
       },
       {
         "command": "vamp.openResolutionGuide",
-        "title": "VAMP: Guest Resolution Guide (1920×1080)"
+        "title": "VAMP: Guest Resolution Guide (1920\u00d71080)"
       }
     ],
     "mcpServerDefinitionProviders": [
@@ -277,6 +277,12 @@
           "minimum": 3,
           "maximum": 60,
           "description": "Seconds to wait for the SSH connection before reporting a failure."
+        },
+        "vamp.podman.workspaceConfigPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "description": "Absolute path to an owner-controlled mode 0600 workspace JSON configuration for local Linux only. Attaches an already-unlocked VeraCrypt workspace to a new disposable desktop after explicit confirmation. Never unlocks volumes. Workspace-folder settings are ignored. Empty uses trusted VAMP_WORKSPACE_CONFIG environment."
         }
       }
     },
@@ -320,7 +326,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.1.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.2.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
     "test:manager": "node --test test/vm-manager.cjs test/script-server.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs test/vagrant-backend.cjs test/vision-preload.cjs test/containers-panel.cjs test/podman-packaging.cjs",

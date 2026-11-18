@@ -12,6 +12,71 @@ Windows 11 설치 ISO와 유효한 라이선스는 사용자가 직접 준비해
 
 Debian과 Windows 예시는 1920×1080을 기준으로 합니다. OS·배율·화면 배치가 다르면 좌표를 다시 확인해야 합니다. GNOME 실행창·`su root`·`apt update` 예시는 Debian용이며 Windows 녹화 작업의 검증 결과는 [워크플로 예시](WORKFLOWS.md)에 있습니다.
 
+<a id="windows-powershell-host"></a>
+## Windows 호스트: PowerShell 실행 정책과 Hyper-V
+
+이 절차는 **Windows 호스트의 Windows PowerShell 5.1 (`powershell.exe`)** 용입니다. 게스트 VM이나 PowerShell 7 (`pwsh.exe`) 설정과 혼동하지 마세요. VAMP가 호출하는 것과 같은 호스트 계정으로 Windows PowerShell을 열고 확인합니다. 처음부터 관리자 권한으로 실행할 필요는 없습니다.
+
+### 1. 변경 전에 현재 값을 기록
+
+```powershell
+Get-ExecutionPolicy -List
+Get-ExecutionPolicy
+Get-ExecutionPolicy -Scope CurrentUser
+```
+
+`CurrentUser` 값을 별도로 기록해 두세요. 터미널 변수를 저장하는 것만으로는 VS Code 재시작 이후 복구할 수 없습니다. 우선순위는 `MachinePolicy → UserPolicy → Process → CurrentUser → LocalMachine`입니다. 조직의 그룹 정책(GPO)이 정해져 있으면 관리자에게 승인된 절차를 요청하고 우회하지 마세요. [Microsoft 실행 정책 설명](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_execution_policies?view=powershell-5.1)
+
+### 2. 허용된 경우에만 현재 사용자 범위 변경
+
+실효 정책이 `Restricted`이고, 장비 소유자와 조직 정책이 허용하는 경우에만 다음을 실행합니다. 기존의 더 엄격한 서명 정책을 이 안내만 보고 낮추지 마세요.
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+Get-ExecutionPolicy -List
+Get-ExecutionPolicy
+```
+
+`RemoteSigned`는 인터넷에서 받은 스크립트에 신뢰할 수 있는 서명을 요구할 수 있습니다. 출처와 내용을 검토하고 승인된 서명 파일을 사용하세요. 이 안내는 `Bypass`, `LocalMachine` 변경, 기본 관리자 실행 또는 다운로드 폴더 전체의 차단 해제를 권하지 않습니다. [Microsoft Set-ExecutionPolicy](https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.security/set-executionpolicy?view=powershell-5.1)
+
+VS Code의 모든 창을 종료한 뒤 다시 열고, 새 **Windows PowerShell** 터미널에서 위의 두 확인 명령을 다시 실행하세요. 정책 변경 자체는 즉시 적용되지만 새 프로세스로 실제 빌드 환경을 다시 확인하는 단계입니다. 출력이 계속 `Restricted`이면 재시도나 권한 상승 대신 GPO 및 `Process` 범위를 확인하세요.
+
+호스트 사전 검사 패치가 포함된 빌드에서는 실효 정책이 `Restricted`이면 Packer 프로비저닝 전에 중단하고 정책 안내를 표시합니다. 아직 패치가 없는 구버전에서 같은 조기 중단을 보장하지 않습니다. VAMP가 이 설정을 자동 변경하지는 않습니다.
+
+### 3. 필요한 경우 원래 값으로 복구
+
+아래 명령은 처음 기록한 값이 **정확히 `Undefined`였을 때만** 사용합니다.
+
+```powershell
+Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy Undefined
+Get-ExecutionPolicy -List
+Get-ExecutionPolicy
+```
+
+이전 값이 `Restricted`, `AllSigned`, `RemoteSigned` 등 다른 값이었다면 `Undefined` 대신 **기록한 원래 값**으로 복구하세요. `Undefined`는 전체 실행 정책 초기화가 아니라 해당 사용자 범위의 명시적 설정 제거입니다. 복구 후에도 GPO와 다른 범위가 실효 정책을 결정합니다.
+
+### Hyper-V / CIM 접근 권한은 별도 문제
+
+실행 정책을 바꾸어도 Hyper-V 설치 여부, 가상화 지원, 서비스 상태, Hyper-V 관리 권한이나 CIM 네임스페이스 접근 권한은 부여되지 않습니다. `Access denied` / CIM 접근 오류라면 정책을 반복해서 완화하지 말고 해당 호스트 권한을 별도로 점검하세요. 필요한 기능 설치나 관리 권한 변경은 장비 관리자와 승인된 절차로 진행합니다. 이 정책 안내는 관리자 실행이나 Hyper-V 설정 변경을 대신하지 않습니다.
+
+### 현재 Windows Hyper-V VM 프로비저닝: VS Code를 직접 관리자 권한으로 실행
+
+**현재 릴리스에서 Hyper-V VM을 실제로 생성·프로비저닝할 때는 사용자가 VS Code를 직접 “관리자 권한으로 실행”해야 합니다.** 일반 편집, 정책 확인, 컨테이너 조회 또는 다른 하이퍼바이저를 위한 기본 실행 방식은 아닙니다.
+
+1. 작업을 저장하고 기존 VS Code 창을 모두 종료합니다. 별도 창만 열면 기존 비관리자 프로세스를 재사용할 수 있습니다.
+2. 신뢰할 수 있는 VAMP 저장소와 필요한 확장만 사용하세요. 출처를 모르는 프로젝트, 작업(task), 확장 또는 스크립트를 관리자 편집기에서 열거나 실행하지 마세요.
+3. Windows 시작 메뉴에서 **Visual Studio Code → 관리자 권한으로 실행**을 직접 선택하고 UAC 내용을 확인한 뒤 승인합니다. 열린 관리자 VS Code에서 필요한 Hyper-V 빌드만 명시적으로 시작합니다.
+4. 프로비저닝이 끝나면 관리자 VS Code를 종료하고 일반 권한으로 다시 실행합니다. 실패했다고 실행 정책을 완화하거나 관리자 편집기를 계속 켜 두지 마세요.
+
+**Check permissions (UAC)** 진단 창은 권한을 가진 별도 프로세스에서 읽기 전용 진단만 합니다. UAC 진단 성공은 원래 VS Code/MCP 프로세스의 승격이 아니며, 원래 프로세스에 Hyper-V 권한을 부여하지 않습니다. 현재는 VM 생성을 대신 수행하는 권한 상승 브로커가 없습니다. 관리자 실행은 장비 소유자·조직의 허가와 정상적인 Hyper-V 설치/서비스/스위치 구성을 대신하지도 않습니다.
+
+### Debian 설치 파일 다운로드 실패: preseed와 postdeb를 구분
+
+- **`preseed.cfg`를 받지 못한 경우:** Debian 설치기 초기에 Packer 임시 HTTP 서버로 접근하는 단계입니다. 빌드 로그의 실제 `preseed/url`, HTTP 포트, 서버 실행 상태와 선택한 Hyper-V 스위치에서 그 호스트 주소까지의 경로를 확인하세요. 일반 웹 브라우저에서 ISO를 내려받았다는 사실만으로 게스트의 이 경로가 검증되지는 않습니다.
+- **`postdeb.sh`를 받지 못한 경우:** preseed 처리 뒤 `late_command`가 빌드 호스트 스크립트 서버에서 게스트 후처리 파일을 받는 별도 단계입니다. 생성된 preseed의 실제 스크립트 기본 URL, 호스트 IPv4/포트, 스크립트 서버 실행 상태를 확인하세요. preseed 다운로드 성공을 postdeb 접근 성공으로 간주하지 마세요. 설치기 로그에 표시된 실패 URL을 기준으로 진단합니다.
+
+두 경로의 주소와 포트가 항상 같다고 가정하지 마세요. 진단한다고 방화벽 전체를 끄거나 공용/LAN 전체에 서버를 노출하지 않습니다. 필요한 경우에만 관리자와 협의해 해당 빌드 인터페이스·게스트 경로·포트에 한정된 승인된 규칙을 점검합니다. 게스트 설치용 스크립트를 호스트에서 실행하지 마세요.
+
 ## 1. 수동 설치 — Ubuntu 호스트
 
 저장소 루트에서 실행하세요. 다음 OS 패키지는 호스트 설치용이며 게스트 apt 업데이트 RPA와 다릅니다.
@@ -137,3 +202,18 @@ Intel NPU 경로는 명시적으로 선택해야 합니다. 첫 사용 때 YOLO 
 ```
 
 위 설정·dry-run 검사는 실제 VM 로그인이나 apt update를 실행하지 않습니다. 실제 실행 명령은 [RPA 패키지 README](../rpas/README.md)에 있습니다.
+
+
+### Hyper-V permission diagnosis with UAC
+
+The Hyper-V panel displays the Windows version without probing the VM engine.
+If Create reports missing permissions, choose **Check permissions (UAC)** in the
+Hyper-V panel or request `hyperv_permission_diagnosis` from the Windows-hosted
+VAMP MCP server. Both paths require the user's explicit action and the user's
+own response to the Windows prompt. The fixed administrator window only checks
+the host and lists switches. Opening it does not elevate VS Code or MCP, grant
+access to the original process, or start a VM. Hyper-V provisioning must still
+run from VS Code that the user manually launched with **Run as administrator**,
+for this provisioning task only. Use a trusted checkout, close the elevated
+editor afterwards, and return to normal privileges. No privileged VM build
+broker is included in this release. See the Windows host section above.

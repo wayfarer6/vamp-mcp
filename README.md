@@ -94,7 +94,7 @@ Packer guests fetch post-install resources from their build host, not from a uni
 With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from the [GitHub Releases page](https://github.com/wayfarer6/vamp-mcp/releases). Verify the SHA-256 hashes against the release notes, then install from the downloaded files:
 
 ```bash
-npm install -g ./vamp-mcp-0.3.1.tgz ./vamp-mcp-vault-0.1.8.tgz
+npm install -g ./vamp-mcp-0.3.2.tgz ./vamp-mcp-vault-0.1.8.tgz
 ```
 
 Register **VAMP MCP** with command `vamp-mcp` and no arguments, and **VAMP Vault** with command `vamp-mcp-vault` and no arguments. If the client cannot resolve these commands, use their full installed paths. Do not add separate Podman or hypervisor registrations. See [MCP registration](docs/MCP_REGISTRATION.md).
@@ -105,38 +105,40 @@ Register **VAMP MCP** with command `vamp-mcp` and no arguments, and **VAMP Vault
 2. Open the **VAMP** activity bar. Use **Open VM Manager** for VMs, **Open Containers** for the Podman inventory and desktop actions, and **RPA Library** for reviewed workflows. Manage credentials in **VAMP Vault** separately.
 3. For WSL, follow the [manual setup guide](vscode-extension/CONTAINERS_WSL.md). See [Container desktops](docs/CONTAINER_DESKTOP.md) for rootless Podman, noVNC, capture, and limitations.
 
+For Windows host PowerShell policy and separate Hyper-V/CIM permission checks, see the [Windows host guide](docs/INSTALL.md#windows-powershell-host).
+
 ---
 
 ## 🏗️ Architecture Overview
 
 ```mermaid
 flowchart TD
-    subgraph Host [Host Machine / AI Agent]
-        Agent[Claude / Cursor / AI Agent]
-        MCP[VAMP MCP Server]
-        Vault[VAMP Vault (KeePassXC)]
-        HTTP[Host Script Server :8421]
+    subgraph Host ["Host Machine / AI Agent"]
+        Agent["Claude / Cursor / AI Agent"]
+        MCP["VAMP MCP Server"]
+        Vault["VAMP Vault (KeePassXC)"]
+        HTTP["Host Script Server :8421"]
 
         Agent <-->|MCP Stdio Protocol| MCP
         MCP --> Vault
         MCP --> HTTP
     end
 
-    subgraph Infrastructure [Virtualization Abstraction Layer]
-        Packer[Packer (Golden Image Provisioning)]
-        Vagrant[Vagrant & DesktopAdapter]
+    subgraph Infrastructure ["Virtualization Abstraction Layer"]
+        Packer["Packer (Golden Image Provisioning)"]
+        Vagrant["Vagrant & DesktopAdapter"]
         MCP --> Packer
         MCP --> Vagrant
         Packer -->|Golden Images| Vagrant
         Vagrant -->|VirtualBox / KVM / Hyper-V| Guest
     end
 
-    subgraph Guest [Isolated Guest VM (Windows / Debian)]
-        SSH[OpenSSH Server :22]
-        RPA[Deterministic RPA Runner]
-        Vision[Local OCR / YOLO Daemon]
+    subgraph Guest ["Isolated Guest VM (Windows / Debian)"]
+        SSH["OpenSSH Server :22"]
+        RPA["Deterministic RPA Runner"]
+        Vision["Local OCR / YOLO Daemon"]
 
-        Adapter -. SSH Transport .-> SSH
+        Vagrant -. SSH Transport .-> SSH
         SSH --> RPA
         RPA --> Vision
     end

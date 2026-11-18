@@ -73,27 +73,28 @@ def names(backend,request):
     return json.loads(run('powershell.exe',['-NoProfile','-NonInteractive','-Command','ConvertTo-Json -InputObject @(Get-VM | Select-Object -ExpandProperty Name)']))
 
 def hyperv_network(request):
-    from hyperv_bootstrap import host_ipv4
+    from hyperv_bootstrap import NETWORK_QUERY, select_network
     switch=request.get('switch_name','Default Switch')
     if not isinstance(switch,str) or not re.fullmatch(r'[^\x00-\x1f\x7f]{1,128}',switch) or switch.startswith('-'):
         raise ValueError('Choose a valid Hyper-V switch name')
-    args=['-NoProfile','-NonInteractive','-File',HERE/'hyperv-network.ps1','-SwitchName',switch]
-    selected=request.get('bootstrap_host')
-    if selected:args+=['-BootstrapHost',selected]
+    args=['-NoProfile','-NonInteractive','-Command',NETWORK_QUERY]
     try:
         data=json.loads(run('powershell.exe',args,timeout=30))
     except subprocess.CalledProcessError as error:
         detail=(error.stderr or error.stdout or '').strip().splitlines()
         raise RuntimeError('Hyper-V switch IPv4 check failed for '+switch+(': '+detail[0].strip() if detail else '. Check switch membership and host permissions.')) from None
-    host=host_ipv4(data,switch)
-    if selected and host!=selected:raise ValueError('Hyper-V bootstrap IPv4 no longer matches the selected switch')
-    return data
+    return select_network(data,switch,request.get('bootstrap_host'))
 
 def create(request):
     request=check_request(request)
+    preflight={}
     if request['backend']=='hyperv' and (request.get('preflight_only') or request['guest_os']!='windows11' or request.get('windows_confirmed')):
-        request['bootstrap_host']=hyperv_network(request)['host_ipv4']
-    if request.get('preflight_only'):return {'status':'preflight_ready','engine':'packer','vm_created':False,'request':request,'post_reboot_wait_seconds':60}
+        from hyperv_bootstrap import require_deployment_policy
+        network=hyperv_network(request)
+        request['bootstrap_host']=network['host_ipv4']
+        preflight={'windows_execution_policy':network['execution_policy'],'deployment_blocked':network['execution_policy']=='Restricted'}
+        if not request.get('preflight_only'):require_deployment_policy(network)
+    if request.get('preflight_only'):return {'status':'preflight_ready','engine':'packer','vm_created':False,'request':request,'post_reboot_wait_seconds':60,**preflight}
     if request['guest_os']=='windows11' and not request.get('windows_confirmed'):
         return {'status':'needs_windows_confirmation','vm_created':False,'action_required':'Windows requires explicit confirmation and your own valid license.'}
     conflicts(request['backend'])
@@ -183,7 +184,9 @@ def worker(image_id):
             def log_message(self,*args):pass
         host='10.0.2.2'
         if request['backend']=='hyperv':
+            from hyperv_bootstrap import require_deployment_policy
             network=hyperv_network(request)
+            require_deployment_policy(network)
             host=network['host_ipv4'];status('building',network=network)
         if request['backend']=='kvm':
             from kvm_bootstrap import resolve_kvm_bootstrap_host,bind_kvm_listener

@@ -94,7 +94,7 @@ Packer 게스트는 사후 설정 파일을 빌드 호스트에서 받습니다.
 Node.js 22+ 환경에서 [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)의 `vamp-mcp`와 선택 사항인 `vamp-mcp-vault` tarball을 내려받습니다. 릴리즈 노트의 SHA-256을 확인한 뒤 내려받은 파일로 설치합니다.
 
 ```bash
-npm install -g ./vamp-mcp-0.3.1.tgz ./vamp-mcp-vault-0.1.8.tgz
+npm install -g ./vamp-mcp-0.3.2.tgz ./vamp-mcp-vault-0.1.8.tgz
 ```
 
 클라이언트에 인자 없이 `vamp-mcp`를 **VAMP MCP**로, `vamp-mcp-vault`를 **VAMP Vault**로 등록합니다. 클라이언트가 명령을 찾지 못하면 설치된 전체 경로를 사용하세요. Podman이나 하이퍼바이저를 별도로 등록하지 않습니다. 자세한 내용은 [MCP 등록 가이드](docs/MCP_REGISTRATION.md)를 참고하세요.
@@ -105,38 +105,40 @@ npm install -g ./vamp-mcp-0.3.1.tgz ./vamp-mcp-vault-0.1.8.tgz
 2. **VAMP** 사이드바에서 **Open VM Manager**로 VM을, **Open Containers**로 Podman 목록과 데스크톱을, **RPA Library**로 검토한 워크플로를 관리합니다. 자격증명은 별도의 **VAMP Vault**에서 관리합니다.
 3. WSL은 [수동 설정 가이드(영문)](vscode-extension/CONTAINERS_WSL.md)를, rootless Podman과 noVNC는 [컨테이너 데스크톱 문서](docs/CONTAINER_DESKTOP.md)를 참고하세요.
 
+Windows 호스트 PowerShell 실행 정책 및 별도의 Hyper-V/CIM 권한 확인은 [Windows 호스트 안내](docs/INSTALL.md#windows-powershell-host)를 참고하세요.
+
 ---
 
 ## 🏗️ 아키텍처 개요
 
 ```mermaid
 flowchart TD
-    subgraph Host [호스트 머신 / AI 에이전트]
-        Agent[Claude / Cursor / AI 에이전트]
-        MCP[VAMP MCP Server]
-        Vault[VAMP Vault (KeePassXC)]
-        HTTP[호스트 스크립트 서버 :8421]
+    subgraph Host ["호스트 머신 / AI 에이전트"]
+        Agent["Claude / Cursor / AI 에이전트"]
+        MCP["VAMP MCP Server"]
+        Vault["VAMP Vault (KeePassXC)"]
+        HTTP["호스트 스크립트 서버 :8421"]
 
         Agent <-->|MCP Stdio 프로토콜| MCP
         MCP --> Vault
         MCP --> HTTP
     end
 
-    subgraph Infrastructure [가상화 추상화 레이어]
-        Packer[Packer (골든 이미지 프로비저닝)]
-        Vagrant[Vagrant & DesktopAdapter]
+    subgraph Infrastructure ["가상화 추상화 레이어"]
+        Packer["Packer (골든 이미지 프로비저닝)"]
+        Vagrant["Vagrant & DesktopAdapter"]
         MCP --> Packer
         MCP --> Vagrant
         Packer -->|골든 이미지| Vagrant
         Vagrant -->|VirtualBox / KVM / Hyper-V| Guest
     end
 
-    subgraph Guest [격리된 게스트 VM (Windows / Debian)]
-        SSH[OpenSSH Server :22]
-        RPA[결정론적 RPA 실행기]
-        Vision[로컬 OCR / YOLO 데몬]
+    subgraph Guest ["격리된 게스트 VM (Windows / Debian)"]
+        SSH["OpenSSH Server :22"]
+        RPA["결정론적 RPA 실행기"]
+        Vision["로컬 OCR / YOLO 데몬"]
 
-        Adapter -. SSH 전송 .-> SSH
+        Vagrant -. SSH 전송 .-> SSH
         SSH --> RPA
         RPA --> Vision
     end

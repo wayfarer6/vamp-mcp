@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.3.2 (preview)
+
+- Queue a dedicated Debian headless Podman VM through Packer and Vagrant from VS Code and MCP. Boot and SSH/rootless engine verification remain separate.
+- Show the Windows host version in the Hyper-V panel without passive engine probing. Missing features are distinct from permission errors. A separate UAC diagnosis is read-only.
+- Add native-Linux rootless workspace attachment to a new network-isolated disposable desktop, with owner-controlled configuration, pinned approval scope and explicit confirmation. No unlock, secret sharing or modification of existing containers. WSL/SSH workspace attachment remains unsupported.
+- Harden KVM/Hyper-V bootstrap host resolution and scoped listeners; keep VirtualBox behavior unchanged.
+- Keep one VAMP MCP registration and a separate unchanged VAMP Vault 0.1.8.
+- Isolated tests do not establish actual VM provisioning, OCI display/browser behavior, GPU acceleration or real-volume write safety. Host integration remains a separate verification gate.
+
 ## 0.3.1
 
 - Register one VAMP MCP server containing VM, RPA and Podman tools. Keep Vault separate.

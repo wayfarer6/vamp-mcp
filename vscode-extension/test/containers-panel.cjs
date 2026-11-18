@@ -5,7 +5,7 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const {containersHTML,withContainersSidebar,registerContainers}=require('../src/containers-panel.cjs');
 const ID='a'.repeat(64);
-function harness(){
+function harness(extra={}){
   const commands=new Map(),calls=[],messages=[],prompts=[];
   let receive,dispose,factoryCalls=0,current='exited',confirmation='Start Container',failure=null;
   const rows=()=>[{id:ID,name:'demo',image:'example/image',state:current}];
@@ -13,7 +13,7 @@ function harness(){
   const panel={webview:{html:'',postMessage:m=>messages.push(m),onDidReceiveMessage:fn=>{receive=fn;}},reveal(){},onDidDispose:fn=>{dispose=fn;},dispose:()=>dispose?.()};
   const context={subscriptions:[],extensionUri:{path:'/mock/extension'}};
   const vscode={Uri:{joinPath:(uri,name)=>({path:uri.path+'/'+name})},commands:{executeCommand:async(...args)=>{calls.push(['command',...args]);},registerCommand:(name,fn)=>{commands.set(name,fn);return {}; }},ViewColumn:{Active:1},window:{createWebviewPanel:()=>panel,showWarningMessage:async(...args)=>{prompts.push(args);return typeof confirmation==='function'?confirmation():confirmation;}}};
-  registerContainers(context,{vscode,openDesktop:options=>calls.push(['openDesktop',options]),openCapture:result=>calls.push(['openCapture',result]),createBackend:()=>{factoryCalls++;return backend;},output:{appendLine(){}}});
+  registerContainers(context,{...extra,vscode,openDesktop:options=>calls.push(['openDesktop',options]),openCapture:result=>calls.push(['openCapture',result]),createBackend:()=>{factoryCalls++;return backend;},output:{appendLine(){}}});
   return {calls,messages,prompts,panel,backend,commands,open:()=>commands.get('vamp.openContainers')(),send:m=>receive(m),close:()=>panel.dispose(),factoryCalls:()=>factoryCalls,setConfirmation:x=>{confirmation=x;},setFailure:x=>{failure=x;},state:()=>messages.findLast(m=>m.type==='state')};
 }
 async function select(h){h.open();await h.send({action:'refresh'});await h.send({action:'select',connection:'debian-vm'});await h.send({action:'list',connection:'debian-vm'});}
@@ -77,4 +77,31 @@ test('capture viewer uses bounded PNG only, no scripts, network or persistent fi
 
 test('Open Desktop requires trusted image precheck and pins stream target',async()=>{
  const h=harness();try{await select(h);await h.send({action:'start',connection:'debian-vm',id:ID});h.backend.screenTarget=async(...args)=>{h.calls.push(['screenTarget',...args]);};h.backend.openScreenStream=async(...args)=>args;await h.send({action:'desktop',connection:'debian-vm',id:ID});const opened=h.calls.find(c=>c[0]==='openDesktop');assert.ok(opened);assert.deepEqual(h.calls.find(c=>c[0]==='screenTarget'),['screenTarget','debian-vm',ID,'opaque-binding']);assert.deepEqual(await opened[1].openScreenStream(),['debian-vm',ID,'opaque-binding']);h.backend.screenTarget=async()=>{throw Error('Untrusted image');};await h.send({action:'desktop',connection:'debian-vm',id:ID});assert.equal(h.calls.filter(c=>c[0]==='openDesktop').length,1);}finally{h.close();}
+});
+
+async function localWorkspace(h){
+ h.backend.connections=async()=>[{name:'local-linux',transport:'local'}];
+ h.backend.workspaceStatus=async(...args)=>{h.calls.push(['workspaceStatus',...args]);return {status:'ready_to_attach',approval_id:'b'.repeat(64),path:'NEVER_SHOW_PATH'};};
+ h.backend.workspaceAttach=async(...args)=>{h.calls.push(['workspaceAttach',...args]);return {status:'attached',id:ID,destination:'/workspace'};};
+ h.open();await h.send({action:'refresh'});await h.send({action:'select',connection:'local-linux'});
+}
+test('workspace status and attachment pin binding, ignore WebView paths and require native approval',async()=>{
+ const h=harness();try{await localWorkspace(h);await h.send({action:'workspace-status',connection:'local-linux',path:'/untrusted'});assert.match(h.state().message,/ready to attach/);assert.ok(!h.calls.some(c=>c[0]==='workspaceAttach'));h.setConfirmation('Create Workspace Desktop');await h.send({action:'workspace-attach',connection:'local-linux',path:'/untrusted',config:'/untrusted'});assert.deepEqual(h.calls.find(c=>c[0]==='workspaceAttach'),['workspaceAttach','local-linux','opaque-binding','b'.repeat(64)]);assert.equal(h.prompts[0][1].modal,true);assert.match(h.prompts[0][1].detail,/network disabled/);assert.match(h.prompts[0][1].detail,/no existing container/);assert.match(h.state().message,/created/);assert.ok(!JSON.stringify(h.messages).includes('NEVER_SHOW_PATH'));assert.ok(!JSON.stringify(h.messages).includes('opaque-binding'));}finally{h.close();}
+});
+test('workspace remote targets, spoofed local names and unavailable status never attach',async()=>{
+ const h=harness();try{await select(h);await h.send({action:'workspace-attach',connection:'debian-vm'});assert.equal(h.prompts.length,0);h.backend.connections=async()=>[{name:'local-linux',transport:'ssh'}];await h.send({action:'refresh'});await h.send({action:'select',connection:'local-linux'});await h.send({action:'workspace-attach',connection:'local-linux'});assert.equal(h.prompts.length,0);await localWorkspace(h);h.backend.workspaceStatus=async()=>({status:'unavailable'});await h.send({action:'workspace-attach',connection:'local-linux'});assert.equal(h.prompts.length,0);assert.ok(!h.calls.some(c=>c[0]==='workspaceAttach'));}finally{h.close();}
+});
+test('workspace cancellation, closing modal and stale binding fail closed',async()=>{
+ const h=harness();try{await localWorkspace(h);h.setConfirmation(undefined);await h.send({action:'workspace-attach',connection:'local-linux'});assert.ok(!h.calls.some(c=>c[0]==='workspaceAttach'));h.setConfirmation('Create Workspace Desktop');h.backend.workspaceAttach=async(name,binding)=>{assert.equal(binding,'opaque-binding');throw Error('/secret/path connection changed');};await h.send({action:'workspace-attach',connection:'local-linux'});assert.equal(h.state().error,true);assert.match(h.state().message,/partial operation/);assert.ok(!JSON.stringify(h.messages).includes('/secret/path'));h.setConfirmation(()=>{h.close();return 'Create Workspace Desktop';});h.backend.workspaceAttach=async()=>assert.fail('must not attach after close');await h.send({action:'workspace-attach',connection:'local-linux'});}finally{h.close();}
+});
+test('workspace setting is machine-only and same trusted configuration feeds MCP and UI',()=>{
+ const fs=require('node:fs'),path=require('node:path');const extension=fs.readFileSync(path.join(__dirname,'../extension.js'),'utf8');const pkg=require('../package.json');assert.equal(pkg.contributes.configuration.properties['vamp.podman.workspaceConfigPath'].scope,'machine');assert.match(extension,/inspect\('podman.workspaceConfigPath'\)\?\.globalValue\|\|process.env.VAMP_WORKSPACE_CONFIG/);assert.match(extension,/workspaceConfigPath:workspaceConfigPath\(\)/);assert.match(extension,/VAMP_WORKSPACE_CONFIG:workspaceConfigPath\(\)/);assert.match(extension,/workspaceAttach:\(name,binding,approvalId\)=>adapter.workspaceAttach\(name,binding,approvalId\)/);
+});
+
+test('workspace approval must exist and remain pinned across modal changes',async()=>{
+ const h=harness();try{await localWorkspace(h);for(const approval_id of [undefined,'invalid','B'.repeat(64)]){h.backend.workspaceStatus=async()=>({status:'ready_to_attach',approval_id});await h.send({action:'workspace-attach',connection:'local-linux'});assert.equal(h.prompts.length,0);assert.equal(h.state().error,true);}const report={status:'ready_to_attach',approval_id:'c'.repeat(64)};h.backend.workspaceStatus=async()=>report;h.setConfirmation(()=>{report.approval_id='d'.repeat(64);return 'Create Workspace Desktop';});h.backend.workspaceAttach=async(name,binding,approval)=>{assert.equal(approval,'c'.repeat(64));throw Error('Approval no longer matches configured scope');};await h.send({action:'workspace-attach',connection:'local-linux'});assert.equal(h.state().error,true);assert.ok(!JSON.stringify(h.messages).includes('c'.repeat(64)));assert.match(h.state().message,/could not be verified/);}finally{h.close();}
+});
+
+test('Debian build action is explicit and only reports exact queue/status evidence',async()=>{
+ const seen=[];let stage='vm_started';const h=harness({createDebianHost:async()=>{seen.push('create');return {status:'queued',job_id:'job-one'};},debianHostStatus:async id=>{seen.push(id);return {status:stage};}});try{h.open();await h.send({action:'ready'});assert.deepEqual(seen,[]);await h.send({action:'create-debian',provider:'evil',isoPath:'/untrusted'});assert.deepEqual(seen,['create']);assert.match(h.state().message,/queued/);assert.equal(h.factoryCalls(),0);await h.send({action:'debian-status',job_id:'foreign'});assert.equal(seen[1],'job-one');assert.match(h.state().message,/SSH and Podman connection are not yet verified/);stage='box_ready';await h.send({action:'debian-status'});assert.match(h.state().message,/box ready/);}finally{h.close();}
 });

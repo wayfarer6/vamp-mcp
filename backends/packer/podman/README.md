@@ -1,10 +1,29 @@
-# Debian headless Podman: source-only sibling profile
+# Debian headless Podman VM
 
-This is **not integrated with the desktop runner, VS Code create action or MCP
-create action**. Those paths remain unchanged. No box has been built or booted
-by this change. Generated `profile.json` explicitly says
-`source_only_unverified` and `box_created: false`; a planned filename is not an
-artifact or a successful deployment.
+Use **Open Containers → Create Debian VM** in VS Code, or
+`podman_prepare_debian_vm` through MCP. Choose a native VirtualBox host (Windows
+or Linux) or native Linux KVM/libvirt, a local Debian amd64 installer ISO, and
+its independently verified Debian SHA-256. See [Debian ISO verification](https://www.debian.org/CD/verify).
+The confirmed build reserves 4 GiB for the VM and requires at least 6 GiB of
+currently available RAM plus 64 GiB of storage headroom. It needs local Python,
+OpenSSH key generation, Vagrant, and the selected hypervisor/provider.
+
+The local job creates separate build and deployment SSH keys, pins the official
+Packer runtime and plugins, validates the local ISO checksum, builds a private
+provider box, and checks the box's checksum, metadata and embedded Vagrantfile
+before attempting Vagrant deployment. It does not install or switch a host
+hypervisor, enable WSL, alter the default Podman connection, or reuse a
+preexisting VM. Use the returned ID in `podman_debian_vm_build_status`, or
+refresh the build status in the panel. `vm_started` is not a verified SSH or
+Podman connection. Build logs and the private project stay under VAMP's local
+data directory.
+
+This headless path does **not** use Hyper-V as a Vagrant provider and does not
+run the builder inside WSL. An existing rootless Debian VM over a configured
+SSH connection is still supported independently. Runtime behavior on a real
+provider is not certified merely by this implementation.
+
+## Standalone profile and security contract
 
 The pure Python `profile.py:render_profile` API accepts a **new** output directory
 and keyword arguments:
@@ -20,7 +39,7 @@ and keyword arguments:
 The renderer only writes inputs. It does not download, install dependencies,
 spawn tools, build a VM or configure a host. Review generated files before a
 separately authorized `packer init`, `packer validate`, then `packer build` on
-`podman.pkr.hcl`. Actual plugin resolution/HCL validation is pending. Do not run
+`podman.pkr.hcl`. A successful validation is not proof of boot or setup. Do not run
 `provision.sh` on a host: it is a guest-only provisioning script.
 
 ## Build and deployment contract
@@ -66,8 +85,7 @@ and external deployment key. Save the returned file as `Vagrantfile` in a new
 project directory. Then manually run `vagrant validate`, followed by either
 `vagrant up --provider=virtualbox` or `vagrant up --provider=libvirt` on the
 matching host. Vagrant and its provider must already be installed; the KVM path
-requires the `vagrant-libvirt` plugin. No box is built or booted from the VAMP
-Containers panel.
+requires the `vagrant-libvirt` plugin. The panel can run the same local provider pipeline after confirmation.
 
 After the guest is running, use `vagrant ssh-config` to identify its SSH address,
 port and username, and verify the guest's SSH host fingerprint independently

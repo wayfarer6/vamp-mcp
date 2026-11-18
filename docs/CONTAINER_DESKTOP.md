@@ -14,9 +14,20 @@ The same recipe can be used with `docker build` on a separately configured Docke
 
 The image installs a minimal XFCE desktop, Chromium, LibreOffice, Korean fonts, noVNC and websockify from Debian packages. The virtual display is 1920×1080. **The container does not listen on a VNC or websockify port.** Its fixed screen helpers pass pixels over a managed subprocess only. Do not publish raw VNC or websockify on a public or LAN interface, and do not disable Chromium's sandbox to make it run.
 
+## Create a separate Debian VM for Podman
+
+On a supported native host, **Open Containers → Create Debian VM** queues a
+headless Packer and Vagrant build from your verified local Debian installer
+ISO. See the [Debian VM build guide](../backends/packer/podman/README.md).
+Windows uses VirtualBox for this path, while native Linux also supports KVM
+with Vagrant libvirt. The build retains a private, user-specific box; do not
+publish it. A Vagrant startup is not engine verification. Independently confirm
+the new guest's SSH host key, numeric UID and rootless socket before using a
+named connection. WSL remains independent and is never activated by this flow.
+
 ## View or capture a desktop
 
-This prerelease requires an independently verified immutable desktop image ID. Record it with `podman image inspect localhost/vamp-debian-desktop:dev --format '{{.Id}}'` after verifying the built image. For VS Code, configure the application setting `vamp.podman.desktopImageIds`. For a standalone MCP server, provide the IDs in the startup environment variable `VAMP_DESKTOP_IMAGE_IDS` (comma-separated). Screen tools reject unmanaged images, root or privileged workload settings, and writable root filesystems. Use a preview container launched read-only with the image's non-root user and no host mounts; encrypted-workspace attachment is not supported by these viewer tools yet. Start one using the recipe's [disposable smoke instructions](../containers/debian-desktop/README.md).
+This prerelease requires an independently verified immutable desktop image ID. Record it with `podman image inspect localhost/vamp-debian-desktop:dev --format '{{.Id}}'` after verifying the built image. For VS Code, configure the application setting `vamp.podman.desktopImageIds`. For a standalone MCP server, provide the IDs in the startup environment variable `VAMP_DESKTOP_IMAGE_IDS` (comma-separated). Screen tools reject unmanaged images, root or privileged workload settings, and writable root filesystems. For a preview, use a read-only container with the image's non-root user and no host mounts. The only workspace exception is a managed, revalidated native-Linux attachment described below; an arbitrary bind-mounted container is not eligible. Start one using the recipe's [disposable smoke instructions](../containers/debian-desktop/README.md).
 
 - **VS Code:** Open **Containers**, select the engine, then **Open Desktop** or **Capture desktop** on a running container row. The in-editor viewer is view-only. If the webview cannot establish an eligible local origin, the viewer fails closed and the snapshot remains available.
 - **Standalone MCP:** `podman_view_container_screen` returns JSON containing `url`, `container_id`, `mode`, and `scope: "same_machine"`. For human keyboard/mouse control, explicitly request `mode: "control"` and obtain approval for that exact target. The AI should send the complete URL only to that requester in a private conversation, never to logs, shared chats, screenshots, or release notes. The URL is reusable during one short session with no password prompt. Open it in the browser **on the computer that runs MCP**. A remotely hosted MCP makes its own loopback URL, not the user's PC loopback. Do not broaden the bind or copy its URL to resolve that topology automatically.
@@ -24,20 +35,47 @@ This prerelease requires an independently verified immutable desktop image ID. R
 
 Local browser listeners are restricted to `127.0.0.1` and allocate the lowest open port from 6080 through 6111. Knowledge of the port is not access; the private URL contains a session capability. Browser and VS Code viewer paths are still awaiting real engine/UI testing; clipboard and file transfer are disabled in the fixed screen helper.
 
-## Keep the workspace outside the image
+## Native Linux: attach an already-opened VeraCrypt workspace
 
-| Target | Vault opens the volume | Podman must independently see |
-| --- | --- | --- |
-| Linux local | On the same Linux host | A verified task-only directory on the opened volume |
-| Windows / WSL 2 | In Windows, or on an explicitly configured engine-side path | The intended volume and writable folder in the exact Podman machine; Windows drive visibility alone is not enough |
-| Windows / Debian VM | Prefer the same Debian host that runs Podman | The verified task-only directory in that VM. Windows-only mounts are not implicitly shared |
+This prerelease adds a narrow source implementation for **native Linux, same-user rootless Podman, `local-linux` only**. WSL and SSH targets, including an engine in a remote Debian VM, are unavailable for this attachment flow. A Debian VM can use it only when VAMP and rootless Podman both run locally inside that native Linux guest. Engine connection, mounted-volume identity, desktop readiness and real application read/write are separate checks.
 
-Keep credentials and the container workspace separate. Mount only a dedicated work directory at `/workspace`; grant write access to one approved workload at a time. Do not mount the whole vault, KDBX, private key material, the host display socket, or the Podman socket in the workload. A rootless container does not eliminate file access granted by an explicit bind.
+Unlock and mount the intended VeraCrypt volume yourself using an approved local procedure before checking it. VAMP does **not** unlock a volume, request a password, store a key, create a host mount or substitute an empty directory for a missing mount. Keep the image, credentials and task workspace separate. Never put a KDBX database, private key, whole vault, host display socket or Podman socket in the workload scope.
 
-The intended order is **unlock → verify mounted identity on the engine → verify the workload binding and access → start desktop**. If a configured bind is already correct, the same container can start or restart after the volume becomes available. If the bind is new or different, prepare a reviewed replacement and preserve app state independently. Never replace a missing volume with an empty directory. Finish by saving and closing apps, stopping the workload and verifying the attachment is released, then dismounting. If any prerequisite is unverified, don't claim ready or unblock the workflow.
+### Owner-controlled configuration
+
+Create one JSON file owned by the same Linux user, with permissions **0600**, outside the container's work directory. Configure its absolute path through the VS Code **user/global** setting `vamp.podman.workspaceConfigPath`, not a repository/workspace setting, or through `VAMP_WORKSPACE_CONFIG` in a standalone MCP server's startup environment. No path or mount configuration is accepted from an MCP tool call or webview message.
+
+The file has exactly these fields; use real, verified local paths rather than copying placeholders:
+
+| Field | Required value |
+| --- | --- |
+| `veracryptPath` | Absolute path to the installed VeraCrypt executable used for read-only mount inspection |
+| `volumePath` | Absolute path identifying the already-unlocked VeraCrypt volume |
+| `mountPoint` | Existing absolute mount point of that exact volume |
+| `directory` | Existing dedicated task subdirectory strictly below `mountPoint`, not the volume root |
+| `workloadId` | 1–48 lowercase letters, digits or hyphens; first character must be a letter or digit |
+| `imageId` | Already-installed, independently trusted immutable image ID: 64 lowercase hexadecimal characters, without `sha256:`; also present in `vamp.podman.desktopImageIds` or `VAMP_DESKTOP_IMAGE_IDS` |
+| `protectedPaths` | Nonempty array of existing absolute paths to protected material outside the task scope; neither ancestors nor descendants of `directory` |
+
+The checks reject ambiguous paths, unsafe ownership/permissions, unexpected volume or folder identity, and overlapping protected material. Do not broaden the scope or remove protected paths just to pass a failed check. No image is downloaded by attachment.
+
+### Check, approve, then attach
+
+- **VS Code:** Select `local-linux`, choose **Check workspace**, inspect the result, then **Create workspace desktop**. The explicit modal authorizes the checked attachment, not arbitrary future mounts.
+- **MCP:** Call `podman_workspace_check` with `connection: "local-linux"` and the current opaque connection `binding`. A successful check returns `status: "ready_to_attach"` and `approval_id`. Explain the proposed new workload, `/workspace` read/write access and network isolation, then obtain the user's explicit approval. Only then call `podman_workspace_attach` with that same `connection`, `binding`, `approval_id`, and `confirmed: true`. A check or an `approval_id` is not itself user consent. If configuration, binding or mount identity changes, check again and obtain fresh approval.
+
+Attachment reserves the local operation, checks same-user Podman writers, and creates a **new disposable desktop container** from the installed trusted image. It is rootless, has a read-only root filesystem, no network, and only the approved dedicated directory mounted read/write at `/workspace`. Existing containers are untouched: this is not restart, reconfiguration or in-place recreation. Managed local viewer/capture is available subject to the screen checks above. Save work in `/workspace`; desktop/home state is temporary. Network isolation means the desktop cannot browse the Internet.
+
+The writer check covers the same user's Podman containers, **not every host process, another user or another engine**. The reservation prevents overlapping managed attach operations; it is not a system-wide file lock. Keep unrelated writers closed. `actual_read_write_verified: false` remains honest even after an attachment reports success: real file-write and full OCI/desktop integration have not yet been verified. Do not tell the user that a document was saved or the workspace is fully ready without checking the actual result.
+
+### Finish before dismounting
+
+Save and close applications, stop the newly created workload, then refresh and verify that it is gone and the attachment is released **before manually dismounting VeraCrypt**. The workload is disposable; stopping it does not delete files saved in the approved task directory. Do not dismount while a workload might still write. If attachment fails or its state is uncertain, inspect the local container inventory before retrying or dismounting; do not assume rollback completed.
+
+**Existing VAMP Vault unmount operations are not guarded by this workspace flow.** It does not intercept Vault or manual dismounts, unlock secrets, or change credential handling. Use only explicitly approved dummy volumes and non-secret files for integration tests; no real secrets or personal work documents.
 
 ## MCP and UI boundary
 
-Use **VAMP MCP** and **VAMP Vault** as the two registrations. `Open Containers` remains a VS Code view. Select an explicit rootless engine before listing containers. On native Linux, select the same-user **Local Podman** choice; Windows can still select a configured rootless SSH connection. Detection does not install or enable WSL, and listing an engine does not prove that its desktop or decrypted workspace is ready.
+Use **VAMP MCP** and **VAMP Vault** as the two registrations. `Open Containers` remains a VS Code view. Select an explicit rootless engine before listing containers. Detection does not install or enable WSL. Other SSH/WSL container inventory and desktop viewing remain separate from the native-Linux-only workspace attachment.
 
-In **VAMP MCP**, `podman_workspace_plan` accepts only an opaque target ID and is read-only. Trusted observations must come from a host-side probe; tool callers cannot supply mount evidence. The current default is `unavailable` because that production probe is not connected. The Vault-side policy is also a source-only validator and does not alter the existing Vault unlock/dismount behavior. This phase does not perform VeraCrypt unlock, host mounts, container recreation, browser viewing or credential injection. Use only approved dummy volumes for future end-to-end testing. Vault passwords remain out of MCP tool output and out of the workload in any future mediated flow.
+`podman_workspace_plan` remains a separate read-only planning interface. It does not authorize attachment or accept caller-asserted mount evidence. Use the new `podman_workspace_check` → explicit approval → `podman_workspace_attach` flow for the configured native-Linux source. Never infer workspace access from connection success, `vault_status`, a path string or a planner's recommendation alone.

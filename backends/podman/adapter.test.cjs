@@ -220,3 +220,46 @@ test('human control stream allows only exact fixed mode flag; default stays view
  assert.deepEqual(spawned[1].slice(7),['exec','--user','1000:1000','--interactive','--',id,'/usr/bin/python3','-I','-B','/opt/vamp-desktop/view.py','--interactive']);control.close();
  assert.equal(calls.filter(c=>c.args[7]==='inspect').length,2);
 });
+
+test('local workspace uses checked binding, pinned image, single disposable container and verified scope',async()=>{
+ const imageId='b'.repeat(64),other='d'.repeat(64);
+ const m={mountId:'mount',scopeId:'scope',directory:'/mnt/volume/task'};
+ const config={imageId,workloadId:'fixture'};
+ let created=false,running=false,conflict=false;
+ const calls=[];
+ const adapter=createPodmanAdapter({platform:'linux',desktopImageIds:imageId,
+  userIdentity:()=>({uid:1000,euid:1000,home:'/home/test'}),workspaceConfigPath:'/private/config',
+  workspaceDependencies:{release:()=> '6.8.0',read:async()=>({config,raw:'fixture'}),reserve:async(_uid,fn)=>fn(),
+    sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>{})})},
+  execute:async(_exe,argv,options)=>{
+    assert.equal(argv[0],'--remote=false');assert.equal(options.shell,false);
+    const cmd=argv.slice(1);calls.push(cmd);
+    let result;
+    if(cmd[0]==='info')result={host:{security:{rootless:true},serviceIsRemote:false}};
+    else if(cmd[0]==='ps')result=[...(created?[{Id:id,State:running?'running':'created',Labels:{'io.vamp.workspace':'mount.scope'}}]:[]),...(conflict?[{Id:other}]:[])];
+    else if(cmd[0]==='image')result=[{Id:imageId,Config:{User:'1000:1000',Entrypoint:['/usr/bin/tini','--','/usr/bin/python3','-I','-B','/opt/vamp-desktop/desktop.py']}}];
+    else if(cmd[0]==='inspect'&&cmd.at(-1)===other)result=[{Id:other,Mounts:[{Type:'bind',Source:'/'}]}];
+    else if(cmd[0]==='inspect'&&cmd.at(-1)===id)result=[{Id:id,Image:imageId,State:{Running:running},
+      Config:{User:'1000:1000',Labels:{'io.vamp.workspace':'mount.scope'}},
+      HostConfig:{NetworkMode:'none',AutoRemove:true,ReadonlyRootfs:true,Privileged:false,CapAdd:[],CapDrop:['ALL'],
+        SecurityOpt:['no-new-privileges'],PidMode:'private',IpcMode:'private',UTSMode:'private',UsernsMode:'keep-id'},
+      Mounts:[{Destination:'/workspace',Type:'bind',Source:m.directory,RW:true,Propagation:'private'}]}];
+    else if(cmd[0]==='create'){created=true;return {stdout:id};}
+    else if(cmd[0]==='start'){running=true;return {stdout:id};}
+    else throw Error('Unexpected command');
+    return {stdout:JSON.stringify(result)};
+  }});
+ const {binding}=await adapter.check('local-linux');
+ await assert.rejects(adapter.workspaceStatus('qa',binding),/native Linux/);
+ await assert.rejects(adapter.workspaceStatus('local-linux','f'.repeat(64)),/Connection changed/);
+ conflict=true;
+ await assert.rejects(adapter.workspaceStatus('local-linux',binding),/reserves/);
+ conflict=false;
+ const check=await adapter.workspaceStatus('local-linux',binding);
+ assert.equal(calls.filter(a=>a[0]==='create').length,0);
+ assert.equal((await adapter.workspaceAttach('local-linux',binding,check.approval_id)).status,'attached');
+ assert.equal((await adapter.screenTarget('local-linux',id,binding)).id,id);
+ assert.equal((await adapter.list('local-linux')).containers[0].workspaceManaged,true);
+ await assert.rejects(adapter.start('local-linux',id,binding),/fresh authorized workspace/);
+ assert.equal(calls.filter(a=>a[0]==='start').length,1);
+});

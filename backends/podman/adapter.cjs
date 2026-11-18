@@ -6,6 +6,7 @@ const {createHash}=require('node:crypto');
 const path=require('node:path');
 const fs=require('node:fs');
 const os=require('node:os');
+const {workspaceRuntime,writerAbsent,LABEL}=require('./workspace-runtime.cjs');
 const NAME=/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 const ID=/^[a-f0-9]{64}$/;
 const MAX=1024*1024;
@@ -28,9 +29,11 @@ function connectionRecord(row){
     return {name:row.Name,transport:'ssh',rootlessCandidate:true};
   }catch{return null;}
 }
-function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spawn,desktopImageIds=process.env.VAMP_DESKTOP_IMAGE_IDS||'',userIdentity=()=>({uid:process.getuid?.(),euid:process.geteuid?.(),home:os.userInfo().homedir})}={}){
+function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spawn,desktopImageIds=process.env.VAMP_DESKTOP_IMAGE_IDS||'',workspaceConfigPath=process.env.VAMP_WORKSPACE_CONFIG||'',workspaceDependencies={},userIdentity=()=>({uid:process.getuid?.(),euid:process.geteuid?.(),home:os.userInfo().homedir})}={}){
   const injected=typeof execute==='function';
   execute=execute||promisify(execFile);
+  const approvedImages=()=>String(desktopImageIds).split(/[\s,]+/).filter(Boolean);
+  const workspace=workspaceRuntime({...workspaceDependencies,platform,allowedImages:approvedImages,configPath:workspaceConfigPath});
   let executable;
   function binary(){
     if(injected)return 'podman';
@@ -149,7 +152,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     return data.map(r=>{
       if(!ID.test(r.Id||r.ID||''))throw Error('Expected full container ID');
       const text=v=>String(v??'').slice(0,512);
-      return {id:r.Id||r.ID,name:text(Array.isArray(r.Names)?r.Names.join(', '):r.Names),image:text(r.Image),state:text(r.State),status:text(r.Status)};
+      return {id:r.Id||r.ID,name:text(Array.isArray(r.Names)?r.Names.join(', '):r.Names),image:text(r.Image),state:text(r.State),status:text(r.Status),...(r.Labels?.[LABEL]&&{workspaceManaged:true})};
     });
   }
   async function list(connection){const snapshot=await ready(connection);const containers=await rows(snapshot);await same(snapshot);return {connection,binding:snapshot.binding,containers};}
@@ -163,6 +166,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
   }
   async function action(connection,id,binding,verb){
     const snapshot=await existing(connection,id,binding);
+    if(verb==='start'&&snapshot.local&&(await rows(snapshot)).some(row=>row.id===id&&row.workspaceManaged))throw Error('Create a fresh authorized workspace session instead of restarting an old attachment');
     await run(args(snapshot,[verb,...(verb==='stop'?['--time','10']:[]),'--',id]),snapshot);
     return {connection,id,status:'requested'};
   }
@@ -173,17 +177,56 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     const bytes=Buffer.from(text);
     return {connection,id,tail,text:bytes.subarray(0,24*1024).toString('utf8'),truncated:bytes.length>24*1024};
   }
+  async function workspaceSnapshot(connection,binding){
+    if(connection!==LOCAL_TARGET||!ID.test(binding||''))throw Error('A checked native Linux local rootless connection is required');
+    const snapshot=await ready(connection,binding);
+    if(!workspace.supported(snapshot))throw Error('Workspace attachment is not available for WSL or SSH');
+    return snapshot;
+  }
+  function workspaceOperations(snapshot){
+    const command=async tail=>{await same(snapshot);return run(args(snapshot,tail),snapshot);};
+    async function inspect(id){
+      if(typeof id!=='string'||!ID.test(id))throw Error('Invalid local Podman container ID');
+      const values=parse(await command(['inspect','--type','container','--',id]));
+      if(!Array.isArray(values)||values.length!==1||values[0]?.Id!==id)throw Error('Container identity could not be verified');
+      return values[0];
+    }
+    async function scan(m,except){
+      const ids=(await rows(snapshot)).map(row=>row.id).filter(value=>value!==except);
+      const values=[];
+      // Batch bounded inventory; malformed or changing inspect fails closed.
+      for(let i=0;i<ids.length;i+=12){
+        const batch=ids.slice(i,i+12);
+        const result=parse(await command(['inspect','--type','container','--',...batch]));
+        if(!Array.isArray(result)||result.length!==batch.length||!batch.every(id=>result.filter(v=>v?.Id===id).length===1))throw Error('Local Podman writer inventory changed');
+        values.push(...result);
+      }
+      await writerAbsent(values,m,except);await same(snapshot);
+    }
+    return {scan,command,inspect};
+  }
+  async function workspaceStatus(connection,binding){
+    const snapshot=await workspaceSnapshot(connection,binding);
+    return workspace.status(snapshot,workspaceOperations(snapshot).scan);
+  }
+  async function workspaceAttach(connection,binding,approvalId){
+    const snapshot=await workspaceSnapshot(connection,binding);
+    return workspace.attach(snapshot,approvalId,workspaceOperations(snapshot));
+  }
   async function desktop(connection,id,binding){
     const snapshot=await existing(connection,id,binding);
-    const allowed=String(desktopImageIds).split(/[\s,]+/).filter(Boolean);
+    const allowed=approvedImages();
     if(!allowed.length||allowed.some(value=>!ID.test(value)))throw Error('Configure trusted VAMP Desktop image IDs first');
     const values=parse(await run(args(snapshot,['inspect','--type','container','--',id]),snapshot));
     const value=Array.isArray(values)&&values.length===1?values[0]:null;
     const imageId=String(value?.Image||'').replace(/^sha256:/,'');
     const host=value?.HostConfig,config=value?.Config;
     if(value?.Id!==id||value?.State?.Running!==true||!ID.test(imageId)||!allowed.includes(imageId))throw Error('Running container must use a trusted immutable VAMP Desktop image');
-    const safeTmpfs=new Set(['/tmp','/run','/var/tmp']);
-    const mountsSafe=Array.isArray(value.Mounts)&&value.Mounts.every(m=>m&&m.Type==='tmpfs'&&safeTmpfs.has(m.Destination)&&(!m.Source||m.Source==='tmpfs'));
+    const managedWorkspace=Boolean(config?.Labels?.[LABEL]);
+    const workspaceVerified=managedWorkspace&&snapshot.local&&await workspace.verify(snapshot,value);
+    if(managedWorkspace&&!workspaceVerified)throw Error('Workspace desktop scope could not be verified');
+    const safeTmpfs=new Set(['/tmp','/run','/var/tmp',...(workspaceVerified?['/home/desktop']:[])]);
+    const mountsSafe=workspaceVerified||Array.isArray(value.Mounts)&&value.Mounts.every(m=>m&&m.Type==='tmpfs'&&safeTmpfs.has(m.Destination)&&(!m.Source||m.Source==='tmpfs'));
     const declaredTmpfs=host?.Tmpfs;
     const tmpfsSafe=declaredTmpfs==null||(typeof declaredTmpfs==='object'&&!Array.isArray(declaredTmpfs)&&Object.keys(declaredTmpfs).every(key=>safeTmpfs.has(key)));
     if(config?.User!=='1000:1000'||host?.Privileged!==false||host?.ReadonlyRootfs!==true||!mountsSafe||!tmpfsSafe||
@@ -226,7 +269,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     child.stdout.pause();
     return {...metadata,viewOnly:mode==='view_only',mode,child,close};
   }
-  return {screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
+  return {workspaceStatus,workspaceAttach,screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
 }
 module.exports={createPodmanAdapter,standardLocations,LOCAL_TARGET};
 

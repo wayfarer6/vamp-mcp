@@ -1,5 +1,7 @@
 """Pure/mocked Hyper-V bootstrap checks; no Windows or hypervisor access."""
 import sys
+import json
+from contextlib import ExitStack
 import tempfile
 import unittest
 import subprocess
@@ -8,6 +10,8 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT/'backends/packer'))
 import templates
+import runner
+import hyperv_bootstrap
 import runner
 from hyperv_bootstrap import host_ipv4,bootstrap_origin,requested_host
 
@@ -24,15 +28,15 @@ class HyperVBootstrapTests(unittest.TestCase):
         for update in ({'switch':'wrong'},{'host_ipv4_candidates':[]},{'host_ipv4_candidates':['172.20.1.1','172.20.1.2']},{'host_ipv4':'172.20.1.2'}):
             with self.assertRaises(ValueError):host_ipv4(data|update,'QA')
     def test_preflight_reads_only_the_selected_switch_and_preserves_ip(self):
-        data={'switch':'QA','host_ipv4':'172.20.1.1','host_ipv4_candidates':['172.20.1.1']}
+        data={'switches':[{'Name':'QA','Type':'Internal'}],'addresses':[{'InterfaceAlias':'vEthernet (QA)','IPAddress':'172.20.1.1'}],'execution_policy':'RemoteSigned'}
         with tempfile.TemporaryDirectory() as tmp, patch.object(runner,'require_install_host'), patch.object(runner,'run',return_value=runner.json.dumps(data)) as probe, patch.object(runner,'names',side_effect=AssertionError('inventory called')):
             iso=Path(tmp)/'test.iso';iso.write_bytes(b'fixture')
             request={'backend':'hyperv','guest_os':'debian','iso_path':str(iso),'switch_name':'QA','preflight_only':True}
             result=runner.create(request)
             self.assertEqual(result['request']['bootstrap_host'],'172.20.1.1')
-            self.assertIn('QA',probe.call_args.args[1])
+            self.assertEqual(probe.call_args.args[1],['-NoProfile','-NonInteractive','-Command',hyperv_bootstrap.NETWORK_QUERY])
             self.assertFalse(result['vm_created'])
-            with self.assertRaisesRegex(ValueError,'no longer matches'):
+            with self.assertRaisesRegex(ValueError,'not a usable address'):
                 runner.create({**request,'bootstrap_host':'172.20.1.2'})
     def test_origin_rejects_missing_unsafe_or_injected_address(self):
         for url in ['http://127.0.0.1:8421','http://0.0.0.0:8421','http://169.254.1.2:8421','http://host:8421','http://172.20.1.1:8421/x','http://u@172.20.1.1:8421','http://172.20.1.1:8421?x=1']:
@@ -69,4 +73,86 @@ class HyperVBootstrapTests(unittest.TestCase):
         self.assertIn("make_server(Path(staged['directory']),8421,host,10800)",text)
         self.assertIn('if bootstrap_server:bootstrap_server.shutdown();bootstrap_server.server_close()',text)
         self.assertIn("host=resolve_kvm_bootstrap_host(request)",text)
+class HyperVReadOnlyPreflightTests(unittest.TestCase):
+    @staticmethod
+    def probe(policy='Restricted'):
+        return {'switches':[{'Name':'Default Switch','Type':'Internal'}],
+                'addresses':[{'InterfaceAlias':'vEthernet (Default Switch)','IPAddress':'172.20.1.1'}],
+                'execution_policy':policy}
+
+    def test_default_switch_fixed_cmdlets_no_script_or_policy_override(self):
+        with patch.object(runner,'run',return_value=json.dumps(self.probe())) as execute:
+            network=runner.hyperv_network({})
+        self.assertEqual(network['switch'],'Default Switch')
+        self.assertEqual(network['host_ipv4'],'172.20.1.1')
+        args=execute.call_args.args
+        self.assertEqual(args[0],'powershell.exe')
+        self.assertEqual(args[1],['-NoProfile','-NonInteractive','-Command',hyperv_bootstrap.NETWORK_QUERY])
+        self.assertEqual(execute.call_args.kwargs['timeout'],30)
+        query=args[1][-1]
+        self.assertIn('Get-VMSwitch',query);self.assertIn('Get-NetIPAddress',query)
+        self.assertIn('Get-ExecutionPolicy',query)
+        self.assertNotIn('-ExecutionPolicy',args[1])
+        for forbidden in ['-File','Set-ExecutionPolicy','Invoke-Expression','EncodedCommand','Unblock-File','RunAs']:
+            self.assertNotIn(forbidden,query)
+        # Windows PowerShell 5.1-compatible array construction; no PS7 operators.
+        self.assertIn('$switches=@(',query);self.assertIn('$addresses=@(',query)
+        self.assertNotIn('??',query);self.assertNotIn('?.',query)
+
+    def test_switch_names_stay_data_not_interpolated_commands(self):
+        switch="QA '; Write-Output injected; '"
+        probe=self.probe();probe['switches'][0]['Name']=switch
+        probe['addresses'][0]['InterfaceAlias']='vEthernet ('+switch+')'
+        with patch.object(runner,'run',return_value=json.dumps(probe)) as execute:
+            result=runner.hyperv_network({'switch_name':switch})
+        self.assertEqual(result['switch'],switch)
+        self.assertNotIn(switch,execute.call_args.args[1][-1])
+        for value in ['', '-bad', 'bad\nname', None]:
+            with patch.object(runner,'run') as execute:
+                with self.assertRaises(ValueError):runner.hyperv_network({'switch_name':value})
+                execute.assert_not_called()
+
+    def test_invalid_or_missing_probe_policy_and_addresses_fail_closed(self):
+        for changes in ({'execution_policy':None},{'execution_policy':'unexpected'}, {'addresses':[]}, {'switches':[]}):
+            with self.assertRaises(ValueError):hyperv_bootstrap.select_network(self.probe()|changes,'Default Switch')
+        probe=self.probe();probe['addresses'].append({'InterfaceAlias':'vEthernet (Default Switch)','IPAddress':'172.20.1.2'})
+        with self.assertRaises(ValueError):hyperv_bootstrap.select_network(probe,'Default Switch')
+        selected=hyperv_bootstrap.select_network(probe,'Default Switch','172.20.1.2')
+        self.assertEqual(selected['host_ipv4'],'172.20.1.2')
+        with self.assertRaises(ValueError):hyperv_bootstrap.select_network(probe,'Default Switch','192.168.2.1')
+
+    def guarded_create(self, request):
+        # Every mutation boundary is a failing mock, including storage allocation.
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(runner,'check_request',side_effect=lambda r:dict(r)))
+            stack.enter_context(patch.object(runner,'run',return_value=json.dumps(self.probe())))
+            for name in ['conflicts','names','home','directory','write']:
+                stack.enter_context(patch.object(runner,name,side_effect=AssertionError('Unexpected mutation boundary: '+name)))
+            stack.enter_context(patch.object(runner.subprocess,'Popen',side_effect=AssertionError('Unexpected worker spawn')))
+            stack.enter_context(patch.object(Path,'mkdir',side_effect=AssertionError('Unexpected directory write')))
+            return runner.create(request)
+
+    def test_restricted_preflight_reports_blocked_without_mutation(self):
+        result=self.guarded_create({'backend':'hyperv','guest_os':'debian','name':'QA','preflight_only':True})
+        self.assertEqual(result['status'],'preflight_ready')
+        self.assertTrue(result['deployment_blocked']);self.assertFalse(result['vm_created'])
+        self.assertEqual(result['windows_execution_policy'],'Restricted')
+        self.assertEqual(result['request']['bootstrap_host'],'172.20.1.1')
+
+    def test_restricted_creation_fails_before_any_mutation(self):
+        for guest in ['debian','windows11']:
+            with self.assertRaisesRegex(ValueError,'Restricted'):
+                self.guarded_create({'backend':'hyperv','guest_os':guest,'name':'QA','windows_confirmed':True})
+
+    def test_windows_license_gate_does_not_probe_or_mutate(self):
+        with patch.object(runner,'check_request',side_effect=lambda r:r),patch.object(runner,'run',side_effect=AssertionError('No probe expected')):
+            result=runner.create({'backend':'hyperv','guest_os':'windows11','name':'QA'})
+        self.assertEqual(result['status'],'needs_windows_confirmation');self.assertFalse(result['vm_created'])
+
+    def test_read_only_cim_failure_remains_failure_without_fallback(self):
+        failure=subprocess.CalledProcessError(1,'powershell.exe',stderr='CIM access denied')
+        with patch.object(runner,'run',side_effect=failure) as execute:
+            with self.assertRaisesRegex(RuntimeError,'CIM access denied'):runner.hyperv_network({})
+        self.assertEqual(execute.call_count,1)
+
 if __name__=='__main__':unittest.main()

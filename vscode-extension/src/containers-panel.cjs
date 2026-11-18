@@ -10,23 +10,25 @@ function containersHTML(){
   return `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'nonce-${nonce}'; script-src 'nonce-${nonce}';"><title>VAMP Containers</title><style nonce="${nonce}">
 body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);background:var(--vscode-editor-background);padding:20px;margin:0;line-height:1.5}main{max-width:1040px;margin:auto}h1{font-size:22px;margin:0}h2{font-size:18px}p,small{color:var(--vscode-descriptionForeground)}section{margin:24px 0}.row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}.spread{justify-content:space-between}.choices{display:grid;grid-template-columns:1fr;gap:12px}.choice{border:1px solid var(--vscode-panel-border);padding:16px;border-radius:6px}.choice.selected{border-color:var(--vscode-focusBorder)}.choice h3{margin:0 0 8px;font-size:15px}.badge{font-size:11px;border:1px solid var(--vscode-focusBorder);padding:2px 7px;border-radius:12px}.choice.unavailable{opacity:.65}button,select{font:inherit;padding:8px 12px;border:1px solid var(--vscode-button-border,transparent);border-radius:4px}button{background:var(--vscode-button-background);color:var(--vscode-button-foreground);cursor:pointer}button.secondary{background:var(--vscode-button-secondaryBackground);color:var(--vscode-button-secondaryForeground)}button:disabled{opacity:.5;cursor:default}select{background:var(--vscode-dropdown-background);color:var(--vscode-dropdown-foreground);border-color:var(--vscode-dropdown-border);min-width:240px;max-width:100%}button:focus-visible,select:focus-visible{outline:2px solid var(--vscode-focusBorder);outline-offset:2px}.container{border-top:1px solid var(--vscode-panel-border);padding:14px 0;overflow-wrap:anywhere}.container strong{font-size:15px}#status{padding:12px;background:var(--vscode-textBlockQuote-background);border-left:3px solid var(--vscode-focusBorder)}#status.error{border-color:var(--vscode-errorForeground)}pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:300px;overflow:auto;background:var(--vscode-textCodeBlock-background);padding:12px}.muted{color:var(--vscode-descriptionForeground)}[hidden]{display:none!important}@media(max-width:700px){.choices{grid-template-columns:1fr}body{padding:12px}.row>*{max-width:100%}select{width:100%}}
 </style></head><body><main><header class="row spread"><div><h1>Containers</h1><p>Podman containers, separate from your virtual machines.</p></div><span class="badge">Podman</span></header>
-<section aria-labelledby="where"><h2 id="where">Where to run containers</h2><p class="engine-note">A Podman engine is required. Podman Desktop is optional.</p><div class="choices"><article class="choice"><h3>Linux host</h3><p>Use the local rootless Podman engine on Linux.</p><small>Refresh targets, explicitly select Linux local (rootless), then test it. Nothing runs automatically.</small></article><article class="choice selected"><h3>Existing Debian VM</h3><span class="badge">Recommended with VirtualBox</span><p>Use an existing named Podman connection to your Debian VM.</p><small>No VM is created or changed. The connection name does not verify its guest OS.</small></article><article class="choice unavailable" aria-disabled="true"><h3>Create Debian VM</h3><p>Not available yet. Planned: a Debian VM without GNOME, provisioned with Packer and Vagrant.</p></article><article class="choice"><h3>WSL 2</h3><p>Automatic setup is not available. Follow the manual setup guide.</p><button class="secondary" data-action="detect-local">Detect installed Podman</button> <button class="secondary" data-action="wsl-guide">WSL 2 setup guide</button><p><small>Detection only reads the installed Podman version and machine inventory on Windows. Nothing is installed or started; no Windows settings are changed. The guide opens locally.</small></p></article></div></section>
-<section aria-labelledby="desktop-heading"><h2 id="desktop-heading">Desktop image</h2><p>Planned OCI Containerfile: minimal XFCE, fixed 1920×1080 display and installed noVNC.</p><p>Verification needed. No desktop image, running viewer or workspace mount has been verified. Workspace visibility and exclusive write access must be checked before use. Open Desktop is view only for trusted running images. Workspace changes are not available in this panel.</p></section>
+<section aria-labelledby="where"><h2 id="where">Where to run containers</h2><p class="engine-note">A Podman engine is required. Podman Desktop is optional.</p><div class="choices"><article class="choice"><h3>Linux host</h3><p>Use the local rootless Podman engine on Linux.</p><small>Refresh targets, explicitly select Linux local (rootless), then test it. Nothing runs automatically.</small></article><article class="choice selected"><h3>Existing Debian VM</h3><span class="badge">Recommended with VirtualBox</span><p>Use an existing named Podman connection to your Debian VM.</p><small>No VM is created or changed. The connection name does not verify its guest OS.</small></article><article class="choice"><h3>Create Debian VM</h3><p>Build a headless Debian Podman engine with Packer. Deploy a private provider-specific box with Vagrant after the build. SSH and Podman still require verification.</p><button data-action="create-debian">Create Debian VM</button> <button class="secondary" data-action="debian-status">Refresh build status</button><p><small>Windows/Linux VirtualBox or Linux KVM. Requires a local ISO and independently trusted SHA-256. No WSL activation.</small></p></article><article class="choice"><h3>WSL 2</h3><p>Automatic setup is not available. Follow the manual setup guide.</p><button class="secondary" data-action="detect-local">Detect installed Podman</button> <button class="secondary" data-action="wsl-guide">WSL 2 setup guide</button><p><small>Detection only reads the installed Podman version and machine inventory on Windows. Nothing is installed or started; no Windows settings are changed. The guide opens locally.</small></p></article></div></section>
+<section aria-labelledby="desktop-heading"><h2 id="desktop-heading">Desktop image</h2><p>Planned OCI Containerfile: minimal XFCE, fixed 1920×1080 display and installed noVNC.</p><p>Verification needed. No desktop image, running viewer or workspace mount has been verified. Workspace visibility and exclusive write access must be checked before use. Open Desktop is view only for trusted running images. Local Linux only: attach an already-unlocked VeraCrypt workspace to a new disposable desktop after explicit confirmation. WSL and SSH attachment are unavailable.</p></section>
+<section><h2>VeraCrypt workspace · local Linux only</h2><p>Configure VAMP: Podman Workspace Config Path in machine settings to an owner-controlled mode 0600 JSON file. No path or password is accepted here. Nothing is unlocked. A new desktop can write to /workspace; existing containers are untouched.</p><button data-action="workspace-status" disabled>Check workspace</button> <button data-action="workspace-attach" disabled>Create workspace desktop</button></section>
 <section aria-labelledby="connection-heading"><h2 id="connection-heading">Podman connection</h2><label for="connection">Existing Podman target</label><div class="row"><select id="connection" aria-describedby="connection-help"><option value="">Choose a connection</option></select><button id="refresh" data-action="refresh" class="secondary">Refresh targets</button><button id="test" data-action="test" disabled>Test connection</button><button id="list" data-action="list" class="secondary" disabled>Refresh containers</button></div><p id="connection-help">On Linux, explicitly choose the local rootless target. For a Debian VM or WSL engine, configure a named SSH connection outside this panel first. No passwords, keys or shell commands are entered here.</p></section>
 <p id="status" role="status" aria-live="polite">No connection selected.</p><section aria-labelledby="containers-heading"><h2 id="containers-heading">Containers</h2><div id="containers"><p>No connection selected.</p></div></section><section id="logs-section" hidden><h2>Recent container logs</h2><p id="logs-title"></p><pre id="logs" tabindex="0"></pre><button id="clear-logs" class="secondary">Clear displayed logs</button></section><details><summary>Podman Desktop is optional</summary><p>This panel uses the Podman command-line connection. Podman Desktop is not required and is not installed automatically. Start, stop and logs apply only to containers on the selected named connection.</p></details></main>
 <script nonce="${nonce}">
 const api=acquireVsCodeApi(),$=id=>document.getElementById(id);let state={busy:false,connection:'',connections:[],containers:[]};
 function send(action,id){api.postMessage({action,id,connection:$('connection').value});}
-function controls(){for(const button of document.querySelectorAll('button[data-action]'))button.disabled=state.busy||(!['refresh','wsl-guide','detect-local'].includes(button.dataset.action)&&!state.connection)||button.dataset.unavailable==='true';$('connection').disabled=state.busy;}
+function controls(){for(const button of document.querySelectorAll('button[data-action]'))button.disabled=state.busy||(!['refresh','wsl-guide','detect-local','create-debian','debian-status'].includes(button.dataset.action)&&!state.connection)||button.dataset.unavailable==='true'||(button.dataset.action.startsWith('workspace-')&&!state.workspaceLocal);$('connection').disabled=state.busy;}
 document.addEventListener('click',event=>{const button=event.target.closest('button[data-action]');if(button&&!button.disabled)send(button.dataset.action,button.dataset.id);});
 $('connection').addEventListener('change',()=>send('select'));$('clear-logs').addEventListener('click',()=>{$('logs').textContent='';$('logs-section').hidden=true;});
 window.addEventListener('message',event=>{const message=event.data;if(message.type==='state'){state=message;const select=$('connection');select.replaceChildren();const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=state.connections.length?'Choose a connection':'No named connections found';select.appendChild(placeholder);for(const connection of state.connections){const option=document.createElement('option');option.value=connection.name;option.textContent=connection.label||connection.name;select.appendChild(option);}select.value=state.connection;$('status').textContent=state.message||'';$('status').className=state.error?'error':'';const target=$('containers');target.replaceChildren();for(const item of state.containers){const row=document.createElement('article');row.className='container';const title=document.createElement('strong');title.textContent=item.name||item.id;const detail=document.createElement('p');detail.textContent=(item.state||'unknown')+' · '+(item.image||'image unavailable')+' · '+item.id;row.append(title,detail);const buttons=document.createElement('div');buttons.className='row';for(const [action,label,available] of [['start','Start',['exited','stopped','created','configured'].includes(item.state)],['stop','Stop',item.state==='running'],['logs','View logs',true],['capture','Capture desktop',item.state==='running'],['desktop','Open Desktop',item.state==='running']]){const button=document.createElement('button');button.textContent=label;button.className='secondary';button.dataset.action=action;button.dataset.id=item.id;button.dataset.unavailable=String(!available);button.setAttribute('aria-label',label+' '+(item.name||item.id));buttons.appendChild(button);}row.appendChild(buttons);target.appendChild(row);}if(!state.containers.length){const empty=document.createElement('p');empty.textContent=state.connection?'No containers loaded. Test the connection, then refresh containers.':'Select a named connection first.';target.appendChild(empty);}if(message.clearLogs){$('logs').textContent='';$('logs-section').hidden=true;}controls();}if(message.type==='logs'){$('logs-title').textContent=message.title;$('logs').textContent=message.text;$('logs-section').hidden=false;}});
 api.postMessage({action:'ready'});
 </script></body></html>`;
 }
-function registerContainers(context,{vscode,createBackend,output,openCapture,openDesktop}={}){
-  let panel,backend,inventoryBinding,inFlight=false,closed=false,generation=0;
-  const state={type:'state',busy:false,connection:'',connections:[],containers:[],message:'Refresh targets to begin.',error:false};
+function registerContainers(context,{vscode,createBackend,output,openCapture,openDesktop,createDebianHost,debianHostStatus}={}){
+  let localWorkspaceTarget=false;
+  let panel,backend,inventoryBinding,debianJob,inFlight=false,closed=false,generation=0;
+  const state={type:'state',busy:false,connection:'',connections:[],containers:[],workspaceLocal:false,message:'Refresh targets to begin.',error:false};
   const post=(extra={})=>{if(panel&&!closed)panel.webview.postMessage({...state,...extra});};
   const service=()=>{if(!backend)backend=createBackend();return backend;};
   const knownConnection=name=>state.connections.some(row=>row.name===name);
@@ -37,7 +39,7 @@ function registerContainers(context,{vscode,createBackend,output,openCapture,ope
     state.containers=report.containers;inventoryBinding=report.binding;
   }
   async function action(message){
-    if(!message||typeof message!=='object'||!['ready','refresh','select','test','list','start','stop','logs','capture','desktop','wsl-guide','detect-local'].includes(message.action))return;
+    if(!message||typeof message!=='object'||!['ready','refresh','select','test','list','start','stop','logs','capture','desktop','wsl-guide','detect-local','workspace-status','workspace-attach','create-debian','debian-status'].includes(message.action))return;
     if(message.action==='ready'){post();return;}
     if(inFlight)return;
     if(message.action==='wsl-guide'){
@@ -47,13 +49,26 @@ function registerContainers(context,{vscode,createBackend,output,openCapture,ope
     }
     if(message.action==='select'){
       if(message.connection!==''&&!knownConnection(message.connection))return;
-      state.connection=message.connection;state.containers=[];inventoryBinding=undefined;state.error=false;state.message=state.connection?'Connection selected. Test it before managing containers.':'Select a named connection.';post({clearLogs:true});return;
+      state.connection=message.connection;state.workspaceLocal=localWorkspaceTarget&&state.connection==='local-linux';state.containers=[];inventoryBinding=undefined;state.error=false;state.message=state.connection?'Connection selected. Test it before managing containers.':'Select a named connection.';post({clearLogs:true});return;
     }
-    if(!['refresh','detect-local'].includes(message.action)&&(!knownConnection(message.connection)||message.connection!==state.connection))return;
+    if(!['refresh','detect-local','create-debian','debian-status'].includes(message.action)&&(!knownConnection(message.connection)||message.connection!==state.connection))return;
     const activeGeneration=generation;
     inFlight=true;state.busy=true;state.error=false;state.message='Working…';post();
     try{
-      if(message.action==='detect-local'){
+      if(message.action==='create-debian'){
+        if(typeof createDebianHost!=='function')throw Error('Debian engine builder is unavailable in this installation.');
+        const result=await createDebianHost(()=>!closed&&generation===activeGeneration);
+        if(result?.status==='cancelled'){state.message='Canceled. No Debian engine build was requested.';}
+        else{
+          if(result?.status!=='queued'||typeof result.job_id!=='string'||!result.job_id)throw Error('Build request outcome could not be verified. Review build status before retrying.');
+          debianJob=result.job_id;state.message='Debian engine build queued. No box, running VM or Podman connection is verified yet. Refresh build status.';
+        }
+      }else if(message.action==='debian-status'){
+        if(!debianJob||typeof debianHostStatus!=='function')throw Error('No Debian build job is tracked in this panel.');
+        const result=await debianHostStatus(debianJob);
+        const stage=result?.status;
+        state.message=stage==='box_ready'?'Debian box ready. Authorized deployment may follow; guest boot and Podman connection remain unverified.':stage==='vm_started'?'Debian VM started. SSH and Podman connection are not yet verified.':stage==='failed'?'Debian engine build failed. Review the build log; existing VMs were not intentionally changed.':['queued','building','deploying'].includes(stage)?'Debian engine build: '+stage+'. No ready engine is verified.':'Debian build outcome is not verified. Review its local build log.';
+      }else if(message.action==='detect-local'){
         const report=await service().detectLocal();
         if(report?.platform!=='win32')state.message='Installed Podman detection is available on Windows only. Nothing was started.';
         else if(report.cli!=='available')state.message='Podman CLI was not detected or could not be checked. It may be missing from PATH. See the WSL 2 setup guide.';
@@ -64,9 +79,31 @@ function registerContainers(context,{vscode,createBackend,output,openCapture,ope
         }
       }else if(message.action==='refresh'){
         const rows=await service().connections();
+        localWorkspaceTarget=Array.isArray(rows)&&rows.some(row=>row?.name==='local-linux'&&row.transport==='local');
+        state.workspaceLocal=localWorkspaceTarget&&state.connection==='local-linux';
         state.connections=(Array.isArray(rows)?rows:[]).filter(row=>row&&typeof row.name==='string').map(row=>row.name==='local-linux'&&row.transport==='local'?{name:row.name,label:'Linux local (rootless)'}:{name:row.name});
         if(!knownConnection(state.connection)){state.connection='';state.containers=[];}
         state.message=state.connections.length?'Select a Podman target, then test it.':'No Podman targets found. Configure a named connection outside this panel, then refresh.';
+      }else if(message.action==='workspace-status'||message.action==='workspace-attach'){
+        if(!localWorkspaceTarget||state.connection!=='local-linux')throw Error('Workspace attachment is available only on the local Linux target, not WSL or SSH.');
+        await listContainers();
+        const targetConnection=state.connection,targetBinding=inventoryBinding;
+        const report=await service().workspaceStatus(targetConnection,targetBinding);
+        if(closed||generation!==activeGeneration)return;
+        if(report?.status!=='ready_to_attach'){
+          state.message='Workspace unavailable. Check the machine-local workspace configuration, unlocked mount and exclusive access. Nothing was attached.';
+        }else if(typeof report.approval_id!=='string'||!(/^[a-f0-9]{64}$/).test(report.approval_id)){
+          throw Error('Workspace approval scope could not be verified.');
+        }else if(message.action==='workspace-status'){
+          state.message='Workspace ready to attach. No desktop was created and nothing was unlocked.';
+        }else{
+          const approvalId=report.approval_id;
+          const choice=await vscode.window.showWarningMessage('Create a disposable desktop with writable VeraCrypt workspace?',{modal:true,detail:'Local Linux rootless Podman only, with network disabled. This creates a NEW isolated disposable desktop with write access to the already-unlocked workspace at /workspace. Files written there persist. Nothing is unlocked and no existing container is changed. The machine-local configuration selects the mount and trusted image.'},'Create Workspace Desktop');
+          if(closed||generation!==activeGeneration||state.connection!==targetConnection||inventoryBinding!==targetBinding||choice!=='Create Workspace Desktop'){state.message='Canceled. No workspace desktop was created.';return;}
+          const result=await service().workspaceAttach(targetConnection,targetBinding,approvalId);
+          if(!result||result.status!=='attached'||result.destination!=='/workspace'||typeof result.id!=='string'||!(/^[a-f0-9]{64}$/).test(result.id))throw Error('Workspace attachment outcome could not be verified. Check local container inventory before retrying.');
+          state.message='Workspace desktop created: '+result.id+'. Files in /workspace are writable and persist. Desktop readiness is not yet verified.';
+        }
       }else if(message.action==='test'){
         const report=await service().status(state.connection);
         if(report?.status!=='ready')throw Error(report?.message||'Podman connection is not ready.');
@@ -107,7 +144,7 @@ function registerContainers(context,{vscode,createBackend,output,openCapture,ope
           state.message=verified?verb+' verified for '+(item.name||item.id)+'.':verb+' request sent. The expected state is not yet verified; refresh containers.';
         }
       }
-    }catch(error){state.error=true;state.message=String(error?.message||error);output?.appendLine('Containers: '+state.message);}
+    }catch(error){state.error=true;state.message=message.action.startsWith('workspace-')?'Workspace action could not be verified. Check the machine-local configuration and container inventory before retrying; a partial operation may have created a container. No unlock was requested.':String(error?.message||error);output?.appendLine('Containers: '+state.message);}
     finally{inFlight=false;state.busy=false;post({clearLogs:message.action==='refresh'});}
   }
   context.subscriptions.push(vscode.commands.registerCommand(COMMAND,()=>{

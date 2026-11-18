@@ -1,5 +1,6 @@
 import path from 'node:path';
 import packerModule from '../common/packer.cjs';
+import hyperVUacModule from '../hyperv/uac.cjs';
 // First-party MIT integration; upstream files remain unmodified.
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
@@ -195,6 +196,11 @@ server.tool('vm_guest_bootstrap','Run guest setup with the same bootstrap as VSI
   return {...result(report),isError:report.status==='failed'};
 });
 registerScriptServerTools(server);
+const hyperVUac=hyperVUacModule.createHyperVUac();
+server.tool('hyperv_permission_diagnosis','Windows-only, fixed read-only Hyper-V permission check. With explicit user authorization and confirmed:true, opens one native UAC dialog. The user must approve it personally and read the separate console. Does not start a VM, elevate the MCP server or prove the non-elevated builder has access.',{
+  confirmed:z.boolean().default(false)
+}, {readOnlyHint:false,destructiveHint:false,openWorldHint:false}, async args=>result(await hyperVUac.request(args)));
+
 server.tool('vm_create', 'Create a NEW VM through HashiCorp Packer: install CLI and official plugin, build OS and post-install scripts, wait 60s after reboot, export a golden image and deploy a separate live disk. Returns queued; use vm_golden_images for status/paths. Public sandbox autologin vboxuser/password123!.', {
   backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox'),switch_name:z.string().min(1).optional(),bootstrap_host:z.ipv4().optional().describe('Optional guest-reachable IPv4 for Packer bootstrap on Hyper-V or KVM. Hyper-V requires an address on the selected virtual switch; default KVM uses QEMU user-mode NAT.'),libvirt_uri:z.enum(['qemu:///session','qemu:///system']).optional(),
   name:z.string().min(1).optional(), iso_path:z.string().min(1),
@@ -238,7 +244,7 @@ server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach
 return server;
 }
 if(path.basename(path.dirname(process.argv[1]||''))==='virtualbox'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
-const server=new McpServer({name:'VAMP virtualbox',version:'0.3.1'},{instructions:virtualBoxInstructions});
+const server=new McpServer({name:'VAMP virtualbox',version:'0.3.2'},{instructions:virtualBoxInstructions});
 registerVirtualBoxTools(server);
 // Warm the local OCR/YOLO workers in the background. Detached, never blocking
 // stdio, and harmless when this host has no model environment.
