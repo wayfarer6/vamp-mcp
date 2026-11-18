@@ -400,6 +400,19 @@ test('KVM upload rejects macOS and Windows before writing files', async () => {
   }
 });
 
+test('KVM upload reports SSH loss during OS detection', async () => {
+  const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
+  for (const failureAt of ['uname -s', 'cmd.exe /d /c ver']) {
+    const client = new RemoteSshClient(normalizeRemoteConfig({ host: 'lab-host.local' }));
+    client.exec = async command => {
+      if (command === failureAt) return { code: 255, stdout: '', stderr: 'Connection reset by peer' };
+      assert.equal(command, 'uname -s');
+      return { code: 127, stdout: '', stderr: '' };
+    };
+    await assert.rejects(client.upload({ serverFile: __filename }), { code: 255 });
+  }
+});
+
 test('a truncated upload leaves the installed server intact', {skip:process.platform==='win32' && !process.env.VAMP_TEST_POSIX_SHELL}, async t => {
   const { RemoteSshClient, normalizeRemoteConfig } = await load('client.mjs');
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'vamp-upload-'));

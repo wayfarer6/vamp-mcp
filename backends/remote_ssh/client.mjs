@@ -227,14 +227,17 @@ export class RemoteSshClient {
   async upload({ serverFile, setupScript } = {}) {
     if (!serverFile) throw new Error('The bundled remote server file is missing.');
     if (this.config.backend === 'kvm') {
-      const options = { timeoutMs: 60000 };
-      const unix = await this.exec('uname -s', options);
-      if (unix.code === 255) {
-        throw new RemoteSshError(friendly({ code: unix.code }, this.config, unix.stderr), { code: unix.code, stderr: unix.stderr });
-      }
+      const probePlatform = async command => {
+        const result = await this.exec(command, { timeoutMs: 60000 });
+        if (result.code === 255) {
+          throw new RemoteSshError(friendly({ code: result.code }, this.config, result.stderr), { code: result.code, stderr: result.stderr });
+        }
+        return result;
+      };
+      const unix = await probePlatform('uname -s');
       let platform = unix.code === 0 ? unix.stdout.trim() : '';
       if (!platform) {
-        const windows = await this.exec('cmd.exe /d /c ver', options);
+        const windows = await probePlatform('cmd.exe /d /c ver');
         if (windows.code === 0 && /Windows/i.test(windows.stdout)) platform = 'Windows';
       }
       if (platform !== 'Linux') {
