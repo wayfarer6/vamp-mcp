@@ -51,7 +51,9 @@ disconnects, the proxy checks the same host once and reports
 In desktop VS Code, **VAMP Remote: Open Live Viewer** opens a tunnel to a
 noVNC/websockify service already listening on the Linux host at `127.0.0.1:6080`.
 Connect once over SSH and verify the host key before opening the viewer. Closing
-the viewer closes its tunnel. The screenshot viewer does not enable forwarding.
+the viewer closes its tunnel. The VS Code status bar shows the viewer connection
+state. If the connection drops, choose **Reconnect** to reopen it. The
+screenshot viewer does not enable forwarding.
 
 If the Linux host already runs the VAMP script server on `127.0.0.1:8421`,
 add `--verify-setup-server` to `vamp-mcp bootstrap` to check `/healthz` over a
@@ -176,22 +178,21 @@ With `vamp.remote.enabled` and a host set, the extension contributes the MCP
 server **VAMP Remote (SSH)**; VS Code starts `ssh` itself, so agents see the
 remote tools next to the local ones.
 
-Any MCP client can do the same. Replace the user and host:
+For Claude Desktop or Cursor, run **VAMP Remote: Export MCP Config** in VS Code
+and save the JSON to a new file. Choose **Verify** to check MCP initialization
+and see the remote tool count. Add the exported `mcpServers.vamp-remote` entry to
+the client's configuration under `mcpServers`. If that name is already used,
+choose an unused name for the new entry.
+
+To use the standalone VAMP proxy with a Linux KVM host, register this command
+after running `vamp-mcp bootstrap`. Replace the example host and account:
 
 ```json
 {
   "mcpServers": {
     "vamp-remote": {
-      "command": "ssh",
-      "args": [
-        "-T",
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=10",
-        "-o", "StrictHostKeyChecking=accept-new",
-        "--",
-        "you@lab-host.local",
-        "exec 'node' \"$HOME/.vamp/remote/server.mjs\" --backend 'kvm' --libvirt-uri 'qemu:///system'"
-      ]
+      "command": "vamp-mcp",
+      "args": ["proxy", "--host", "lab-host.local", "--user", "you"]
     }
   }
 }
