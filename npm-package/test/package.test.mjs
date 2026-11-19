@@ -27,6 +27,15 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),sourceManifest.version);
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
+    await t.test('packaged runtime excludes guest provisioning files', async () => {
+      const runtime = path.resolve(path.dirname(cli), '../runtime');
+      const inventory = await readdir(runtime, { recursive: true, withFileTypes: true });
+      const unexpected = inventory.filter(item => !item.isDirectory() && (!item.isFile() || !/\.(?:mjs|cjs|js|json)$/i.test(item.name)));
+      assert.deepEqual(unexpected.map(item => item.name), []);
+      for (const relative of ['guest_setup', 'third_party/pyautogui-recorder', 'backends/packer']) {
+        await assert.rejects(access(path.join(runtime, relative)), { code: 'ENOENT' });
+      }
+    });
     await t.test('packaged proxy requires an explicit Linux KVM host', () => {
       const runProxy = args => spawnSync(process.execPath, [cli, 'proxy', ...args], { encoding: 'utf8' });
       const missing = runProxy([]);
@@ -117,8 +126,6 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       for (const relative of ['guest_setup','third_party/pyautogui-recorder','scripts/script_server.py','scripts/build_recorder_media.py','backends/virtualbox/provision.py','backends/packer','backends/vagrant/podman_handoff.py']) {
         await assert.rejects(access(path.join(runtime,relative)),{code:'ENOENT'});
       }
-      const inventory = await readdir(runtime, { recursive: true, withFileTypes: true });
-      assert.deepEqual(inventory.filter(item => item.isFile() && !/\.(?:mjs|cjs|js|json)$/i.test(item.name)), []);
       for (const name of ['replay.py','registry.py']) {
         await assert.rejects(access(path.join(runtime,'backends/library',name)),{code:'ENOENT'});
       }
