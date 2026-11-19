@@ -296,12 +296,19 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
   }
   async function openScreen(vm) {
     const normalized = requireConfigured();
-    const key = `${normalized.host}:${vm.id || vm.name}`;
+    const targetId = vm.id || vm.name;
+    const key = JSON.stringify([
+      normalized.host, normalized.port, normalized.username, normalized.privateKeyPath,
+      normalized.backend, normalized.libvirtUri, normalized.remoteVboxManagePath,
+      normalized.remoteNodePath, targetId,
+    ]);
     if (screens.has(key)) {
       screens.get(key).reveal();
       return screens.get(key);
     }
     const client = clientFor(normalized);
+    const address = normalized.host.includes(':') ? `[${normalized.host}]` : normalized.host;
+    const endpoint = `${normalized.username ? `${normalized.username}@` : ''}${address}:${normalized.port}`;
     const panel = vscode.window.createWebviewPanel(
       'vamp.remoteScreen',
       `VAMP Remote · ${vm.name || vm.id}`,
@@ -311,7 +318,7 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
     const logo = panel.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri, 'assets/sidebar-brand.png'));
     panel.webview.html = remoteScreenHTML({
       name: vm.name || vm.id,
-      target: `${normalized.username ? `${normalized.username}@` : ''}${normalized.host}`,
+      target: normalized.backend === 'kvm' ? `${endpoint} · ${normalized.libvirtUri}` : endpoint,
       cspSource: panel.webview.cspSource,
       logoUri: String(logo),
     });
@@ -323,7 +330,7 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
       if (disposed || capturing || !visible) return;
       capturing = true;
       try {
-        const shot = await client.screenshot(vm.name || vm.id);
+        const shot = await client.screenshot(targetId);
         if (disposed) return;
         lastImage = shot;
         panel.webview.postMessage({

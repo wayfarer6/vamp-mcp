@@ -1,6 +1,6 @@
 {
   "name": "vamp-mcp",
-  "version": "0.3.7",
+  "version": "0.3.8",
   "description": "Packer-powered VM installation, post-install setup, golden image management and GUI automation over MCP for VirtualBox, KVM and Hyper-V.",
   "type": "module",
   "license": "MIT",
@@ -44,7 +44,7 @@
     "build": "node build.mjs",
     "build:assets": "node build-assets.mjs",
     "prepack": "npm run build",
-    "test": "node --test test/package.test.mjs"
+    "test": "node --test test/package.test.mjs test/windows-elevation.test.mjs"
   },
   "publishConfig": {
     "access": "public",

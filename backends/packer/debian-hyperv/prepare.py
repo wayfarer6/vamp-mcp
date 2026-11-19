@@ -1,8 +1,6 @@
 """Build the Debian Installer answer ISO and inputs for the Hyper-V template."""
 import argparse
-import gzip
 import hashlib
-from io import BytesIO
 import ipaddress
 import json
 import os
@@ -11,32 +9,12 @@ import re
 import secrets
 from tempfile import TemporaryDirectory
 
-import pycdlib
+import sys
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-
-
-def cpio_entry(name, payload, inode, mode):
-    name = name.encode() + b"\0"
-    fields = (inode, mode, 0, 0, 1, 0, len(payload), 0, 0, 0, 0, len(name), 0)
-    header = b"070701" + b"".join(f"{value:08x}".encode() for value in fields) + name
-    return header + b"\0" * (-len(header) % 4) + payload + b"\0" * (-len(payload) % 4)
-
-
-def create_setup_iso(path, files):
-    payload = b"".join(
-        cpio_entry(name, contents, inode, mode)
-        for inode, (name, contents, mode) in enumerate(files, start=1)
-    )
-    payload += cpio_entry("TRAILER!!!", b"", 0, 0)
-    compressed = gzip.compress(payload, mtime=0)
-    iso = pycdlib.PyCdlib()
-    iso.new(interchange_level=3, joliet=3, vol_ident="VAMP_SETUP")
-    with BytesIO(compressed) as stream:
-        iso.add_fp(stream, len(compressed), iso_path="/VAMPBOOT.GZ;1", joliet_path="/vampboot.gz")
-        iso.write(str(path))
-    iso.close()
+sys.path.insert(0, str(HERE.parent))
+from debian_answer_iso import create_setup_iso
 
 
 def render_preseed():
@@ -84,8 +62,8 @@ def main():
     args = parser.parse_args()
     if not args.dvd.is_file() or not re.fullmatch(r"[a-fA-F0-9]{64}", args.dvd_sha256):
         parser.error("Use a local Debian 13 amd64 DVD and its verified SHA-256")
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9-]{0,62}", args.vm_name):
-        parser.error("VM name must be 1-63 ASCII letters, digits, or hyphens")
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,62}", args.vm_name):
+        parser.error("VM name must be 1-63 ASCII letters, digits, underscores, or hyphens")
     if not args.hyperv_daemons_deb.is_file():
         parser.error("Debian DVD-1 requires a separate hyperv-daemons package")
     integration_package = args.hyperv_daemons_deb.read_bytes()

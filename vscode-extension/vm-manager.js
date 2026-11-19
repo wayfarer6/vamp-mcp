@@ -8,7 +8,8 @@ const crypto = require('node:crypto');
 const {isIPv4} = require('node:net');
 const bootstrapEngine = require('./guest-bootstrap');
 const {SCRIPT_SERVER_PORT, createScriptServer} = require('./script-server');
-const run = promisify(execFile);
+const exec = promisify(execFile);
+const run = (command,args,options) => exec(command,args,{...options,windowsHide:true});
 
 function hyperVFeatureIssue(code) {
   if(code==='hyperv_module_missing')return 'Hyper-V management tools are missing. Open Windows Features and enable Hyper-V Management Tools (including the PowerShell module), if supported on this Windows edition.';
@@ -314,7 +315,9 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
           path.basename(selectedISO),
           `${resources.memory_mb/1024} GB RAM · ${resources.cpus} CPUs · 64 GB expandable disk`,
           connectionDetails,
-          message.os==='windows11' ? 'Windows requires your own license.' : 'The Debian sandbox uses the public login vboxuser / password123!.',
+          message.os==='windows11' ? 'Windows requires your own license.'
+            : backend==='hyperv' ? 'Debian installs without DHCP. Vagrant provisions it over the reserved IP using the SSH key in VAMP_HYPERV_DEBIAN_CONFIG.'
+            : 'The Debian sandbox uses the public login vboxuser / password123!.',
           'Packer may download build tools and will save a golden image separately from the running VM. Keep the host awake during setup.',
         ].filter(Boolean).join('\n');
         const choice=await vscode.window.showInformationMessage(`Create ${name}?`,{modal:true,detail:confirmationDetails},'Create and Start');

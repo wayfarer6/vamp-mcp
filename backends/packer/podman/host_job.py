@@ -88,7 +88,7 @@ def assert_host(data):
     if provider=='virtualbox':
         tools['VBoxManage']=local_tool('VBoxManage')
         try:
-            active=subprocess.run([tools['VBoxManage'],'list','runningvms'],capture_output=True,text=True,check=True,timeout=15)
+            active=subprocess.run([tools['VBoxManage'],'list','runningvms'],capture_output=True,text=True,check=True,timeout=15,creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         except (subprocess.SubprocessError,OSError):
             raise ValueError('VirtualBox could not confirm the running VM inventory; check access on this host') from None
         if active.stdout.strip():
@@ -98,7 +98,7 @@ def assert_host(data):
         if not os.access('/dev/kvm',os.R_OK|os.W_OK):
             raise ValueError('This Linux user cannot access /dev/kvm')
         try:
-            plugins=subprocess.run([tools['vagrant'],'plugin','list'],capture_output=True,text=True,check=True,timeout=20)
+            plugins=subprocess.run([tools['vagrant'],'plugin','list'],capture_output=True,text=True,check=True,timeout=20,creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         except (subprocess.SubprocessError,OSError):
             raise ValueError('Vagrant could not verify its libvirt plugin') from None
         if not re.search(r'^vagrant-libvirt\s+\(', plugins.stdout,re.M):
@@ -203,7 +203,8 @@ def work(jid):
         with (folder/'build.log').open('wb') as log:
             def run(exe,argv,timeout,cwd=folder,env=None):
                 subprocess.run([exe,*map(str,argv)],stdin=subprocess.DEVNULL,stdout=log,stderr=subprocess.STDOUT,
-                               check=True,timeout=timeout,cwd=cwd,env=env)
+                               check=True,timeout=timeout,cwd=cwd,env=env,
+                               creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
             for file in (build_key,deploy_key):
                 run(tools['ssh-keygen'],['-q','-t','ed25519','-N','','-f',file],20)
             def public(file):

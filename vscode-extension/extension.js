@@ -3,7 +3,8 @@ const path = require('node:path');
 const fs = require('node:fs');
 const {execFile} = require('node:child_process');
 const {promisify} = require('node:util');
-const run = promisify(execFile);
+const exec = promisify(execFile);
+const run = (command,args,options) => exec(command,args,{...options,windowsHide:true});
 const version = require('./package.json').version;
 
 function activate(context) {
@@ -17,6 +18,16 @@ function activate(context) {
     process.platform === 'win32' ? 'Scripts/python.exe' : 'bin/python');
   const runtime = context.asAbsolutePath('dist/runtime');
   const output = vscode.window.createOutputChannel('VAMP');
+  const administrator = process.platform === 'win32'
+    ? require(path.join(runtime,'backends/common/windows-admin.cjs')).isAdministrator()
+    : Promise.resolve(true);
+  if (process.platform === 'win32') {
+    administrator.then(elevated => {
+      if (!elevated) vscode.window.showWarningMessage(
+        'VAMP: Local VM MCP requires an administrator VS Code session. Close this window and reopen VS Code using Run as administrator.'
+      );
+    }).catch(error => output.appendLine('Could not verify Windows administrator status: '+error.message));
+  }
   const containersSource=path.join(__dirname,'src/containers-panel.cjs');
   const containersUI=require(fs.existsSync(containersSource)?containersSource:'./dist/containers_panel.cjs');
   // Machine/user value only: workspace folders cannot redirect this privileged config.
@@ -55,6 +66,7 @@ function activate(context) {
   context.subscriptions.push(vscode.lm.registerMcpServerDefinitionProvider('vamp.mcp', {
     onDidChangeMcpServerDefinitions: changes.event,
     async provideMcpServerDefinitions() {
+      if (!await administrator.catch(() => false)) return [];
       const env = {
         ELECTRON_RUN_AS_NODE:'1',VBOXMANAGE_DEBUG:'false',
         VAMP_WORKSPACE_CONFIG:workspaceConfigPath(),
@@ -68,6 +80,8 @@ function activate(context) {
       };
       if(config().get('vboxManagePath'))env.VBOXMANAGE_PATH=config().get('vboxManagePath');
       if(config().get('mousePythonExecutable'))env.PYTHON_PATH=config().get('mousePythonExecutable');
+      const ocrPython=config().inspect('ocrPythonExecutable')?.globalValue||process.env.VAMP_OCR_PYTHON;
+      if(ocrPython)env.VAMP_OCR_PYTHON=ocrPython;
       const repository=config().get('kvmRepositoryPath');
       const pythonProfile={enabled:!!(repository&&path.isAbsolute(repository)&&fs.existsSync(path.join(repository,'vm_mcp_server.py')))};
       if(pythonProfile.enabled){

@@ -1,11 +1,19 @@
 """Backend routing; only Ubuntu/NVIDIA has been exercised on project hardware."""
 
 
+def openvino_device_available(device):
+    try:
+        import openvino as ov
+        return any(name == device or name.startswith(device + '.') for name in ov.Core().available_devices)
+    except (ImportError, OSError, RuntimeError):
+        return False
+
+
 def choose_device(requested='auto'):
     import torch
     requested=str(requested).lower()
-    if requested in ('intel-npu','openvino-npu'):
-        return 'intel-npu'
+    if requested in ('intel-npu','openvino-npu','intel-gpu','openvino-gpu'):
+        return requested.replace('openvino-', 'intel-')
     if requested in ('amd','rocm'):
         if not torch.version.hip or not torch.cuda.is_available():
             raise RuntimeError('ROCm was requested but this Torch/runtime has no available AMD GPU')
@@ -25,16 +33,24 @@ def choose_device(requested='auto'):
         return '0'
     if requested!='auto':
         return requested
+    try:
+        import torch_npu  # noqa: F401; registers torch.npu
+        if torch.npu.is_available():
+            return 'npu:0'
+    except (ImportError, OSError, RuntimeError, AttributeError):
+        pass
+    if openvino_device_available('NPU'):
+        return 'intel-npu'
     # ROCm exposes AMD GPUs through the same torch.cuda namespace.
     if torch.cuda.is_available():
         return '0'
     if hasattr(torch.backends,'mps') and torch.backends.mps.is_available():
         return 'mps'
-    try:
-        import torch_npu  # noqa: F401
-    except ImportError:
-        return 'cpu'
-    return 'npu:0' if torch.npu.is_available() else 'cpu'
+    if hasattr(torch, 'xpu') and torch.xpu.is_available():
+        return 'xpu'
+    if openvino_device_available('GPU'):
+        return 'intel-gpu'
+    return 'cpu'
 
 
 def prepare_detector(model,requested,cache):
@@ -44,14 +60,14 @@ def prepare_detector(model,requested,cache):
     selected=choose_device(requested)
     key=(str(model),selected)
     if key not in cache:
-        if selected=='intel-npu':
-            import openvino as ov
-            if not any(name=='NPU' or name.startswith('NPU.') for name in ov.Core().available_devices):
-                raise RuntimeError('Intel NPU not available; check the OpenVINO package and NPU driver')
-            # Exported OpenVINO backend maps device='npu' to Intel, not torch_npu.
+        if selected in ('intel-npu', 'intel-gpu'):
+            hardware = selected.removeprefix('intel-').upper()
+            if not openvino_device_available(hardware):
+                raise RuntimeError(f'Intel {hardware} not available; check the OpenVINO package and driver')
+            # The exported OpenVINO backend maps npu and xpu to Intel devices.
             exported=YOLO(model).export(format='openvino',imgsz=1280,batch=1,
                                         dynamic=False,device='cpu',half=False)
             cache[key]=YOLO(exported,task='detect')
         else:
             cache[key]=YOLO(model)
-    return cache[key],('npu' if selected=='intel-npu' else selected)
+    return cache[key], {'intel-npu': 'npu', 'intel-gpu': 'xpu'}.get(selected, selected)

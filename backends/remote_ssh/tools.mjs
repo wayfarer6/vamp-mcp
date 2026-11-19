@@ -13,7 +13,7 @@ import { parseMachineReadable, parseVmList, vboxStatus, vboxVm } from './virtual
 import { keyEvents, chordKeys, SCANCODES } from './input.mjs';
 import { toPng } from './png.mjs';
 
-export const VERSION = '0.3.7';
+export const VERSION = '0.3.8';
 const UUID_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const MAX_SCREENSHOT_BYTES = 12 * 1024 * 1024;
 

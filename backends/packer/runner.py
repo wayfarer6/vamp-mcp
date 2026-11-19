@@ -26,7 +26,7 @@ def write(path,data):
     temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,indent=2)+'\n');temp.replace(path)
 
 def run(exe,args,timeout=120,*,binary=False,**kwargs):
-    return subprocess.run([str(exe),*map(str,args)],capture_output=True,text=not binary,timeout=timeout,check=True,**kwargs).stdout
+    return subprocess.run([str(exe),*map(str,args)],capture_output=True,text=not binary,timeout=timeout,check=True,creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0),**kwargs).stdout
 
 
 def hyperv_json(query, stage):
@@ -59,6 +59,8 @@ def check_request(request):
     require_install_host(backend)
     request.setdefault('guest_os','debian');guest=request['guest_os']
     if guest not in ('debian','windows11'):raise ValueError('Packer profiles currently require a Debian amd64 installer ISO or Windows 11 x64 ISO')
+    if request.get('hyperv_debian') is not None and (backend, guest) != ('hyperv', 'debian'):
+        raise ValueError('The static Hyper-V deployment profile is only supported for Debian on Hyper-V')
     if request.get('installation_mode','auto') not in ('auto','unattended'):raise ValueError('Packer owns unattended installation; manual mode is no longer a Packer profile')
     if request.get('product_key') and not re.fullmatch(r'[A-Za-z0-9]{5}(?:-[A-Za-z0-9]{5}){4}',request['product_key']):raise ValueError('Invalid Windows product key format')
     name=request.get('name') or 'VAMP-'+uuid.uuid4().hex[:8];request['name']=name
@@ -71,6 +73,17 @@ def check_request(request):
         if type(request[key]) is not int or not low<=request[key]<=high:raise ValueError('Invalid '+key)
     if backend=='hyperv':
         from hyperv_bootstrap import requested_host
+        if guest == 'debian' and (
+            not request.get('preflight_only') or request.get('hyperv_debian') is not None
+            or os.environ.get('VAMP_HYPERV_DEBIAN_CONFIG')
+        ):
+            from hyperv_debian import configuration
+            profile = configuration(request.get('hyperv_debian'), os.environ)
+            if request.get('switch_name') not in (None, profile['switch']):
+                raise ValueError('Selected Hyper-V switch does not match the static deployment profile')
+            if request.get('bootstrap_host') not in (None, profile['gateway']):
+                raise ValueError('Selected host IPv4 does not match the static deployment profile gateway')
+            request.update(hyperv_debian=profile, switch_name=profile['switch'], bootstrap_host=profile['gateway'])
         selected=requested_host(request,os.environ)
         if selected is not None:request['bootstrap_host']=selected
     if backend=='kvm':
@@ -113,8 +126,22 @@ def create(request):
     if request['backend']=='hyperv' and (request.get('preflight_only') or request['guest_os']!='windows11' or request.get('windows_confirmed')):
         from hyperv_bootstrap import require_deployment_policy
         network=hyperv_network(request)
+        if 'hyperv_debian' in request:
+            from hyperv_debian import require_network
+            require_network(request['hyperv_debian'], network)
         request['bootstrap_host']=network['host_ipv4']
         preflight={'windows_execution_policy':network['execution_policy'],'deployment_blocked':network['execution_policy']=='Restricted'}
+        if request['guest_os'] == 'debian':
+            preflight['static_profile_configured'] = 'hyperv_debian' in request
+            preflight['deployment_blocked'] |= not preflight['static_profile_configured']
+            if preflight['static_profile_configured']:
+                from hyperv_debian import require_host_tools
+                if request.get('preflight_only'):
+                    try:require_host_tools()
+                    except ValueError as error:
+                        preflight.update(deployment_blocked=True, host_dependency_error=str(error))
+                else:
+                    require_host_tools()
         if not request.get('preflight_only'):require_deployment_policy(network)
     if request.get('preflight_only'):return {'status':'preflight_ready','engine':'packer','vm_created':False,'request':request,'post_reboot_wait_seconds':60,**preflight}
     if request['guest_os']=='windows11' and not request.get('windows_confirmed'):
@@ -141,12 +168,18 @@ def create(request):
     notice=post_create_notice(request['guest_os'],f"http://{request.get('bootstrap_host','10.0.2.2')}:8421")
     notice['title']='Packer build queued: OS installation and post-install setup'
     notice['message']='HashiCorp Packer downloads its CLI and official plugin, installs the guest, waits 60 seconds after the first reboot and completes post-install setup. Windows also installs the hypervisor guest drivers and reboots before completion. Debian uses automatic desktop login. Check Golden images for status, paths and logs. The live VM is deployed only after the build succeeds.'
-    if request['backend'] in ('hyperv','kvm'):
+    if request.get('hyperv_debian'):
+        notice['setup_command']=''
+        notice['message']='Packer installs Debian from the DVD and local answer media with networking disabled. Vagrant uses the reserved IP to provision the desktop and verify SSH after reboot.'
+    elif request['backend'] in ('hyperv','kvm'):
         notice['setup_command']=''
         notice['message']+=f" Build-only bootstrap IPv4: {request['bootstrap_host']}. If guest setup fails, check the build logs and correct connectivity before building again."
+    credentials = {'username':'vboxuser','password':'password123!','public_sandbox_credentials':True}
+    if request.get('hyperv_debian'):
+        credentials = {'username': 'vboxuser', 'authentication': 'configured_ssh_key'}
     return {'status':'installation_started','engine':'packer','installation_mode':'unattended','installation_verified':False,'image_id':image_id,'worker_pid':child.pid,
             'vm':request['name'],'golden_image_path':str(folder),'log_path':str(folder/'packer.log'),
-            'post_reboot_wait_seconds':60,'credentials':{'username':'vboxuser','password':'password123!','public_sandbox_credentials':True},
+            'post_reboot_wait_seconds':60,'credentials':credentials,
             'post_create_notice':notice,
             'next_action':'Read golden image status. Packer builds and verifies guest setup, then exports a golden image and deploys a separate live VM disk.'}
 
@@ -204,6 +237,16 @@ def worker(image_id):
     try:
         status('building',worker_pid=os.getpid())
         conflicts(request['backend'])
+        if request.get('hyperv_debian'):
+            from hyperv_bootstrap import require_deployment_policy
+            from hyperv_debian import require_network, run_build
+            network = hyperv_network(request)
+            require_network(request['hyperv_debian'], network)
+            require_deployment_policy(network)
+            live = home() / 'vms' / 'hyperv' / request['name']
+            result = run_build(request, folder, live, ASSETS, executable, init, environment, home, update)
+            status('completed', stage='complete', **result)
+            return
         token=secrets.token_hex(32);completed=threading.Event()
         observe_preseed=request['backend']=='hyperv' and request['guest_os']=='debian'
         if observe_preseed:
@@ -277,7 +320,7 @@ def worker(image_id):
             # Init a separate directory so duplicate required_plugins blocks never coexist.
             init(request['backend'],home()/'tools/packer/init'/request['backend'],log)
             for args in [['validate',str(template)],['build','-color=false','-on-error=abort',str(template)]]:
-                subprocess.run([str(executable()),*args],env=environment(),stdout=log,stderr=subprocess.STDOUT,timeout=10800,check=True)
+                subprocess.run([str(executable()),*args],env=environment(),stdout=log,stderr=subprocess.STDOUT,timeout=10800,check=True,creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
         if not completed.is_set():raise RuntimeError('Packer exited without the authenticated guest post-install completion signal')
         status('deploying',installation_verified=True,artifact_path=str(folder/'artifact'))
         result=deploy(request,folder)

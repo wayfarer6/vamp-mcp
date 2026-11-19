@@ -40,7 +40,11 @@ def register(root,request):
     if request.get('id'):
         previous=json.loads((folder/'rpa.json').read_text(encoding='utf8'))
         if previous.get('format')!='vamp-saved-rpa':raise ValueError('Unknown editable definition')
-    else:folder.mkdir(mode=0o700)
+    start_text = request.get('start_text', (previous or {}).get('start_text', ''))
+    if not isinstance(start_text, str) or len(start_text.strip()) > 240:
+        raise ValueError('Starting-screen text must be at most 240 characters')
+    start_text = start_text.strip()
+    if previous is None:folder.mkdir(mode=0o700)
     folder.chmod(0o700)
     lock=folder/'.rpa-save.lock'
     try:fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
@@ -57,6 +61,8 @@ def register(root,request):
           'inputs':names,'backend':backend,'resolution':[width,height],'reviewed':request.get('reviewed') is True,
           'version':version,'entrypoints':[{'name':'run','file':'source.py'}],
           'source_sha256':hashlib.sha256(raw).hexdigest(),'action_count':len(actions),'source_executed':False}
+        if start_text:
+            definition['start_text'] = start_text
         encoded=(json.dumps(actions,ensure_ascii=False,indent=2)+'\n').encode();definition['actions_sha256']=hashlib.sha256(encoded).hexdigest()
         (folder/'source.py').write_bytes(raw);(folder/'actions.json').write_bytes(encoded)
         (folder/'rpa.json').write_text(json.dumps(definition,ensure_ascii=False,indent=2)+'\n',encoding='utf8')

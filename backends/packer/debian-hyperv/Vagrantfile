@@ -1,28 +1,34 @@
 require "json"
 
-job = File.expand_path(ENV.fetch("VAMP_DEBIAN_HYPERV_JOB"))
+job = if File.file?(File.join(__dir__, "deployment.json"))
+  __dir__
+else
+  File.expand_path(ENV.fetch("VAMP_DEBIAN_HYPERV_JOB"))
+end
 deployment = JSON.parse(File.read(File.join(job, "deployment.json")))
 name = deployment.fetch("vm_name")
-box = File.join(job, "debian-hyperv.box")
+box = deployment.fetch("box_path", File.join(job, "debian-hyperv.box"))
+identity = deployment["ssh_private_key"] || ENV.fetch("VAMP_DEBIAN_HYPERV_SSH_KEY")
 profile = ENV.fetch("VAMP_DEBIAN_HYPERV_PROFILE", "recorder")
 unless ["recorder", "headless", "podman"].include?(profile)
   raise ArgumentError, "VAMP_DEBIAN_HYPERV_PROFILE must be recorder, headless, or podman"
 end
 
 Vagrant.configure("2") do |config|
-  config.vm.box = "vamp/debian-hyperv-#{name.downcase}"
-  config.vm.box_url = box
+  config.vm.box = deployment.fetch("box_name", "vamp/debian-hyperv-#{name.downcase}")
+  config.vm.box_url = box if File.file?(box)
   config.vm.box_check_update = false
   config.vm.synced_folder ".", "/vagrant", disabled: true
   config.vm.network "public_network", bridge: deployment.fetch("switch"), auto_config: false
   config.ssh.host = deployment.fetch("guest_ip")
   config.ssh.username = "vboxuser"
-  config.ssh.private_key_path = File.expand_path(ENV.fetch("VAMP_DEBIAN_HYPERV_SSH_KEY"))
+  config.ssh.private_key_path = File.expand_path(identity)
   config.ssh.insert_key = false
   config.vm.provider "hyperv" do |hyperv|
     hyperv.vmname = name
-    hyperv.memory = 4096
-    hyperv.cpus = 2
+    hyperv.linked_clone = false
+    hyperv.memory = deployment.fetch("memory_mb", 4096)
+    hyperv.cpus = deployment.fetch("cpus", 2)
   end
   if profile == "recorder"
     config.vm.provision "shell", inline: "install -d -m 0700 -o vboxuser -g vboxuser /var/tmp/vamp-provision"

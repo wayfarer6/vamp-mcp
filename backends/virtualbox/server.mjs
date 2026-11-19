@@ -204,12 +204,16 @@ server.tool('hyperv_permission_diagnosis','Windows-only, fixed read-only Hyper-V
   confirmed:z.boolean().default(false)
 }, {readOnlyHint:false,destructiveHint:false,openWorldHint:false}, async args=>result(await hyperVUac.request(args)));
 
-server.tool('vm_create', 'Create a NEW VM through HashiCorp Packer: install CLI and official plugin, build OS and post-install scripts, wait 60s after reboot, export a golden image and deploy a separate live disk. Returns queued; use vm_golden_images for status/paths. Public sandbox autologin vboxuser/password123!.', {
+server.tool('vm_create', 'Create a NEW VM through HashiCorp Packer: install CLI and official plugin, build OS and post-install scripts, wait 60s after reboot, export a golden image and deploy a separate live disk. Returns queued; use vm_golden_images for status/paths. Hyper-V Debian uses a local answer ISO and a fixed-address Vagrant SSH profile. Other Debian sandbox builds use public autologin vboxuser/password123!.', {
   backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox'),switch_name:z.string().min(1).optional(),bootstrap_host:z.ipv4().optional().describe('Optional guest-reachable IPv4 for Packer bootstrap on Hyper-V or KVM. Hyper-V requires an address on the selected virtual switch; default KVM uses QEMU user-mode NAT.'),libvirt_uri:z.enum(['qemu:///session','qemu:///system']).optional(),
   name:z.string().min(1).optional(), iso_path:z.string().min(1),
   memory_mb:z.number().int().optional(), cpus:z.number().int().optional(),
   disk_mb:z.number().int().optional(), basedir:z.string().optional(),
   image_index:z.number().int().default(1), product_key:z.string().default(''),
+  hyperv_debian:z.object({switch:z.string().min(1),guest_ip:z.string().min(1),gateway:z.ipv4(),dns:z.ipv4(),
+    dvd_sha256:z.string().regex(/^[a-fA-F0-9]{64}$/),ssh_private_key:z.string().min(1),
+    hyperv_daemons_deb:z.string().min(1),hyperv_daemons_sha256:z.string().regex(/^[a-fA-F0-9]{64}$/)})
+    .strict().optional().describe('DHCP-free Debian Hyper-V deployment profile. Uses an internal switch and a reserved static guest IPv4. Omit to read VAMP_HYPERV_DEBIAN_CONFIG.'),
   guest_os:z.enum(['debian','windows11']).default('debian'), allow_manual_install:z.boolean().default(true), installation_mode:z.enum(['auto']).default('auto'), windows_confirmed:z.boolean().default(false), preflight_only:z.boolean().default(false),
   serve_scripts:z.boolean().default(true).describe('Start the host Python HTTP script server on port 8421 so the guest installs the recorder with wget/curl'),
 }, async (args) => {
@@ -250,7 +254,10 @@ server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach
 return server;
 }
 if(path.basename(path.dirname(process.argv[1]||''))==='virtualbox'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
-const server=new McpServer({name:'VAMP virtualbox',version:'0.3.7'},{instructions:virtualBoxInstructions});
+const {default:windowsAdmin}=await import('../common/windows-admin.cjs');
+try { await windowsAdmin.requireAdministrator(); }
+catch (error) { console.error(error.message); process.exit(1); }
+const server=new McpServer({name:'VAMP virtualbox',version:'0.3.8'},{instructions:virtualBoxInstructions});
 registerVirtualBoxTools(server);
 // Warm the local OCR/YOLO workers in the background. Detached, never blocking
 // stdio, and harmless when this host has no model environment.

@@ -30,22 +30,29 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
   const notices = [];
   const statusItems = [];
   let receiveMessage;
-  let disposePanel;
-  const panel = {
-    visible: true,
-    reveal() {},
-    dispose() { disposePanel?.(); },
-    onDidDispose(fn) { disposePanel = fn; },
-    onDidChangeViewState() {},
-    webview: {
-      cspSource: 'test:',
-      asWebviewUri: value => value,
-      postMessage: message => messages.push(message),
-      set html(value) { this._html = value; },
-      get html() { return this._html; },
-      onDidReceiveMessage(fn) { receiveMessage = fn; },
-    },
-  };
+  const panels = [];
+  function createPanel() {
+    let disposePanel;
+    const panel = {
+      visible: true,
+      reveal() {},
+      dispose() { disposePanel?.(); },
+      onDidDispose(fn) { disposePanel = fn; },
+      onDidChangeViewState() {},
+      webview: {
+        cspSource: 'test:',
+        asWebviewUri: value => value,
+        postMessage: message => messages.push(message),
+        set html(value) { this._html = value; },
+        get html() { return this._html; },
+        onDidReceiveMessage(fn) { receiveMessage = fn; },
+      },
+    };
+    panels.push(panel);
+    return panel;
+  }
+  const panel = createPanel();
+  let firstPanel = true;
   const vscode = {
     workspace: {
       getConfiguration() {
@@ -71,7 +78,11 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
         statusItems.push(item);
         return item;
       },
-      createWebviewPanel: () => panel,
+      createWebviewPanel: () => {
+        if (!firstPanel) return createPanel();
+        firstPanel = false;
+        return panel;
+      },
       withProgress: async (_options, task) => task({ report() {} }),
       showInformationMessage: async (...args) => { notices.push(args); return exportPath && args.includes('Verify') ? 'Verify' : undefined; },
       showWarningMessage: async (...args) => { notices.push(args); return reconnect && args.includes('Reconnect') ? 'Reconnect' : undefined; },
@@ -114,7 +125,17 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
         if (input.host && /[^A-Za-z0-9._:-]/.test(input.host)) throw new Error('Remote host may contain only letters, digits, dots, colons, underscores and hyphens.');
         return { ...input, port: Number(input.port) || 22, host: input.host || '', username: input.username || '', backend: input.backend || 'kvm', libvirtUri: input.libvirtUri || 'qemu:///system', privateKeyPath: input.privateKeyPath || '' };
       },
-      RemoteSshClient: class { constructor() { return fakeClient; } },
+      RemoteSshClient: class {
+        constructor(config) {
+          return {
+            ...fakeClient,
+            screenshot: target => {
+              posted.push({ port: config.port, username: config.username, uri: config.libvirtUri, target });
+              return fakeClient.screenshot(target);
+            },
+          };
+        }
+      },
       sshArgs: (config, command) => ['-T', '-o', 'BatchMode=yes', '--', `${config.username}@${config.host}`, command],
       remoteMcpCommand: () => 'node ~/.vamp/remote/server.mjs',
       remoteStdioDefinition: () => ({ command: 'ssh', args: ['-T', '--', 'dev@lab-host.local', 'node ~/.vamp/remote/server.mjs'] }),
@@ -129,9 +150,9 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
     { runtime: '/runtime', output, version: '0.1.7', changes },
   );
   return {
-    api, settings, providers, commands, messages, notices, calls, panel, output, statusItems,
+    api, settings, providers, commands, messages, notices, calls, posted, panel, panels, output, statusItems,
     send: message => receiveMessage(message),
-    dispose: () => disposePanel?.(),
+    dispose: () => panels.forEach(panel => panel.dispose()),
   };
 }
 
@@ -184,12 +205,12 @@ test('live viewer replaces its frame with a message when SSH forwarding ends', a
 test('choosing Reconnect opens a new live viewer tunnel after disconnect', async () => {
   let disconnect;
   const tunnelClosed = new Promise(resolve => { disconnect = resolve; });
-  const { commands, calls, panel, dispose } = harness({}, { tunnelClosed, reconnect: true });
+  const { commands, calls, panels, dispose } = harness({}, { tunnelClosed, reconnect: true });
   await commands.get('vamp.remote.openLiveViewer')();
   disconnect();
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(calls, [['openForward', 6080], ['closeForward'], ['openForward', 6080]]);
-  assert.match(panel.webview.html, /<iframe/);
+  assert.match(panels.at(-1).webview.html, /<iframe/);
   dispose();
 });
 
@@ -259,6 +280,22 @@ test('the screenshot panel shows a view-only frame and saves on request', async 
   const again = await h.api.openScreen({ name: 'lab-desktop', id: 'uuid-1' });
   assert.equal(again, panel);
   h.dispose();
+});
+
+test('remote screenshots follow the selected SSH and libvirt connection for the same VM UUID', async () => {
+  const h = harness();
+  const target = { id: 'uuid-1', name: 'lab-desktop' };
+  try {
+    const firstPanel = await h.api.openScreen(target);
+    await h.api.saveSettings({ port: 2222, username: 'other', libvirtUri: 'qemu:///session' });
+    assert.notEqual(await h.api.openScreen(target), firstPanel);
+    assert.deepEqual(h.posted.slice(-2), [
+      { port: 22, username: 'dev', uri: 'qemu:///system', target: 'uuid-1' },
+      { port: 2222, username: 'other', uri: 'qemu:///session', target: 'uuid-1' },
+    ]);
+  } finally {
+    h.dispose();
+  }
 });
 
 test('remote screenshots never run without a configured host', async () => {

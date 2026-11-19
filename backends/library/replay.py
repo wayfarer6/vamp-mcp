@@ -7,6 +7,8 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
+import unicodedata
 import uuid
 import xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
@@ -74,6 +76,9 @@ class VBox:
         if str(machine.state) not in ('5','Running'):raise ValueError('Start the target VM before replay')
         self.session=self.manager.getSessionObject();machine.lockMachine(self.session,1);self.console=self.session.console
     def geometry(self):return list(self.console.display.getScreenResolution(0)[:2])
+    async def capture(self, path, resolution):
+        png = self.console.display.takeScreenShotToArray(0, *resolution, self.manager.constants.BitmapFormat_PNG)
+        path.write_bytes(bytes(png))
     def _scans(self,key,release=False):
         base=SHIFTED.get(key,key.lower());scan={**SCANCODES,**EXTRA}.get(base)
         if scan is None:raise ValueError('Unsupported VirtualBox key: '+key)
@@ -105,6 +110,10 @@ class VBox:
 class VNC:
     def __init__(self,client):self.client=client;self.held={}
     def geometry(self):return [self.client.video.width,self.client.video.height]
+    async def capture(self, path, resolution):
+        from PIL import Image
+        pixels = await asyncio.wait_for(self.client.screenshot(), timeout=15)
+        Image.fromarray(pixels).save(path, format='PNG')
     def key(self,key):return VNC_KEYS.get(key,key.upper() if key.startswith('f') and key[1:].isdigit() else key)
     def down(self,key):
         if key in self.held:return
@@ -133,10 +142,50 @@ def vault_dialogue(message):
         raise VaultDeliveryDenied
 
 
-async def replay(driver,actions,resolution,vault_steps=None):
+def normalized_text(text):
+    return ' '.join(unicodedata.normalize('NFKC', text).casefold().split())
+
+
+def recognize_start_screen(path, expected):
+    language = 'en'
+    if re.search(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]', expected):
+        language = 'ko'
+    elif re.search(r'[\u3040-\u30ff]', expected):
+        language = 'ja'
+    elif re.search(r'[\u3400-\u9fff]', expected):
+        language = 'zh'
+    from model_daemon import request
+    return request('ocr', {'op': 'predict', 'image': str(path), 'languages': [language]}, timeout=180)['lines']
+
+
+class StartScreenBlocked(ValueError):
+    pass
+
+
+async def verify_start(driver, resolution, expected):
+    try:
+        with TemporaryDirectory(prefix='vamp-rpa-start-') as folder:
+            screenshot = Path(folder) / 'screen.png'
+            await driver.capture(screenshot, resolution)
+            lines = await asyncio.to_thread(recognize_start_screen, screenshot, expected)
+        phrase = re.compile(r'(?<![\w-])' + re.escape(normalized_text(expected)) + r'(?![\w-])')
+        matches = sum(len(phrase.findall(normalized_text(line['text'])))
+                      for line in lines if float(line['confidence']) >= 0.8)
+    except Exception as exc:
+        raise StartScreenBlocked('Starting screen could not be verified. Check guest capture and host OCR before replaying.') from exc
+    if matches != 1:
+        raise StartScreenBlocked('Starting screen mismatch. Expected text must appear exactly once before replay.')
+
+
+async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None):
     completed=0
     try:
-        if driver.geometry()!=resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {driver.geometry()}; recalibrate rather than guessing')
+        actual = driver.geometry()
+        if actual != resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {actual}; recalibrate rather than guessing')
+        if start_text is not None:
+            await verify_start(driver, resolution, start_text)
+            if driver.geometry() != resolution:
+                raise ValueError('Guest resolution changed during starting-screen verification. Replay stopped.')
         for a in actions:
             op=a['op']
             if op=='wait':await asyncio.sleep(a['seconds'])
@@ -177,6 +226,9 @@ async def replay(driver,actions,resolution,vault_steps=None):
 
 async def run(request, dialogue=False):
     metadata,actions=load(request)
+    start_text = metadata.get('start_text')
+    if start_text is not None and (not isinstance(start_text, str) or not 1 <= len(start_text.strip()) <= 240):
+        raise ValueError('Invalid reviewed starting-screen text')
     references=vault_references(actions)
     unresolved=any(item['status']=='placeholder_unresolved' for item in references)
     if request.get('dry_run') is True or unresolved or (references and not dialogue):
@@ -188,7 +240,7 @@ async def run(request, dialogue=False):
     if dialogue and references:
         vault_dialogue({'vault':'preflight','references':references})
     if metadata['backend']=='virtualbox':
-        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps)
+        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text)
     elif metadata['backend']=='kvm':
         import asyncvnc
         uri=request.get('libvirt_uri','qemu:///session')
@@ -203,9 +255,9 @@ async def run(request, dialogue=False):
         listen=graphics.find('listen');host=graphics.get('listen') or (listen.get('address') if listen is not None else None) or '127.0.0.1';port=int(graphics.get('port','-1'))
         if host not in ('127.0.0.1','localhost','::1') or not 1<=port<=65535:raise ValueError('Only active localhost VNC is supported')
         async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
-            completed=await replay(VNC(client),actions,metadata['resolution'],vault_steps)
+            completed=await replay(VNC(client),actions,metadata['resolution'],vault_steps,start_text=start_text)
     else:raise ValueError('This backend has no recorded desktop replay adapter')
-    return {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result; no screenshot or model call was made.'}
+    return {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
 
 if __name__=='__main__':
     dialogue=sys.argv[1:]==['--vault-dialogue']
@@ -215,4 +267,6 @@ if __name__=='__main__':
     except VaultDeliveryDenied as error:
         print(json.dumps({'status':'approval_required','actions_completed':error.completed,
                           'message':'Vault delivery did not receive confirmation. Replay stopped.'}))
+    except StartScreenBlocked as error:
+        print(json.dumps({'status':'starting_screen_blocked','actions_completed':0,'message':str(error)}))
     except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)

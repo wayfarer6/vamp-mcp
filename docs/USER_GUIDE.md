@@ -297,3 +297,38 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 VM Manager의 **Prepare Environment** 오른쪽 새로고침은 실제 가상환경을 활성화하고 Python 경로와 필수 패키지 4개를 확인합니다. 성공하면 초록색 원 안에 체크가 표시됩니다. **Delete**로 전용 환경을 지운 뒤 다시 생성할 수 있습니다. 삭제 전에 해당 MCP 프로세스를 중지하세요. VM 디스크·RPA·Vault 파일은 유지됩니다.
 
 호스트에 Git이 필요합니다. 저장 RPA마다 독립 Git 저장소가 생성되고 생성·수정 시 버전과 커밋이 기록됩니다. **Export ZIP**은 최신 커밋의 파일만 포함하며 Git 이력과 미커밋 수정은 제외합니다. AI는 승인된 수정에 **rpa_revision**을 사용할 수 있습니다. 커밋 충돌이나 미커밋 변경이 있으면 중단하며, 수정 후에는 검토 승인이 해제되므로 **Edit Details**에서 재검토 후 실행합니다. Vault는 별도 금고 아이콘으로 구분됩니다.
+
+### 호스트 PaddleOCR 준비
+
+저장 RPA의 시작 화면 확인은 Windows·macOS·Linux 호스트에서 PaddleOCR을 실행합니다.
+Windows x64, Apple Silicon Mac 또는 Intel Mac에서 해당 아키텍처의 Python
+3.12로 전용 환경을 만들고 저장소의 `requirements-ocr.txt`를 설치합니다.
+
+```powershell
+py -3.12 -m venv "$env:USERPROFILE/.vamp/ocr-python"
+& "$env:USERPROFILE/.vamp/ocr-python/Scripts/python.exe" -m pip install -r requirements-ocr.txt
+```
+
+```sh
+python3.12 -m venv ~/.vamp/ocr-python
+~/.vamp/ocr-python/bin/python -m pip install -r requirements-ocr.txt
+```
+
+다른 위치에 설치했다면 VS Code의 사용자 설정 `vamp.ocrPythonExecutable`
+또는 독립 MCP의 `VAMP_OCR_PYTHON`에 해당 환경의 Python 경로를 지정합니다.
+첫 사용 시 해당 언어 모델을 가져올 수 있도록 네트워크가 필요할 수 있습니다.
+한 번 올라간 워커는 모델을 재사용합니다. PaddleOCR을 사용할 수 없거나 문구를
+한 번만 확인할 수 없으면, 시작 화면 확인이 설정된 RPA는 입력 전에 중단됩니다.
+
+MCP가 시작될 때 준비된 PaddleOCR과 YOLO 워커를 미리 올립니다. 독립 MCP는
+프로비저닝 자산을 설치해 둔 경우 시작 시 이 자산을 사용합니다. YOLO 환경과
+가중치가 저장소 기본 위치에 없으면 `VAMP_YOLO_PYTHON`과 `VAMP_YOLO_MODEL`을
+지정합니다. `VAMP_YOLO_DEVICE=cuda`는 CUDA를 요구하며, Apple Silicon의 YOLO는
+호환 Torch로 `mps`를 사용할 수 있습니다.
+
+기본 장치 우선순위는 모델별 런타임이 지원하는 **NPU → GPU → CPU**입니다.
+PaddleOCR은 PaddlePaddle NPU 백엔드가 등록한 장치를 먼저 사용하고, 그다음
+CUDA를 지원하는 PaddlePaddle 빌드의 GPU를 사용합니다. CUDA가 필수인 호스트는 공식 GPU 빌드를 별도 OCR
+환경에 설치하고 `VAMP_OCR_DEVICE=gpu:0`을 설정합니다. 이 설정에서 지정한
+장치를 사용할 수 없으면 시작에 실패합니다. macOS용 PaddlePaddle 휠에서는
+PaddleOCR이 CPU에서 실행됩니다.

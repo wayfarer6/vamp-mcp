@@ -13,14 +13,16 @@ def main():
     parser.add_argument('action',choices=['start','status','stop','restart'])
     parser.add_argument('--device',default='auto')
     parser.add_argument('--no-wait',action='store_true',help='Start workers without waiting for model preload')
+    parser.add_argument('--kind',choices=KINDS,help='Manage only one worker')
     args=parser.parse_args()
+    kinds = (args.kind,) if args.kind else KINDS
     if args.action in ('stop','restart'):
-        states={kind:stop(kind) for kind in KINDS}
+        states={kind:stop(kind) for kind in kinds}
     if args.action=='restart' and any(state.get('running') for state in states.values()):
         raise RuntimeError('A worker is still stopping; wait for current inference before restart')
     if args.action in ('start','restart'):
-        states=ensure_services(wait=not args.no_wait,device=args.device)
-    if args.action=='status':states={kind:status(kind) for kind in KINDS}
+        states=ensure_services(wait=not args.no_wait,device=args.device,kinds=kinds)
+    if args.action=='status':states={kind:status(kind) for kind in kinds}
     print(json.dumps({'runtime_directory':str(runtime_dir()),'services':states},indent=2))
 
 

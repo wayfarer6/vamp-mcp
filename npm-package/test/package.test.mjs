@@ -20,6 +20,9 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.ok(npmCli,'Run this check through npm test so npm_execpath is available');
   execFileSync(process.execPath,[npmCli,'install','--prefix',temporary,'--ignore-scripts','--no-audit','--no-fund',tarball],{stdio:'pipe'});
   const cli=path.join(temporary,'node_modules',packageName,'bin',packageName+'.mjs');
+  const localAdmin = vault || process.platform !== 'win32' || await (await import(pathToFileURL(
+    path.resolve(path.dirname(cli), '../runtime/backends/common/windows-admin.cjs')),
+  )).default.isAdministrator();
   const cache=path.join(temporary,'cache');
   const env={...process.env,VAMP_ASSETS_DIR:cache,VAMP_RPA_REGISTRY:path.join(temporary,'catalog')};
   const sourceManifest=JSON.parse(await readFile(vault
@@ -87,7 +90,9 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
     });
   }
   for (const [command,expected] of (vault?[[null,'vault_status']]:[['unified','podman_view_container_screen'],['virtualbox','vamp_setup'],['kvm','remote_vm_list'],['library','rpa_search'],['remote','remote_vm_list']])) {
-    await t.test(`${command}: initialize and discover real MCP tools`,{timeout:12000},async()=>{
+    const skip = !localAdmin && ['unified','virtualbox'].includes(command)
+      ? 'Run from administrator Windows to exercise the installed local VM MCP without an interactive prompt' : false;
+    await t.test(`${command}: initialize and discover real MCP tools`,{timeout:12000,skip},async()=>{
       const child=spawn(process.execPath,[cli,...(command?[command]:[])],{cwd:temporary,env});
       let stdout='',stderr='';
       child.stderr.on('data',chunk=>stderr+=chunk);
@@ -206,7 +211,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       assert.equal(download(true).trim(),target);
       const url=`https://github.com/wayfarer6/vamp-mcp/releases/download/v${version}/${archiveName}`;
       assert.deepEqual((await readFile(calls,'utf8')).trim().split('\n').map(line=>JSON.parse(line)),[url,url]);
-      if (process.env.VAMP_TEST_RECORDER_MEDIA === '1') {
+      if (process.env.VAMP_TEST_RECORDER_MEDIA === '1' && localAdmin) {
         const work=path.join(temporary,'on-demand');
         const downloadCache=path.join(work,'cache');
         const home=path.join(work,'home');

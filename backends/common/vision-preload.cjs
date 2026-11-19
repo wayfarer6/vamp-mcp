@@ -1,12 +1,12 @@
 'use strict';
 // Optional OCR/YOLO worker warmup when an MCP server starts.
 //
-// The model workers are owner-local detached processes that talk over private
-// Unix sockets, so starting them here never touches stdio and never fails a
+// The model workers use private local IPC, so starting them here never touches stdio and never fails a
 // server: every problem comes back as a status the caller may log and ignore.
 // The workers stay for later calls and are reused across server restarts.
 
 const fs=require('node:fs');
+const os=require('node:os');
 const path=require('node:path');
 const {spawn}=require('node:child_process');
 
@@ -41,13 +41,19 @@ function python_for(env,platform){
 function ensureVisionServices({runtime,env=process.env,platform=process.platform,spawnProcess=spawn,logger}={}){
   const report={status:'skipped',reason:null,command:null,pid:null};
   if(!enabled(env)){report.reason='disabled_by_VAMP_PRELOAD_MODELS';return report;}
-  // model_daemon relies on fcntl locks and AF_UNIX sockets, which Windows lacks.
-  if(platform==='win32'){report.reason='unsupported_platform';return report;}
   if(runtime && fs.existsSync(path.join(runtime,'provisioning-assets.json'))){
     report.reason='deferred_until_assets_are_used';return report;
   }
   const entry=entrypoint(runtime);
   if(!entry){report.status='unavailable';report.reason='model_daemon_not_packaged';return report;}
+  if((platform==='win32'||platform==='darwin') && !env.VAMP_OCR_PYTHON && !env.VAMP_YOLO_PYTHON){
+    const nativePython=platform==='win32'?'Scripts/python.exe':'bin/python';
+    const hostHome=env.VAMP_HOME||path.join(os.homedir(),'.vamp');
+    if(!['.venv','.venv-ocr'].some(folder=>fs.existsSync(path.join(runtime,folder,nativePython))) &&
+       !['ocr-python','yolo-python'].some(folder=>fs.existsSync(path.join(hostHome,folder,nativePython)))){
+      report.reason='host_model_environment_missing';return report;
+    }
+  }
   const python=python_for(env,platform);
   const args=entry.script?[entry.script,...entry.args]:['-c','import model_daemon;model_daemon.ensure_services(wait=False)'];
   const command=[python,...args];

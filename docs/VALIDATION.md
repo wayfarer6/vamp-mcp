@@ -1,5 +1,7 @@
 # Validation on Ubuntu + NVIDIA
 
+For repeatable release acceptance on Windows and Linux, see the [practical QA scenarios](QA_SCENARIOS.ko.md).
+
 Date: 2026-11-15. Existing VirtualBox 7.2.6 Windows 11 and Debian 13 VMs only; no new VM was created.
 
 - Python suite: 63 tests passed. Upstream TypeScript suite: 101 tests passed.

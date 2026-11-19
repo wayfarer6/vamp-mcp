@@ -120,6 +120,15 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
   if (!Object.hasOwn(entries,command) || (!['remote','kvm'].includes(command) && args.length)) {
     console.error('Invalid command or arguments. Run vamp-mcp --help.');
     process.exitCode=2;
+  } else if (process.platform==='win32' && ['unified','virtualbox'].includes(command)
+      && !await (await import('../runtime/backends/common/windows-admin.cjs')).default.isAdministrator()) {
+    try {
+      const {elevateMcp}=await import('./windows-mcp-elevation.mjs');
+      process.exitCode=await elevateMcp(process.argv.slice(2));
+    } catch(error) {
+      console.error('vamp-mcp:',error.message);
+      process.exitCode=1;
+    }
   } else {
     process.env.RPA_HOST_PYTHON ||= process.platform==='win32'?'python':'python3';
     process.env.PYTHON_PATH ||= process.env.RPA_HOST_PYTHON;

@@ -9,7 +9,7 @@ $ErrorActionPreference='Stop';
 $switches=@(Get-VMSwitch | Select-Object Name, @{n='Type';e={[string]$_.SwitchType}});
 $addresses=@(Get-NetIPAddress -AddressFamily IPv4 | Where-Object {
     $_.AddressState -eq 'Preferred' -and -not $_.SkipAsSource
-} | Select-Object InterfaceAlias, IPAddress);
+} | Select-Object InterfaceAlias, IPAddress, PrefixLength);
 @{switches=$switches; addresses=$addresses; execution_policy=[string](Get-ExecutionPolicy)} | ConvertTo-Json -Depth 4 -Compress
 """.replace('\n',' ')
 
@@ -20,7 +20,7 @@ def select_network(probe, switch_name, selected=None):
     switches = [row for row in probe['switches'] if isinstance(row, dict) and row.get('Name') == switch_name]
     if len(switches) != 1:
         raise ValueError('Exactly one explicitly selected Hyper-V switch is required')
-    candidates = set()
+    candidates = {}
     for row in probe['addresses']:
         if not isinstance(row, dict) or row.get('InterfaceAlias') != 'vEthernet (' + switch_name + ')':
             continue
@@ -29,18 +29,18 @@ def select_network(probe, switch_name, selected=None):
         except ValueError:
             continue
         if ipaddress.IPv4Address(address).is_private:
-            candidates.add(address)
+            candidates[address] = row.get('PrefixLength')
     if selected is not None:
         if selected not in candidates:
             raise ValueError('Requested bootstrap host is not a usable address of the selected Hyper-V switch')
-        candidates = {selected}
+        candidates = {selected: candidates[selected]}
     if len(candidates) != 1:
         raise ValueError('The selected Hyper-V switch must have exactly one usable guest-reachable host IPv4 address; none or ambiguous addresses are refused')
-    host = candidates.pop()
+    host, prefix = candidates.popitem()
     policy = probe.get('execution_policy')
     if policy not in ('Restricted','AllSigned','RemoteSigned','Unrestricted','Bypass','Undefined'):
         raise ValueError('Unable to determine the effective Windows PowerShell execution policy')
-    return {'switch':switch_name,'switch_type':switches[0].get('Type'),'host_ipv4':host,
+    return {'switch':switch_name,'switch_type':switches[0].get('Type'),'host_ipv4':host,'prefix_length':prefix,
             'host_ipv4_candidates':[host],'execution_policy':policy}
 
 

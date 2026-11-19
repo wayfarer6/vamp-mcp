@@ -57,15 +57,32 @@ test('starting the workers is detached and never waits for a model load',()=>{
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 
-test('a host without the model environment, or on Windows, is skipped quietly',()=>{
+test('a host without the OCR environment is skipped quietly',()=>{
   const root=runtime_tree(false);
   try{
     let spawns=0;
     const spawnProcess=()=>{spawns++;return {on(){},unref(){}};};
     assert.deepEqual(ensureVisionServices({runtime:root,env:{},platform:'linux',spawnProcess}),{status:'unavailable',reason:'model_daemon_not_packaged',command:null,pid:null});
     assert.equal(ensureVisionServices({runtime:root,env:{VAMP_PRELOAD_MODELS:'0'},platform:'linux',spawnProcess}).reason,'disabled_by_VAMP_PRELOAD_MODELS');
-    assert.equal(ensureVisionServices({runtime:root,env:{},platform:'win32',spawnProcess}).reason,'unsupported_platform');
+    fs.writeFileSync(path.join(root,'scripts','model_service.py'),'');
+    assert.equal(ensureVisionServices({runtime:root,env:{VAMP_HOME:root},platform:'win32',spawnProcess}).reason,'host_model_environment_missing');
     assert.equal(spawns,0);
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
+test('Windows and macOS use the shared preload for both configured workers',()=>{
+  const root=runtime_tree();
+  try{
+    for(const platform of ['win32','darwin']){
+      const env={VAMP_OCR_PYTHON:'configured-ocr',VAMP_YOLO_PYTHON:'configured-yolo'};
+      const report=ensureVisionServices({runtime:root,platform,env,spawnProcess:(exe,args,options)=>{
+        assert.deepEqual(args.slice(-2),['start','--no-wait']);
+        assert.equal(options.env.VAMP_OCR_PYTHON,'configured-ocr');
+        assert.equal(options.env.VAMP_YOLO_PYTHON,'configured-yolo');
+        return {pid:4242,on(){},unref(){}};
+      }});
+      assert.equal(report.status,'started');
+    }
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 

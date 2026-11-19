@@ -13,6 +13,18 @@ variable "dvd_sha256" { type = string }
 variable "job_dir" { type = string }
 variable "vm_name" { type = string }
 variable "switch_name" { type = string }
+variable "memory_mb" {
+  type    = number
+  default = 2048
+}
+variable "cpus" {
+  type    = number
+  default = 2
+}
+variable "disk_mb" {
+  type    = number
+  default = 32768
+}
 
 source "hyperv-iso" "debian" {
   vm_name              = var.vm_name
@@ -30,9 +42,9 @@ source "hyperv-iso" "debian" {
   boot_wait            = "10s"
   shutdown_timeout     = "20m"
   disable_shutdown     = true
-  memory               = 2048
-  cpus                 = 2
-  disk_size            = 32768
+  memory               = var.memory_mb
+  cpus                 = var.cpus
+  disk_size            = var.disk_mb
   skip_compaction      = true
   boot_command = [
     "c<wait>",

@@ -25,7 +25,7 @@ server.tool('rpa_search','Find reusable saved RPA skills by title, description, 
  const terms=query.toLowerCase().split(/\s+/).filter(Boolean);let rows=(await definitions()).filter(i=>!backend||i.backend===backend).map(i=>({item:i,score:terms.reduce((score,term)=>score+(i.name.toLowerCase().includes(term)?4:0)+(i.description.toLowerCase().includes(term)?2:0)+(i.tags.join(' ').toLowerCase().includes(term)?3:0)+(i.when_to_use.toLowerCase().includes(term)?1:0),0)})).filter(row=>!terms.length||row.score>0).sort((a,b)=>b.score-a.score);
  return result({status:'observed',total_matches:rows.length,rpas:rows.slice(0,limit).map(row=>summary(row.item)),next_step:'Read rpa_details for the best match; use reviewed RPA skills before repeated CUA.'});
 });
-server.tool('rpa_details','Read a saved skill’s purpose, input contract, guest resolution, review state and expected result. Does not return source or recorded text.',{id:identifier},{readOnlyHint:true,destructiveHint:false},async({id})=>{const i=await definition(id);return result({...summary(i),description:i.description,when_to_use:i.when_to_use,expected_result:i.expected_result,resolution:i.resolution,action_count:i.action_count,execution_status:'not_requested'});});
+server.tool('rpa_details','Read a saved skill’s purpose, input contract, guest resolution, review state and expected result. Does not return source or recorded text.',{id:identifier},{readOnlyHint:true,destructiveHint:false},async({id})=>{const i=await definition(id);return result({...summary(i),description:i.description,when_to_use:i.when_to_use,expected_result:i.expected_result,start_screen_check:Boolean(i.start_text),resolution:i.resolution,action_count:i.action_count,execution_status:'not_requested'});});
 server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices. Explicit authorization and target VM UUID required for execution. Use dry_run to inspect reviewed Vault references without guest input or secret reads. An authenticated Vault replay bridge is required to use vault_destination.',{id:identifier,vm_id:identifier,inputs:z.record(z.string()).default({}),confirmed:z.boolean().default(false),dry_run:z.boolean().default(false),vault_destination:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/).optional()},{readOnlyHint:false,destructiveHint:true},async request=>{
  const metadata=await definition(request.id);if(!metadata.reviewed||(!request.confirmed&&!request.dry_run))return result({status:'needs_review_or_confirmation',message:'Review and approve this definition in the VAMP RPA Library, then explicitly authorize execution.'});
  const python=metadata.backend==='virtualbox'?(process.env.RPA_REPLAY_PYTHON||process.env.RPA_HOST_PYTHON):process.env.RPA_HOST_PYTHON;
@@ -36,7 +36,7 @@ server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices. E
   socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN,
  }));
  return result(await new Promise(resolve=>{
-  const child=execFile(python,[script],{timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
+  const child=execFile(python,[script],{windowsHide:true,timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
   child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));
  }));
 });
@@ -56,9 +56,9 @@ server.tool('rpa_revision','Inspect a saved skill’s local Git history, read it
  const temporary=await mkdtemp(path.join(os.tmpdir(),'vamp-repair-'));
  try{
   const source=path.join(temporary,'source.py');await writeFile(source,request.source,{mode:0o600});
-  const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name};
+  const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,start_text:item.start_text||'',tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name};
   const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/registry.py');
-  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[script],{timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
+  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[script],{windowsHide:true,timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
   return result(repaired.status==='registered'?{status:'committed_needs_review',id:item.id,version:repaired.definition.version,commit:repaired.commit,reviewed:false}:repaired);
  }finally{await rm(temporary,{recursive:true,force:true});}
 });

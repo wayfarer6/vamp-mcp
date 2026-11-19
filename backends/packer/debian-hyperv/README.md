@@ -18,6 +18,44 @@ After destroying a deployment and retiring its box, the operator can remove
 the corresponding reservation file. The build itself uses the DVD and answer
 ISO, and brings up the network only on the installed system.
 
+### VAMP VM Manager and MCP
+
+For **Create and Start**, set `VAMP_HYPERV_DEBIAN_CONFIG` to an absolute path
+to a local JSON profile before launching the elevated VS Code instance. The
+same profile can be passed as `hyperv_debian` to the MCP `vm_create` tool.
+Use one profile and reserved guest IP per deployment. The selected ISO must
+match the signed Debian DVD checksum.
+
+On Windows, standalone `vamp-mcp` requests UAC at startup when the local
+unified VM server is launched from a standard session. Approve the Windows
+prompt to let the administrator process connect back to the MCP client.
+For VAMP Tools in VS Code, open VS Code with **Run as administrator**. A
+standard Windows VS Code session cannot start the local VM MCP.
+
+```json
+{
+  "switch": "VAMP-Debian-Install",
+  "guest_ip": "192.168.100.51/24",
+  "gateway": "192.168.100.1",
+  "dns": "1.1.1.1",
+  "dvd_sha256": "<64 hexadecimal digits>",
+  "ssh_private_key": "C:/keys/debian-hyperv-51",
+  "hyperv_daemons_deb": "C:/vamp-inputs/hyperv-daemons.deb",
+  "hyperv_daemons_sha256": "<64 hexadecimal digits>"
+}
+```
+
+VAMP publishes the golden export separately from the VM disk and marks the
+job complete after Vagrant provisioning, reload, and a successful SSH check
+of the setup marker. The desktop provisioning stage needs access to the Debian
+mirror through the configured switch and gateway. Inspect the stage and the
+Packer log in **Golden Images** when a job fails.
+The deployed VM's Vagrant configuration and provisioning files remain in its
+live directory. Run Vagrant from that directory with the configured SSH key
+available when managing the VM after the golden export is removed.
+
+### Standalone build
+
 ```powershell
 $job = 'C:/vamp-builds/debian-hyperv-51'
 $env:VAMP_DEBIAN_HYPERV_SSH_KEY = 'C:/keys/debian-hyperv-51'
