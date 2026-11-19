@@ -6,12 +6,14 @@ Standalone stdio MCP server for KeePassXC credential databases and optional Vera
 
 Requires Node.js 22+. Install KeePassXC (`keepassxc-cli`) and, for encrypted volume operations, VeraCrypt separately. npm installation does not install these applications or create databases/volumes.
 
+Download `vamp-mcp-vault-0.1.12.tgz` and `SHA256SUMS` from the [GitHub release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.3.6). Compare the archive's SHA-256 with the corresponding release entry before installing it.
+
 ```sh
-npm install -g vamp-mcp-vault
-vamp-mcp-vault --help
+npm install -g ./vamp-mcp-vault-0.1.12.tgz
+vamp-mcp-vault --version
 ```
 
-Or run with an MCP client using `npx -y vamp-mcp-vault@0.1.6`. Starting it without flags waits for MCP requests on stdin.
+Starting the installed `vamp-mcp-vault` command without flags waits for MCP requests on stdin.
 
 ## VS Code
 
@@ -22,8 +24,8 @@ Add to `.vscode/mcp.json`:
   "servers": {
     "vamp-vault": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "vamp-mcp-vault@0.1.6"],
+      "command": "vamp-mcp-vault",
+      "args": [],
       "env": {
         "VAULT_KDBX": "/absolute/path/to/private.kdbx",
         "VAULT_KEEPASSXC_CLI": "/absolute/path/to/keepassxc-cli",
@@ -34,7 +36,7 @@ Add to `.vscode/mcp.json`:
 }
 ```
 
-Use host-specific existing paths; on Windows your client may require `npx.cmd`.
+Use host-specific existing paths; on Windows your client may require the installed `vamp-mcp-vault.cmd` path.
 
 ## Codex
 
@@ -42,8 +44,8 @@ Add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.vamp_vault]
-command = "npx"
-args = ["-y", "vamp-mcp-vault@0.1.6"]
+command = "vamp-mcp-vault"
+args = []
 
 [mcp_servers.vamp_vault.env]
 VAULT_KDBX = "/absolute/path/to/private.kdbx"
@@ -105,7 +107,7 @@ Prepare the existing `vscode-vault-extension` npm dependencies, then run:
 ```sh
 npm run build --prefix npm-packages/vault
 npm pack ./npm-packages/vault --pack-destination /tmp
-VAMP_TEST_PACKAGE=vault VAMP_TEST_TARBALL=/tmp/vamp-mcp-vault-0.1.6.tgz npm test --prefix npm-package
+VAMP_TEST_PACKAGE=vault VAMP_TEST_TARBALL=/tmp/vamp-mcp-vault-0.1.12.tgz npm test --prefix npm-package
 ```
 
 JavaScript dependencies and their license notices are bundled. The npm package has no install scripts and does not install VS Code extensions.

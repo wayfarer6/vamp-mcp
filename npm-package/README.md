@@ -13,21 +13,16 @@ A unified stdio MCP server for virtual machines, RPA and Podman containers. Run 
 
 ## Install and run
 
-```sh
-npm install -g vamp-mcp
-vamp-mcp --help
-```
-
-Or run without a global install:
+Download `vamp-mcp-0.3.6.tgz` and `SHA256SUMS` from the [GitHub release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.3.6). Compare the archive's SHA-256 with the corresponding release entry before installing it.
 
 ```sh
-npx -y vamp-mcp@0.2.0 virtualbox
-npx -y vamp-mcp@0.2.0 kvm
-npx -y vamp-mcp@0.2.0 library
-npx -y vamp-mcp@0.2.0 remote --backend kvm
+npm install -g ./vamp-mcp-0.3.6.tgz
+vamp-mcp --version
 ```
 
-The current default entry point is `vamp-mcp` with no arguments (or `vamp-mcp unified`). Register it once as **VAMP MCP**. Register `vamp-mcp-vault` separately only if you use Vault. The older per-backend subcommands shown above remain available for explicit legacy integrations; do not add them as duplicate registrations.
+The public npm registry's `latest` tag points to an older release. See the [GitHub advisory](https://github.com/advisories/GHSA-q37r-5xxr-6v4x) for the affected historical npm versions.
+
+The current default entry point is `vamp-mcp` with no arguments (or `vamp-mcp unified`). Register it once as **VAMP MCP**. Register `vamp-mcp-vault` separately only if you use Vault. The per-backend subcommands remain available for explicit legacy integrations; do not add them as duplicate registrations.
 
 ## Default MCP registration
 
@@ -46,15 +41,15 @@ Omit the Vault entry if you do not use it. Where required, replace commands with
 
 ## Legacy VS Code MCP configuration
 
-Add a server to `.vscode/mcp.json` (on Windows use `npx.cmd` if your client requires it):
+Add a server to `.vscode/mcp.json` (on Windows use the installed `vamp-mcp.cmd` path if your client requires it):
 
 ```json
 {
   "servers": {
     "vamp": {
       "type": "stdio",
-      "command": "npx",
-      "args": ["-y", "vamp-mcp@0.2.0", "virtualbox"],
+      "command": "vamp-mcp",
+      "args": ["virtualbox"],
       "env": {"RPA_HOST_PYTHON": "/absolute/path/to/python"}
     }
   }
@@ -69,8 +64,8 @@ In `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.vamp]
-command = "npx"
-args = ["-y", "vamp-mcp@0.2.0", "virtualbox"]
+command = "vamp-mcp"
+args = ["virtualbox"]
 
 [mcp_servers.vamp.env]
 RPA_HOST_PYTHON = "/absolute/path/to/python"
@@ -108,7 +103,7 @@ npm run build --prefix third_party/mcp-virtualbox
 npm ci --prefix vscode-extension --ignore-scripts
 npm run build --prefix npm-package
 npm pack ./npm-package --pack-destination /tmp
-VAMP_TEST_TARBALL=/tmp/vamp-mcp-0.2.0.tgz npm test --prefix npm-package
+VAMP_TEST_TARBALL=/tmp/vamp-mcp-0.3.6.tgz npm test --prefix npm-package
 ```
 
 The build reuses the VSIX runtime bundling and dependency license notices. The published package has no install scripts and no npm runtime dependencies; JavaScript dependencies are bundled. See the repository for backend-specific setup and validation limits.
