@@ -1,11 +1,31 @@
 'use strict';
 const test=require('node:test');
 const assert=require('node:assert/strict');
-const {createPodmanAdapter,standardLocations}=require('./adapter.cjs');
+const {createPodmanAdapter,standardLocations,boundedExecutor}=require('./adapter.cjs');
+const {EventEmitter}=require('node:events');
 const id='a'.repeat(64);
 const {createHash}=require('node:crypto');
 const good={Name:'qa',URI:'ssh://tester@example.test/run/user/1000/podman/podman.sock',Identity:'/not/read'};
 const binding=createHash('sha256').update(JSON.stringify(['qa',good.URI,good.Identity])).digest('hex');
+test('an I/O-blocked Podman command returns at the deadline and blocks a retry while it is still live',async()=>{
+ const child=new EventEmitter();
+ const signals=[];
+ let calls=0,detached=false;
+ child.kill=signal=>signals.push(signal);
+ child.unref=()=>{detached=true;};
+ const execute=boundedExecutor((exe,args,options,done)=>{
+   calls++;
+   if(calls>1)setImmediate(()=>done(null,'ok',''));
+   return child;
+ });
+ await assert.rejects(execute('podman',['create'],{timeout:5}),/exceeded its deadline/);
+ assert.deepEqual(signals,['SIGKILL']);
+ assert.equal(detached,true);
+ await assert.rejects(execute('podman',['create'],{timeout:5}),/still exiting/);
+ assert.equal(calls,1);
+ child.emit('close');
+ assert.deepEqual(await execute('podman',['ps'],{timeout:100}),{stdout:'ok',stderr:''});
+});
 test('standard search includes the official per-user Windows MSI location, not PATH or the checkout',()=>{
  assert.equal(standardLocations('win32','D:\\Users\\tester')[0],'D:\\Users\\tester\\AppData\\Local\\Programs\\Podman\\podman.exe');
  assert.deepEqual(standardLocations('linux'),['/usr/bin/podman','/usr/local/bin/podman']);

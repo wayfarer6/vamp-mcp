@@ -1,7 +1,6 @@
 'use strict';
 const {execFile,spawn}=require('node:child_process');
 const {inflateSync}=require('node:zlib');
-const {promisify}=require('node:util');
 const {createHash}=require('node:crypto');
 const path=require('node:path');
 const fs=require('node:fs');
@@ -11,6 +10,32 @@ const NAME=/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/;
 const ID=/^[a-f0-9]{64}$/;
 const MAX=1024*1024;
 const LOCAL_TARGET='local-linux';
+
+function boundedExecutor(exec=execFile){
+  const timedOut=new Set();
+  return (exe,args,{timeout,...options})=>{
+    if(timedOut.size)return Promise.reject(Error('A timed-out Podman command is still exiting'));
+    return new Promise((resolve,reject)=>{
+      let timer;
+      const child=exec(exe,args,{...options,killSignal:'SIGKILL'},(error,stdout,stderr)=>{
+        clearTimeout(timer);
+        if(error)reject(error);
+        else resolve({stdout,stderr});
+      });
+      timer=setTimeout(()=>{
+        timedOut.add(child);
+        child.once('close',()=>timedOut.delete(child));
+        reject(Error('Podman command exceeded its deadline'));
+        child.kill('SIGKILL');
+        // The kernel may delay exit while the command waits on I/O.
+        child.stdin?.destroy();
+        child.stdout?.destroy();
+        child.stderr?.destroy();
+        child.unref();
+      },timeout);
+    });
+  };
+}
 function standardLocations(platform,home=os.homedir()){
   if(platform!=='win32')return ['/usr/bin/podman','/usr/local/bin/podman'];
   const locations=['C:\\Program Files\\RedHat\\Podman\\podman.exe','C:\\Program Files\\Podman\\podman.exe'];
@@ -31,7 +56,7 @@ function connectionRecord(row){
 }
 function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spawn,desktopImageIds=process.env.VAMP_DESKTOP_IMAGE_IDS||'',workspaceConfigPath=process.env.VAMP_WORKSPACE_CONFIG||'',workspaceDependencies={},userIdentity=()=>({uid:process.getuid?.(),euid:process.geteuid?.(),home:os.userInfo().homedir})}={}){
   const injected=typeof execute==='function';
-  execute=execute||promisify(execFile);
+  execute=execute||boundedExecutor();
   const approvedImages=()=>String(desktopImageIds).split(/[\s,]+/).filter(Boolean);
   const workspace=workspaceRuntime({...workspaceDependencies,platform,allowedImages:approvedImages,configPath:workspaceConfigPath});
   let executable;
@@ -295,7 +320,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
   }
   return {workspaceStatus,workspaceUnlock,workspaceLock,workspaceAttach,workspaceDetach,screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
 }
-module.exports={createPodmanAdapter,standardLocations,LOCAL_TARGET};
+module.exports={createPodmanAdapter,standardLocations,LOCAL_TARGET,boundedExecutor};
 
 function crc32(bytes){let value=0xffffffff;for(const byte of bytes){value^=byte;for(let n=0;n<8;n++)value=(value>>>1)^((value&1)?0xedb88320:0);}return (value^0xffffffff)>>>0;}
 function validatePng(png){
