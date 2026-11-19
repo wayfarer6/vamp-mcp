@@ -55,6 +55,10 @@ the viewer closes its tunnel. The VS Code status bar shows the viewer connection
 state. If the connection drops, choose **Reconnect** to reopen it. The
 screenshot viewer does not enable forwarding.
 
+The viewer and script-server tunnels use the configured SSH host, port, account
+and key directly. Use a reachable hostname or IP and set these connection details
+explicitly if you normally get them from an SSH config alias or jump host.
+
 If the Linux host already runs the VAMP script server on `127.0.0.1:8421`,
 add `--verify-setup-server` to `vamp-mcp bootstrap` to check `/healthz` over a
 temporary SSH tunnel. The check closes its tunnel before returning. This checks
