@@ -9,7 +9,7 @@ const { PassThrough } = require('node:stream');
 
 const root = path.resolve(__dirname, '..');
 
-function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => {}) } = {}) {
+function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => {}), reconnect = false } = {}) {
   const settings = {
     'remote.enabled': true,
     'remote.host': 'lab-host.local',
@@ -68,7 +68,7 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
       createWebviewPanel: () => panel,
       withProgress: async (_options, task) => task({ report() {} }),
       showInformationMessage: async (...args) => { notices.push(args); return exportPath && args.includes('Verify') ? 'Verify' : undefined; },
-      showWarningMessage: async (...args) => { notices.push(args); return undefined; },
+      showWarningMessage: async (...args) => { notices.push(args); return reconnect && args.includes('Reconnect') ? 'Reconnect' : undefined; },
       showErrorMessage: async (...args) => { notices.push(args); return undefined; },
       showInputBox: async () => 'lab-host.local',
       showQuickPick: async items => items[0],
@@ -93,8 +93,9 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
     upload: async () => ({ server_version: '0.1.7', setup_script: null }),
     verifyStdio: async () => { calls.push(['verifyStdio']); return { toolCount: 15 }; },
     openForward: async port => {
+      const first = !calls.some(([name]) => name === 'openForward');
       calls.push(['openForward', port]);
-      return { localPort: 37591, closed: tunnelClosed, dispose: () => calls.push(['closeForward']) };
+      return { localPort: 37591, closed: first ? tunnelClosed : new Promise(() => {}), dispose: () => calls.push(['closeForward']) };
     },
     call: async (tool) => { calls.push(['call', tool]); return { status: 'ok', steps: [] }; },
   };
@@ -167,6 +168,18 @@ test('live viewer replaces its frame with a message when SSH forwarding ends', a
   await tunnelClosed;
   assert.match(panel.webview.html, /SSH forwarding disconnected/);
   assert.doesNotMatch(panel.webview.html, /<iframe/);
+  dispose();
+});
+
+test('choosing Reconnect opens a new live viewer tunnel after disconnect', async () => {
+  let disconnect;
+  const tunnelClosed = new Promise(resolve => { disconnect = resolve; });
+  const { commands, calls, panel, dispose } = harness({}, { tunnelClosed, reconnect: true });
+  await commands.get('vamp.remote.openLiveViewer')();
+  disconnect();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, [['openForward', 6080], ['closeForward'], ['openForward', 6080]]);
+  assert.match(panel.webview.html, /<iframe/);
   dispose();
 });
 
