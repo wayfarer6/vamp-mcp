@@ -29,11 +29,12 @@ VS Code / AI agent            SSH (22, keys only)          Remote host
 | KVM: libvirt + `virsh` (+ `virt-install`, `qemu-img` to create desktops) | hypervisor control | `remote_env_check` |
 | VirtualBox: `VBoxManage` | hypervisor control | `remote_env_check` |
 
-KVM automatic setup requires a Linux host. The uploader checks the host OS over
+The supported unattended `bootstrap`, `proxy`, and live-viewer route is Linux
+KVM. The uploader checks the host OS over
 SSH before writing files and reports `remote_host_unsupported_os` when it cannot
 establish that the host is Linux. The extension automatic uploader expects a
-POSIX shell. Native Windows can run
-the VirtualBox remote server with an explicit PowerShell SSH command; see
+POSIX shell. For the legacy native Windows VirtualBox path, run
+the remote server with an explicit PowerShell SSH command; see
 [the Windows lab setup](REMOTE_PDF_VALIDATION.md). WSL does not establish native
 Windows VirtualBox SDK support by itself.
 
@@ -53,6 +54,9 @@ Initial SSH failures report `remote_unreachable`, `remote_auth_failed`, or
 `remote_host_key_untrusted`. A missing remote Node command reports
 `remote_node_missing`, and a failed libvirt bootstrap check reports
 `remote_libvirt_unavailable`.
+The Linux KVM stdio server records the time, tool name, and outcome in its
+private `~/.vamp/remote/tool-audit.jsonl` file. Arguments, results, and
+subprocess errors are excluded.
 
 In desktop VS Code, **VAMP Remote: Open Live Viewer** opens a tunnel to a
 noVNC/websockify service already listening on the Linux host at `127.0.0.1:6080`.

@@ -7,6 +7,8 @@
 import path from 'node:path';
 import { execFile } from 'node:child_process';
 import { createInterface } from 'node:readline';
+import { constants } from 'node:fs';
+import { lstat, mkdir, open } from 'node:fs/promises';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { resolveConfig, parseArgs } from './config.mjs';
 import { createTools, VERSION } from './tools.mjs';
@@ -55,7 +57,7 @@ export function createRunner() {
 }
 
 /** JSON-RPC dispatcher for MCP over stdio. Returns null when no reply is due. */
-export function createMcpHandler({ tools, version = VERSION, instructions = INSTRUCTIONS, serverName = SERVER_NAME }) {
+export function createMcpHandler({ tools, version = VERSION, instructions = INSTRUCTIONS, serverName = SERVER_NAME, audit }) {
   const byName = new Map(tools.map(tool => [tool.name, tool]));
   return async function handle(message) {
     if (!message || typeof message !== 'object') return null;
@@ -91,7 +93,7 @@ export function createMcpHandler({ tools, version = VERSION, instructions = INST
       const name = params?.name;
       const tool = byName.get(name);
       if (!tool) {
-        return reply({ content: [{ type: 'text', text: JSON.stringify({ status: 'error', message: `Unknown tool "${name}".` }) }], isError: true });
+        return reply({ content: [{ type: 'text', text: JSON.stringify({ status: 'error', message: 'Unknown remote tool.' }) }], isError: true });
       }
       const args = params?.arguments && typeof params.arguments === 'object' ? params.arguments : {};
       try {
@@ -100,8 +102,10 @@ export function createMcpHandler({ tools, version = VERSION, instructions = INST
         if (output && output.text !== undefined) content.push({ type: 'text', text: JSON.stringify(output.text) });
         for (const image of output?.images ?? []) content.push({ type: 'image', data: image.data, mimeType: image.mimeType });
         if (!content.length) content.push({ type: 'text', text: JSON.stringify(output) });
+        await audit?.(tool.name, (output?.text ?? output)?.status === 'error' ? 'error' : 'returned');
         return reply({ content });
       } catch (error) {
+        await audit?.(tool.name, 'error');
         return reply({ content: [{ type: 'text', text: JSON.stringify({ status: 'error', message: String(error?.message || error) }) }], isError: true });
       }
     }
@@ -109,12 +113,36 @@ export function createMcpHandler({ tools, version = VERSION, instructions = INST
   };
 }
 
+function toolAudit(directory) {
+  let warned = false;
+  return async (tool, outcome) => {
+    try {
+      const uid = process.getuid();
+      await mkdir(directory, { recursive:true, mode:0o700 });
+      const parent = await lstat(directory);
+      if (!parent.isDirectory() || parent.uid !== uid || (parent.mode & 0o022)) throw Error('Unsafe audit directory');
+      const file = await open(path.join(directory,'tool-audit.jsonl'),
+        constants.O_WRONLY | constants.O_APPEND | constants.O_CREAT | constants.O_NOFOLLOW | constants.O_NONBLOCK, 0o600);
+      try {
+        const info = await file.stat();
+        if (!info.isFile() || info.uid !== uid || info.nlink !== 1 || (info.mode & 0o077)) throw Error('Unsafe audit file');
+        await file.writeFile(JSON.stringify({at:new Date().toISOString(),tool,outcome})+'\n');
+      } finally {
+        await file.close();
+      }
+    } catch {
+      if (!warned) process.stderr.write('vamp-remote: private tool audit unavailable\n');
+      warned = true;
+    }
+  };
+}
+
 function write(stdout, value) {
   stdout.write(`${JSON.stringify(value)}\n`);
 }
 
-export async function serveStdio({ tools, stdin = process.stdin, stdout = process.stdout, instructions } = {}) {
-  const handle = createMcpHandler({ tools, instructions });
+export async function serveStdio({ tools, stdin = process.stdin, stdout = process.stdout, instructions, audit } = {}) {
+  const handle = createMcpHandler({ tools, instructions, audit });
   const lines = createInterface({ input: stdin, crlfDelay: Infinity });
   let queue = Promise.resolve();
   lines.on('line', line => {
@@ -218,7 +246,7 @@ async function main() {
   } catch (error) {
     process.stderr.write(`vamp-remote: vision preload skipped: ${error?.message || error}\n`);
   }
-  await serveStdio({ tools: tools.tools });
+  await serveStdio({ tools: tools.tools, audit: config.backend === 'kvm' && process.platform === 'linux' ? toolAudit(config.workdir) : undefined });
   return 0;
 }
 

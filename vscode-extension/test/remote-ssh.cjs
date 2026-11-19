@@ -816,6 +816,30 @@ test('actual server entrypoint completes the stdio MCP handshake', async () => {
   assert.equal(JSON.parse(output).result.serverInfo.name,'vamp-remote');
 });
 
+test('Linux KVM stdio audit persists only private operation metadata', {skip:process.platform!=='linux'}, async t => {
+  const workdir=fs.mkdtempSync(path.join(os.tmpdir(),'vamp-remote-audit-'));
+  t.after(()=>fs.rmSync(workdir,{recursive:true,force:true}));
+  const server=path.join(repo,'backends/remote_ssh/server.mjs');
+  const child=spawn(process.execPath,[server,'--backend','kvm','--workdir',workdir],{stdio:['pipe','pipe','pipe']});
+  const output=[];
+  child.stdout.on('data',chunk=>output.push(chunk.toString()));
+  child.stderr.resume();
+  child.stdin.end(JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/call',
+    params:{name:'remote_vm_send_keys',arguments:{vm:'***',text:'private-input-fixture'}}})+'\n');
+  const code=await new Promise((resolve,reject)=>{
+    child.once('error',reject);
+    child.once('close',resolve);
+  });
+  assert.equal(code,0);
+  assert.equal(JSON.parse(output.join('')).result.isError,true);
+  const audit=path.join(workdir,'tool-audit.jsonl');
+  assert.equal(fs.statSync(audit).mode&0o777,0o600);
+  const row=JSON.parse(fs.readFileSync(audit,'utf8'));
+  const {at,...metadata}=row;
+  assert.ok(Number.isFinite(Date.parse(at)));
+  assert.deepEqual(metadata,{tool:'remote_vm_send_keys',outcome:'error'});
+});
+
 test('remote tablet clicks use separate down/up requests, including release after a failed down', async () => {
   const { createTools } = await load('tools.mjs');
   const { resolveConfig } = await load('config.mjs');
