@@ -94,7 +94,7 @@ Packer 게스트는 사후 설정 파일을 빌드 호스트에서 받습니다.
 Node.js 22+ 환경에서 [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)의 `vamp-mcp`와 선택 사항인 `vamp-mcp-vault` tarball을 내려받습니다. 릴리즈 노트의 SHA-256을 확인한 뒤 내려받은 파일로 설치합니다.
 
 ```bash
-npm install -g ./vamp-mcp-0.3.5.tgz ./vamp-mcp-vault-0.1.11.tgz
+npm install -g ./vamp-mcp-0.3.6.tgz ./vamp-mcp-vault-0.1.12.tgz
 ```
 
 클라이언트에 인자 없이 `vamp-mcp`를 **VAMP MCP**로, `vamp-mcp-vault`를 **VAMP Vault**로 등록합니다. 클라이언트가 명령을 찾지 못하면 설치된 전체 경로를 사용하세요. Podman이나 하이퍼바이저를 별도로 등록하지 않습니다. 자세한 내용은 [MCP 등록 가이드](docs/MCP_REGISTRATION.md)를 참고하세요.
