@@ -1,0 +1,79 @@
+name: Remote SSH macOS preflight
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/remote-ssh-macos.yml
+      - backends/remote_ssh/client.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Reject macOS before uploading over OpenSSH
+        shell: bash
+        run: |
+          set -euo pipefail
+          fixture=$(mktemp -d /tmp/vamp-sshd.XXXXXX)
+          trap 'if [[ -s "$fixture/pid" ]]; then sudo kill "$(cat "$fixture/pid")" || true; fi; rm -f "$fixture/host" "$fixture/identity"' EXIT
+          user=$(id -un)
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/host"
+          ssh-keygen -q -t ed25519 -N '' -f "$fixture/identity"
+          cat >"$fixture/sshd_config" <<EOF
+          ListenAddress 127.0.0.1
+          Port 22855
+          HostKey $fixture/host
+          PidFile $fixture/pid
+          AuthorizedKeysFile $fixture/identity.pub
+          AllowUsers $user
+          AuthenticationMethods publickey
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          DisableForwarding yes
+          EOF
+          printf '[127.0.0.1]:22855 %s\n' "$(cat "$fixture/host.pub")" >"$fixture/known_hosts"
+          sudo /usr/sbin/sshd -t -f "$fixture/sshd_config"
+          sudo /usr/sbin/sshd -f "$fixture/sshd_config" -E "$fixture/sshd.log"
+          export VAMP_QA_FIXTURE="$fixture"
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { spawn } from 'node:child_process';
+          import { lstat } from 'node:fs/promises';
+          import { homedir } from 'node:os';
+          import path from 'node:path';
+          import { RemoteSshClient, normalizeRemoteConfig } from './backends/remote_ssh/client.mjs';
+
+          const fixture = process.env.VAMP_QA_FIXTURE;
+          const remoteDirectory = path.join(homedir(), '.vamp', 'remote');
+          const commands = [];
+          const client = new RemoteSshClient(normalizeRemoteConfig({
+            host: '127.0.0.1',
+            username: process.env.USER,
+            port: 22855,
+            privateKeyPath: path.join(fixture, 'identity'),
+          }), {
+            spawnImpl(command, args, options) {
+              commands.push(args.at(-1));
+              return spawn(command, [
+                '-F', 'none', '-o', 'GlobalKnownHostsFile=none',
+                '-o', `UserKnownHostsFile=${path.join(fixture, 'known_hosts')}`,
+                ...args,
+              ], options);
+            },
+          });
+          await assert.rejects(lstat(remoteDirectory), { code: 'ENOENT' });
+          await assert.rejects(client.bootstrap('backends/remote_ssh/server.mjs'), error =>
+            error.code === 'remote_host_unsupported_os' && /Detected: Darwin/.test(error.message));
+          assert.deepEqual(commands, ['uname -s']);
+          await assert.rejects(lstat(remoteDirectory), { code: 'ENOENT' });
+          console.log('macOS OpenSSH rejected before creating the upload directory');
+          JS
