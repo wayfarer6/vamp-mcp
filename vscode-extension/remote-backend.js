@@ -251,19 +251,28 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
       return;
     }
     const opening = (async () => {
-      const tunnel = await clientFor(normalized).openForward(6080);
+      const status = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+      status.name = 'VAMP Remote Live Viewer';
+      status.text = '$(sync~spin) VAMP Remote Viewer · connecting';
+      status.tooltip = normalized.host;
+      status.show();
+      let tunnel;
       try {
+        tunnel = await clientFor(normalized).openForward(6080);
+        status.text = '$(plug) VAMP Remote Viewer · connected';
         const panel = vscode.window.createWebviewPanel('vamp.remoteLive', 'VAMP Remote Live Viewer', vscode.ViewColumn.Active, { enableScripts: true });
         let viewerClosed = false;
         panel.onDidDispose(() => {
           viewerClosed = true;
           tunnel.dispose();
+          status.dispose();
           liveViewers.delete(key);
         });
         const origin = `http://127.0.0.1:${tunnel.localPort}`;
         panel.webview.html = `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'; frame-src ${origin}; style-src 'unsafe-inline'"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0}iframe{display:block;width:100vw;height:100vh;border:0}</style></head><body><iframe title="Remote noVNC viewer" sandbox="allow-scripts allow-same-origin" src="${origin}/vnc.html?autoconnect=1&amp;view_only=1"></iframe></body></html>`;
         tunnel.closed.then(async () => {
           if (viewerClosed) return;
+          status.text = '$(debug-disconnect) VAMP Remote Viewer · stopped';
           panel.webview.html = `<!doctype html><html lang="en"><head><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><title>Remote viewer disconnected</title></head><body><p role="status">SSH forwarding disconnected. Close this tab and reopen the live viewer to reconnect.</p></body></html>`;
           const action = await vscode.window.showWarningMessage(`VAMP Remote live viewer disconnected from ${normalized.host}.`, 'Reconnect');
           if (action !== 'Reconnect' || viewerClosed) return;
@@ -272,7 +281,8 @@ function registerRemote(context, { runtime, output, version, changes, registerMc
         }).catch(error => vscode.window.showErrorMessage(`VAMP remote: ${error.message}`));
         return panel;
       } catch (error) {
-        tunnel.dispose();
+        tunnel?.dispose();
+        status.dispose();
         throw error;
       }
     })();

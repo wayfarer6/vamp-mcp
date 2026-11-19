@@ -28,6 +28,7 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
   const providers = new Map();
   const commands = new Map();
   const notices = [];
+  const statusItems = [];
   let receiveMessage;
   let disposePanel;
   const panel = {
@@ -65,6 +66,11 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
       executeCommand: async (id, ...args) => { calls.push(['executeCommand', id, ...args]); },
     },
     window: {
+      createStatusBarItem: () => {
+        const item = { show() {}, dispose() { this.disposed = true; } };
+        statusItems.push(item);
+        return item;
+      },
       createWebviewPanel: () => panel,
       withProgress: async (_options, task) => task({ report() {} }),
       showInformationMessage: async (...args) => { notices.push(args); return exportPath && args.includes('Verify') ? 'Verify' : undefined; },
@@ -77,6 +83,7 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
     Uri: { joinPath: (...parts) => ({ fsPath: parts.join('/') }), file: value => value },
     ProgressLocation: { Notification: 15, Window: 10 },
     ViewColumn: { Active: 1 },
+    StatusBarAlignment: { Left: 1 },
     ConfigurationTarget: { Global: 1 },
     McpStdioServerDefinition: class {
       constructor(label, command, args, env, version) { Object.assign(this, { label, command, args, env, version }); }
@@ -122,7 +129,7 @@ function harness(overrides = {}, { exportPath, tunnelClosed = new Promise(() => 
     { runtime: '/runtime', output, version: '0.1.7', changes },
   );
   return {
-    api, settings, providers, commands, messages, notices, calls, panel, output,
+    api, settings, providers, commands, messages, notices, calls, panel, output, statusItems,
     send: message => receiveMessage(message),
     dispose: () => disposePanel?.(),
   };
@@ -162,13 +169,16 @@ test('live viewer opens one forward on demand and closes it with the panel', asy
 test('live viewer replaces its frame with a message when SSH forwarding ends', async () => {
   let disconnect;
   const tunnelClosed = new Promise(resolve => { disconnect = resolve; });
-  const { commands, panel, dispose } = harness({}, { tunnelClosed });
+  const { commands, panel, dispose, statusItems } = harness({}, { tunnelClosed });
   await commands.get('vamp.remote.openLiveViewer')();
+  assert.match(statusItems[0].text, /connected$/);
   disconnect();
   await tunnelClosed;
   assert.match(panel.webview.html, /SSH forwarding disconnected/);
   assert.doesNotMatch(panel.webview.html, /<iframe/);
+  assert.match(statusItems[0].text, /stopped$/);
   dispose();
+  assert.equal(statusItems[0].disposed, true);
 });
 
 test('choosing Reconnect opens a new live viewer tunnel after disconnect', async () => {
