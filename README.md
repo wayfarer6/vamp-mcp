@@ -144,7 +144,7 @@ flowchart TD
     VM["Isolated VM desktop"]
     Container["Isolated desktop container"]
     Desktop <-->|Console capture and input| VM
-    Desktop <-->|VNC capture and input| Container
+    Desktop <-->|Managed screen capture and viewer| Container
 ```
 
 Robot Framework and Python run on the controller host, alongside the local YOLO

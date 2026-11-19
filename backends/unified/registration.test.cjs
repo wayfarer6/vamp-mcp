@@ -38,6 +38,11 @@ test('VM, RPA and Podman registrars retain every declared tool without startup e
   const m=await load(`backends/${folder}/server.mjs`);const server=new McpServer();m[fn](server);
   const source=fs.readFileSync(path.join(root,`backends/${folder}/server.mjs`),'utf8');
   const names=[...source.matchAll(/(?:server\.tool|add)\('([^']+)'/g)].map(x=>x[1]);
+  if(folder==='podman'){
+   const detach=names.indexOf('podman_workspace_detach');
+   assert.notEqual(detach,-1);
+   names.splice(detach+1,0,'podman_workspace_attach','vault_attach_container');
+  }
   assert.deepEqual(server.names,names);assert.ok(names.length>0);
  }
 });
