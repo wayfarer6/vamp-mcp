@@ -794,6 +794,22 @@ if (!status.cli.keepassxc.available) {
         await rm(lock, { recursive: true, force: true });
       }
     });
+    await check('Windows MCP publishes one volume for two concurrent requests using the same vault entry', async () => {
+      const volumes = ['concurrent-first.hc', 'concurrent-second.hc'].map(name => path.join(workdir, name));
+      const name = 'ConcurrentVolume';
+      const results = await Promise.all(volumes.map(async volume => payload(await client.callTool({
+        name: 'vault_create_volume', arguments: { volume, name, size_mb: 8, confirm: true },
+      }))));
+      const created = results.find(result => result.status === 'created');
+      assert.equal(results.filter(result => result.status === 'created').length, 1);
+      assert.match(results.find(result => result.status === 'error')?.error ?? '', /operation is active|credential already exists/);
+      const missing = volumes.find(volume => volume !== created.volume);
+      assert.ok((await stat(created.volume)).isFile());
+      await assert.rejects(stat(missing), { code: 'ENOENT' });
+      const cli = new VaultCli({ keepassxcCli: status.cli.keepassxc.path, kdbxPath: kdbx });
+      const listing = await cli.listEntries({ file: kdbx, databasePassword: masterPassword });
+      assert.equal(listing.entries.filter(item => item.path === created.entry).length, 1);
+    });
     if (process.env.VAULT_TEST_WSL_VBOX_MEDIA === '1') {
       await check('Windows MCP creates and deletes a fixed guest VHD with an encrypted payload', async () => {
         const volume = path.join(workdir, 'guest volume.vhd');
