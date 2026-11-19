@@ -45,8 +45,10 @@ already installed. After that, a standalone MCP client can use
 `--port`, `--key`, `--node`, or `--libvirt-uri` to match the SSH host. Verify the
 host key through a trusted source and add it to OpenSSH's known-hosts file before
 using the proxy, an exported MCP configuration, or its Verify action. When SSH
-disconnects, the proxy checks the same host once and reports
-`remote_session_lost` on stderr. The MCP client starts a new session to continue.
+disconnects between requests, the proxy reconnects to the same host once and
+restores the session if the handshake still matches. If a request was in flight
+or the retry fails, the proxy reports `remote_session_lost` on stderr. Start a
+new MCP session and check the operation's outcome before retrying it.
 
 In desktop VS Code, **VAMP Remote: Open Live Viewer** opens a tunnel to a
 noVNC/websockify service already listening on the Linux host at `127.0.0.1:6080`.

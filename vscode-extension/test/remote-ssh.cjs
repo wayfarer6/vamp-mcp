@@ -111,46 +111,122 @@ test('stdio proxy drains stdin and preserves SSH failure at EOF without reconnec
   }
 });
 
-test('stdio proxy preserves bytes and attempts one SSH probe after session loss', async () => {
+test('stdio proxy restores an idle session once and never exposes the second handshake', async () => {
   const { proxyRemoteStdio } = await load('client.mjs');
   const input = new PassThrough();
   const output = new PassThrough();
   const diagnostic = new PassThrough();
   const forwarded = [];
+  const messages = [];
   output.on('data', chunk => forwarded.push(chunk.toString()));
+  diagnostic.on('data', chunk => messages.push(chunk.toString()));
   const attempts = [];
+  const initialize = '{"jsonrpc":"2.0", "id":1,"method":"initialize"}\n';
+  const initialized = '{"jsonrpc":"2.0","method":"notifications/initialized"}\n';
+  const handshake = '{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"version":"0.3.4"}}}\n';
+  const next = '{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n';
   const result = proxyRemoteStdio({ host: 'lab-host.local' }, {
     input, output, diagnostic, expectedVersion: '0.3.5',
     spawnImpl: (command, args) => {
       assert.equal(command, 'ssh');
+      assert.ok(args.includes('StrictHostKeyChecking=yes'));
       const child = new (require('node:events').EventEmitter)();
       child.stdin = new PassThrough();
       child.stdout = new PassThrough();
       child.stderr = new PassThrough();
-      attempts.push({ args, child });
-      if (attempts.length === 2) setImmediate(() => child.emit('close', 255));
+      child.kill = () => child.emit('close', 255);
+      attempts.push(child);
+      if (attempts.length === 2) {
+        const inputs = [];
+        child.stdin.on('data', chunk => {
+          inputs.push(chunk.toString());
+          if (inputs.length === 1) {
+            assert.equal(inputs[0], initialize);
+            child.stdout.write(handshake);
+          }
+          if (inputs.length === 3) {
+            assert.deepEqual(inputs, [initialize, initialized, next]);
+            child.stdout.write('{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}\n');
+            child.emit('close', 255);
+          }
+        });
+      }
       return child;
     },
   });
-  const { child } = attempts[0];
-  const frame = '{"jsonrpc":"2.0", "id":1}\n';
-  input.write(frame);
-  assert.equal(child.stdin.read().toString(), frame);
-  child.stdout.write(frame);
-  assert.equal(forwarded.join(''), frame);
-  const handshake = '{"id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"version":"0.3.4"}}}\n';
+  const child = attempts[0];
+  input.write(initialize);
+  assert.equal(child.stdin.read().toString(), initialize);
   child.stdout.write(handshake.slice(0, 15));
   child.stdout.write(handshake.slice(15));
-  child.stdout.write(handshake);
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(forwarded.join(''), frame + handshake.repeat(2));
-  assert.match(diagnostic.read().toString(), /^Remote VAMP version differs .*vamp-mcp bootstrap --host lab-host\.local[^\n]*\n$/);
+  input.write(initialized);
+  assert.equal(child.stdin.read().toString(), initialized);
+  assert.equal(forwarded.join(''), handshake);
+  assert.match(messages.join(''), /^Remote VAMP version differs .*vamp-mcp bootstrap --host lab-host\.local[^\n]*\n$/);
   child.emit('close', 255);
+  await new Promise(resolve => setImmediate(resolve));
+  input.write(next);
   assert.equal(await result, 1);
   assert.equal(attempts.length, 2);
-  assert.ok(attempts.every(({ args }) => args.includes('StrictHostKeyChecking=yes')));
-  assert.match(attempts[1].args.at(-1), /--version$/);
-  assert.match(diagnostic.read().toString(), /^remote_session_lost:/);
+  assert.equal(forwarded.join(''), handshake + '{"jsonrpc":"2.0","id":2,"result":{"tools":[]}}\n');
+  assert.match(messages.join(''), /reconnected\.\nremote_session_lost:/);
+});
+
+test('stdio proxy never retries a tool call whose response was lost', async () => {
+  const { proxyRemoteStdio } = await load('client.mjs');
+  const input = new PassThrough();
+  const diagnostic = new PassThrough();
+  let child;
+  let attempts = 0;
+  const result = proxyRemoteStdio({ host: 'lab-host.local' }, {
+    input, diagnostic, output: new PassThrough(),
+    spawnImpl: () => {
+      attempts++;
+      child = new (require('node:events').EventEmitter)();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      return child;
+    },
+  });
+  input.write('{"jsonrpc":"2.0","id":1,"method":"initialize"}\n');
+  child.stdout.write('{"jsonrpc":"2.0","id":1,"result":{"protocolVersion":"2024-11-05","serverInfo":{"version":"0.3.4"}}}\n');
+  input.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
+  input.write('{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"remote_vm_stop"}}\n');
+  child.emit('close', 255);
+  assert.equal(await result, 1);
+  assert.equal(attempts, 1);
+  assert.match(diagnostic.read().toString(), /^remote_session_lost:.*Pending requests were not replayed/);
+});
+
+test('stdio proxy stops if the replacement SSH session negotiates a different server', async () => {
+  const { proxyRemoteStdio } = await load('client.mjs');
+  const input = new PassThrough();
+  const output = new PassThrough();
+  const diagnostic = new PassThrough();
+  const children = [];
+  const handshake = version => JSON.stringify({jsonrpc:'2.0',id:1,result:{protocolVersion:'2024-11-05',serverInfo:{version}}}) + '\n';
+  const result = proxyRemoteStdio({host:'lab-host.local'}, {
+    input,output,diagnostic,
+    spawnImpl: () => {
+      const child = new (require('node:events').EventEmitter)();
+      child.stdin = new PassThrough();
+      child.stdout = new PassThrough();
+      child.stderr = new PassThrough();
+      child.kill = () => child.emit('close',255);
+      if (children.length) child.stdin.once('data',() => child.stdout.write(handshake('different')));
+      children.push(child);
+      return child;
+    },
+  });
+  input.write('{"jsonrpc":"2.0","id":1,"method":"initialize"}\n');
+  children[0].stdout.write(handshake('original'));
+  input.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
+  children[0].emit('close',255);
+  assert.equal(await result,1);
+  assert.equal(children.length,2);
+  assert.equal(output.read().toString(),handshake('original'));
+  assert.match(diagnostic.read().toString(),/^remote_session_lost:/);
 });
 
 function fakeHost() {

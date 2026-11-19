@@ -5,6 +5,8 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
+import { StringDecoder } from 'node:string_decoder';
+import { isDeepStrictEqual } from 'node:util';
 
 const HOST_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const USER_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -484,72 +486,158 @@ export function remoteStdioDefinition(config, { version = '0.1.7' } = {}) {
   };
 }
 
-/** Forward MCP bytes unchanged. A broken session must be initialized again by its client. */
+// Observe the MCP handshake and pending request IDs without changing the byte stream.
+// An incomplete frame, unknown response, or oversized message disables recovery.
+function watchFrames(onFrame) {
+  const decoder = new StringDecoder('utf8');
+  const limit = 16 * 1024 * 1024;
+  let pending = '';
+  let valid = true;
+  let newline = true;
+  return {
+    onData(chunk) {
+      if (!valid) return;
+      if (chunk.length) newline = typeof chunk === 'string' ? chunk.endsWith('\n') : chunk[chunk.length - 1] === 10;
+      const lines = (pending + (typeof chunk === 'string' ? chunk : decoder.write(chunk))).split('\n');
+      pending = lines.pop();
+      valid = pending.length <= limit;
+      for (const line of lines) {
+        if (!valid) break;
+        const frame = line.length <= limit ? parseToolOutput(line) : null;
+        valid = Boolean(frame && !Array.isArray(frame) && onFrame(frame, line));
+      }
+      if (!valid) pending = '';
+    },
+    atBoundary: () => valid && newline,
+  };
+}
+
+function openProxyChild(definition, spawnImpl) {
+  const child = spawnImpl(definition.command, definition.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  child.stdin.on('error', () => {});
+  let stderr = '';
+  child.stderr.setEncoding('utf8').on('data', chunk => { stderr = (stderr + chunk).slice(-4096); });
+  const closed = new Promise(resolve => {
+    child.once('error', () => resolve(1));
+    child.once('close', resolve);
+  });
+  return { child, closed, keyError: () => hostKeyMessage(stderr) };
+}
+
+function restoreProxySession(connection, initialize, initialized, original) {
+  const { child, closed } = connection;
+  return new Promise(resolve => {
+    let pending = '';
+    let settled = false;
+    const decoder = new StringDecoder('utf8');
+    const finish = ready => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      child.stdout.off('data', onData);
+      child.stdout.pause();
+      if (ready) child.stdin.write(initialized + '\n');
+      resolve(ready);
+    };
+    const onData = chunk => {
+      pending += decoder.write(chunk);
+      if (pending.length > 65536) return finish(false);
+      const newline = pending.indexOf('\n');
+      if (newline < 0) return;
+      const frame = parseToolOutput(pending.slice(0, newline));
+      finish(newline === pending.length - 1 && frame?.id === original.id && isDeepStrictEqual(frame.result, original.result));
+    };
+    const timer = setTimeout(() => finish(false), 15000);
+    child.stdout.on('data', onData);
+    closed.then(() => finish(false));
+    child.stdin.write(initialize + '\n');
+  });
+}
+
+/** Forward MCP bytes unchanged and restore an idle session at most once. */
 export async function proxyRemoteStdio(config, { input = process.stdin, output = process.stdout, diagnostic = process.stderr, spawnImpl = spawn, expectedVersion } = {}) {
   const normalized = normalizeRemoteConfig(config);
   if (normalized.backend !== 'kvm') throw new Error('The remote proxy requires a Linux KVM host.');
   const definition = remoteStdioDefinition(normalized);
-  const child = spawnImpl(definition.command, definition.args, { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  let ended = false;
-  let shutdownTimer;
-  const onEnd = () => {
-    ended = true;
-    shutdownTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
-    shutdownTimer.unref();
-  };
-  if (input.readableEnded) onEnd();
-  input.once('end', onEnd);
-  child.stdin.on('error', () => {});
-  if (expectedVersion) {
-    let pending = '';
-    const inspectHandshake = chunk => {
-      pending += chunk.toString('utf8');
-      const lines = pending.split('\n');
-      pending = lines.pop();
-      for (const line of lines) {
-        const setup = parseToolOutput(line)?.result;
-        if (!setup?.protocolVersion || typeof setup.serverInfo?.version !== 'string') continue;
-        child.stdout.off('data', inspectHandshake);
-        if (setup.serverInfo.version !== expectedVersion) {
-          const user = normalized.username ? ` --user ${normalized.username}` : '';
-          const port = normalized.port === 22 ? '' : ` --port ${normalized.port}`;
-          diagnostic.write(`Remote VAMP version differs from local VAMP ${expectedVersion}. Run vamp-mcp bootstrap --host ${normalized.host}${user}${port} with the same SSH options.\n`);
-        }
-        return;
-      }
-      if (pending.length > 65536) child.stdout.off('data', inspectHandshake);
-    };
-    child.stdout.on('data', inspectHandshake);
-  }
-  child.stdout.pipe(output, { end: false });
-  let sshDiagnostic = '';
-  child.stderr.setEncoding('utf8').on('data', chunk => { sshDiagnostic = (sshDiagnostic + chunk).slice(-4096); });
-  const closed = new Promise((resolve, reject) => {
-    child.once('error', reject);
-    child.once('close', resolve);
+  let initialize;
+  let initializeId;
+  let initialized;
+  let original;
+  let warned = false;
+  const requests = new Set();
+  const outbound = watchFrames((frame, line) => {
+    if (!frame.method || requests.size >= 1024) return false;
+    if (frame.method === 'initialize') {
+      if (initialize || frame.id === undefined) return false;
+      initialize = line;
+      initializeId = frame.id;
+    }
+    if (frame.method === 'notifications/initialized') initialized = line;
+    if (frame.id !== undefined) {
+      if (requests.has(frame.id)) return false;
+      requests.add(frame.id);
+    }
+    return true;
   });
-  input.pipe(child.stdin);
-  let code;
-  try {
-    code = await closed;
-  } finally {
-    clearTimeout(shutdownTimer);
-    input.unpipe(child.stdin);
-    input.removeListener('end', onEnd);
-    input.pause();
+  const inbound = watchFrames(frame => {
+    const setup = frame.result;
+    if (!warned && expectedVersion && setup?.protocolVersion && typeof setup.serverInfo?.version === 'string') {
+      warned = true;
+      if (setup.serverInfo.version !== expectedVersion) {
+        const user = normalized.username ? ` --user ${normalized.username}` : '';
+        const port = normalized.port === 22 ? '' : ` --port ${normalized.port}`;
+        diagnostic.write(`Remote VAMP version differs from local VAMP ${expectedVersion}. Run vamp-mcp bootstrap --host ${normalized.host}${user}${port} with the same SSH options.\n`);
+      }
+    }
+    if (frame.method) return frame.id === undefined;
+    if (frame.id === undefined || !requests.delete(frame.id)) return false;
+    if (frame.id === initializeId && setup?.protocolVersion && setup.serverInfo) original = frame;
+    return true;
+  });
+
+  async function relay(connection, observe = false) {
+    const {child, closed} = connection;
+    let shutdownTimer;
+    const onEnd = () => {
+      shutdownTimer = setTimeout(() => child.kill('SIGKILL'), 5000);
+      shutdownTimer.unref();
+    };
+    if (input.readableEnded) onEnd();
+    input.once('end', onEnd);
+    if (observe) {
+      input.on('data', outbound.onData);
+      child.stdout.on('data', inbound.onData);
+    }
+    child.stdout.pipe(output, {end:false});
+    input.pipe(child.stdin);
+    try {
+      return await closed;
+    } finally {
+      clearTimeout(shutdownTimer);
+      input.unpipe(child.stdin);
+      child.stdout.unpipe(output);
+      input.removeListener('end', onEnd);
+      input.removeListener('data', outbound.onData);
+      child.stdout.removeListener('data', inbound.onData);
+      input.pause();
+    }
   }
-  const keyError = hostKeyMessage(sshDiagnostic);
-  if (ended) {
-    if (code === 0) return 0;
-    diagnostic.write(`remote_session_lost: ${keyError || 'SSH closed without completing the MCP session.'}\n`);
-    return 1;
+
+  let connection = openProxyChild(definition, spawnImpl);
+  let code = await relay(connection, true);
+  if (input.readableEnded && code === 0) return 0;
+  if (!input.readableEnded && !connection.keyError() && initialize && initialized && original &&
+      requests.size === 0 && outbound.atBoundary() && inbound.atBoundary()) {
+    connection = openProxyChild(definition, spawnImpl);
+    if (await restoreProxySession(connection, initialize, initialized, original)) {
+      diagnostic.write('Remote MCP session reconnected.\n');
+      code = await relay(connection);
+      if (input.readableEnded && code === 0) return 0;
+    } else {
+      connection.child.kill('SIGKILL');
+      await connection.closed;
+    }
   }
-  const retry = new RemoteSshClient(normalized, { spawnImpl });
-  try {
-    await retry.exec(`exec ${quote(normalized.remoteNodePath)} ${remoteFile('server.mjs')} --version`, { timeoutMs: 15000, requireKnownHost: true });
-  } catch {
-    // The original MCP session is lost even if the remote host is reachable again.
-  }
-  diagnostic.write(`remote_session_lost: ${keyError || 'Start a new MCP session to reconnect. Pending requests were not replayed.'}\n`);
+  diagnostic.write(`remote_session_lost: ${connection.keyError() || 'Start a new MCP session to reconnect. Pending requests were not replayed.'}\n`);
   return 1;
 }
