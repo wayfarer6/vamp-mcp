@@ -57,6 +57,7 @@ test('SSH forwarding accepts only explicit private listeners and binds locally t
   client.exec = async (command, options) => {
     assert.equal(command, "LC_ALL=C ss -H -ltn 'sport = :6080'");
     assert.equal(options.requireKnownHost, true);
+    assert.equal(options.ignoreConfig, true);
     return { code: 0, stdout };
   };
   await client.checkForwardListener(6080);

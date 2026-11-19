@@ -59,9 +59,10 @@ export function isConfigured(config) {
 }
 
 /** Arguments for the ssh binary. The remote command is always the last item. */
-export function sshArgs(config, command, { requireKnownHost = false } = {}) {
+export function sshArgs(config, command, { requireKnownHost = false, ignoreConfig = false } = {}) {
   if (!isConfigured(config)) throw new Error('Remote host is not configured.');
   const args = [
+    ...(ignoreConfig ? ['-F', 'none'] : []),
     '-T',
     '-o', 'BatchMode=yes',
     '-o', `ConnectTimeout=${config.connectTimeoutSeconds}`,
@@ -80,9 +81,9 @@ export function sshForwardArgs(config, localPort, remotePort) {
   for (const port of [localPort, remotePort]) {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Forwarding ports must be integers between 1 and 65535.');
   }
-  const prefix = sshArgs(config, '', { requireKnownHost: true }).slice(0, -3);
+  const prefix = sshArgs(config, '', { requireKnownHost: true, ignoreConfig: true }).slice(0, -3);
   return [
-    '-F', 'none', ...prefix, '-N', '-o', 'ExitOnForwardFailure=yes', '-o', 'GatewayPorts=no',
+    ...prefix, '-N', '-o', 'ExitOnForwardFailure=yes', '-o', 'GatewayPorts=no',
     '-L', `127.0.0.1:${localPort}:127.0.0.1:${remotePort}`, '--', remoteTarget(config),
   ];
 }
@@ -171,11 +172,11 @@ export class RemoteSshClient {
   }
 
   /** Run a shell command on the remote host through ssh. */
-  exec(command, { stdinText, timeoutMs = this.timeoutMs, requireKnownHost = false } = {}) {
+  exec(command, { stdinText, timeoutMs = this.timeoutMs, requireKnownHost = false, ignoreConfig = false } = {}) {
     return new Promise((resolve, reject) => {
       let child;
       try {
-        child = this.spawnImpl('ssh', sshArgs(this.config, command, { requireKnownHost }), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+        child = this.spawnImpl('ssh', sshArgs(this.config, command, { requireKnownHost, ignoreConfig }), { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
       } catch (error) {
         reject(new RemoteSshError(friendly(error, this.config, ''), { code: error?.code }));
         return;
@@ -379,7 +380,7 @@ export class RemoteSshClient {
   async checkForwardListener(port) {
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Invalid remote forwarding port.');
     const command = `LC_ALL=C ss -H -ltn ${quote(`sport = :${port}`)}`;
-    const result = await this.exec(command, { timeoutMs: 10000, requireKnownHost: true });
+    const result = await this.exec(command, { timeoutMs: 10000, requireKnownHost: true, ignoreConfig: true });
     const listeners = result.stdout.trim().split(/\r?\n/).filter(Boolean).map(line => line.trim().split(/\s+/)[3]);
     const ipv4 = `127.0.0.1:${port}`;
     const ipv6 = `[::1]:${port}`;
