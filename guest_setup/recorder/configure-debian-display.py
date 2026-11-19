@@ -109,17 +109,20 @@ def finalize():
         if Path(runtime+'/bus').exists():break
         time.sleep(5)
     else:raise RuntimeError('Automatic GNOME login session did not become ready')
+    display_result=Path(account.pw_dir)/'.local/share/vamp/display/persistent-result.json'
     for script in ['session-policy.py','apply-display.py']:
-        command=['/usr/sbin/runuser','-u','vboxuser','--','env',*[key+'='+environment[key] for key in ['HOME','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','DISPLAY','XDG_SESSION_TYPE']],'python3',str(HERE/script)]
-        if script=='apply-display.py':command+=['--output',str(Path(account.pw_dir)/'.local/share/vamp/display/persistent-result.json')]
+        assignments=[key+'='+environment[key] for key in ['HOME','XDG_RUNTIME_DIR','DBUS_SESSION_BUS_ADDRESS','DISPLAY','XDG_SESSION_TYPE']]
+        if script=='apply-display.py':
+            assignments.append('VAMP_GNOME_UNATTENDED=1')
+        command=['/usr/sbin/runuser','-u','vboxuser','--','env',*assignments,'python3',str(HERE/script)]
+        if script=='apply-display.py':
+            command+=['--output',str(display_result)]
         subprocess.run(command,check=True)
-    source=Path(account.pw_dir)/'.config/monitors.xml'
-    for _ in range(30):
-        if source.is_file():break
-        time.sleep(1)
-    else:raise RuntimeError('GNOME did not persist the selected monitor configuration')
-    canonical=Path('/etc/vamp/monitors.xml');canonical.parent.mkdir(parents=True,exist_ok=True)
-    shutil.copyfile(source,canonical)
+    display=json.loads(display_result.read_text())
+    if not display.get('resolution_verified') or not display.get('monitors_xml'):
+        raise RuntimeError('GNOME did not provide a verified monitor configuration')
+    canonical=Path('/etc/vamp/monitors.xml')
+    write(canonical,display['monitors_xml']+'\n')
     paths=distribute(canonical)
     result=prepare();result['monitors_xml']=paths
     state=Path('/var/lib/vamp/display-persistence.json');state.parent.mkdir(parents=True,exist_ok=True);state.write_text(json.dumps(result,indent=2)+'\n')

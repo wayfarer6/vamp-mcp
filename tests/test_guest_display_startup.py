@@ -4,6 +4,7 @@ from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import patch
+import xml.etree.ElementTree as ET
 
 ROOT=Path(__file__).resolve().parents[1]
 def load(name):
@@ -39,11 +40,38 @@ class GuestDisplayTests(unittest.TestCase):
     def test_gnome_refuses_multi_monitor_and_checks_current_mode(self):
         gnome=load('gnome-display.py')
         mode=('mode',1920,1080,60,1,[1],{'is-current':True})
-        state=(1,[(('Virtual-1','vendor','product','serial'),[mode],{})],[(0,0,1,0,True,[],{})],{})
+        spec=('Virtual1','vendor','product','serial')
+        spares=[(f'Virtual{number}','vendor','product','serial') for number in range(2,9)]
+        spare=spares[0]
+        monitors=[(output,[],{}) for output in spares]+[(spec,[mode],{})]
+        state=(1,monitors,[(0,0,1,0,True,[spec],{})],{})
         self.assertTrue(gnome.verify(state));self.assertEqual(gnome.select_mode(state)[2][0],'mode')
-        state[2][0]=(0,0,1.5,0,True,[],{})
+        self.assertEqual(gnome.select_mode(state)[1],spec)
+        config=ET.fromstring(gnome.monitor_configuration(state)).find('configuration')
+        self.assertEqual(config.findtext('logicalmonitor/monitor/monitorspec/connector'),'Virtual1')
+        self.assertEqual(config.findtext('logicalmonitor/monitor/mode/width'),'1920')
+        self.assertEqual([node.text for node in config.findall('disabled/monitorspec/connector')],
+                         [output[0] for output in spares])
+        state[2][0]=(0,0,1.5,0,True,[spec],{})
         self.assertFalse(gnome.verify(state))
-        with self.assertRaises(RuntimeError):gnome.select_mode((1,state[1]*2,state[2],{}))
+        with self.assertRaises(RuntimeError):
+            gnome.select_mode((1,monitors,[(0,0,1,0,True,[spec,spare],{})],{}))
+        with self.assertRaises(RuntimeError):
+            gnome.select_mode((1,monitors,state[2]+[(1920,0,1,0,False,[spare],{})],{}))
+
+    def test_native_x11_uses_only_the_active_output(self):
+        gnome=load('gnome-display.py')
+        visible=('Screen 0: minimum 1 x 1, current 1920 x 1080, maximum 16384 x 16384\n'
+                 'Virtual1 connected primary 1920x1080+0+0 (normal)\n'
+                 '   1920x1080     60.00*\n'
+                 'Virtual2 connected (normal)\n')
+        with patch('subprocess.check_output',return_value=visible), patch('subprocess.run') as run:
+            self.assertEqual(gnome.native_x11(),[1920,1080])
+            run.assert_called_once_with(['xrandr','--output','Virtual1','--mode','1920x1080',
+                                         '--fb','1920x1080'],check=True,capture_output=True,text=True)
+        with patch('subprocess.check_output',return_value=visible.replace(
+                'Virtual2 connected (normal)','Virtual2 connected 1920x1080+1920+0 (normal)')):
+            with self.assertRaises(RuntimeError):gnome.native_x11()
     def test_recording_handoff_never_executes_source(self):
         recorder=load('prepare-recording.py')
         with tempfile.TemporaryDirectory() as directory:
