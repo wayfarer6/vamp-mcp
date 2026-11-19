@@ -484,17 +484,24 @@ export class VaultCli {
     return this.wslVeraCrypt(['--create', target, ...args.slice(2)], { password, timeout: 900000 });
   }
 
-  async wrapGuestVolumeViaWsl(container, vhd, sizeBytes) {
+  async wrapGuestVolume(container, vhd, sizeBytes) {
+    const windows = this.platform === 'win32';
+    const qemu = (args, timeout) => windows
+      ? this.wslCommand(['/usr/bin/qemu-img', ...args], { timeout })
+      : run('qemu-img', args, { timeout, env: this.env });
     try {
-      const [source, destination] = await Promise.all([container, vhd].map(file => this.windowsVolumePathInWsl(file)));
-      await this.wslCommand(['/usr/bin/qemu-img', 'convert', '-f', 'raw', '-O', 'vpc',
-        '-o', 'subformat=fixed,force_size=on', source, destination], { timeout: 900000 });
-      const { stdout } = await this.wslCommand(['/usr/bin/qemu-img', 'info', '-f', 'vpc', '--output=json', destination]);
+      const [source, destination] = windows
+        ? await Promise.all([container, vhd].map(file => this.windowsVolumePathInWsl(file)))
+        : [container, vhd];
+      await qemu(['convert', '-f', 'raw', '-O', 'vpc',
+        '-o', 'subformat=fixed,force_size=on', source, destination], 900000);
+      const { stdout } = await qemu(['info', '-f', 'vpc', '--output=json', destination], 30000);
       if (JSON.parse(stdout)['virtual-size'] !== sizeBytes || (await stat(vhd)).size !== sizeBytes + 512) {
         throw new Error('Unexpected VHD size');
       }
     } catch {
-      const error = new Error('Could not create a fixed guest VHD. Check that /usr/bin/qemu-img is installed in the configured WSL distribution and there is space for both staging files.');
+      const location = windows ? 'the configured WSL distribution' : 'the Linux host';
+      const error = new Error(`Could not create a fixed guest VHD. Check for qemu-img on ${location} and space for both staging files.`);
       error.code = 'guest_vhd_failed';
       throw error;
     }

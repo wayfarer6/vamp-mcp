@@ -414,8 +414,9 @@ Windows host, both WSL UNC aliases were accessible to the Windows user,
 but Hyper-V could not open either alias. In that configuration the tool
 returns `hyperv_medium_unavailable` before changing the VM configuration.
 To create a VHD for guest-side unlocking, call `vault_create_volume` with
-`format: "guest-vhd"` and a local Windows `.vhd` path. The configured WSL
-distribution needs VeraCrypt and `/usr/bin/qemu-img`. The fixed VHD exposes a
+`format: "guest-vhd"` and a local `.vhd` path. On Linux, install VeraCrypt and
+`qemu-img` on the host. On Windows, install VeraCrypt and `/usr/bin/qemu-img`
+in the configured WSL distribution. The fixed VHD exposes a
 whole VeraCrypt block device. Its password is stored in the managed KeePassXC
 entry. To attach it to a powered-off Hyper-V VM, call `vault_attach_vm` with
 `backend: "hyperv"`, the local `.vhd` path as `volume`, the returned
@@ -423,6 +424,9 @@ entry. To attach it to a powered-off Hyper-V VM, call `vault_attach_vm` with
 and `disk`. Use the same parameters with `vault_detach_vm` before deleting the
 volume. For a powered-off Windows-hosted VirtualBox VM, use
 `backend: "virtualbox"`, the SATA `controller` name and the secondary `port`.
+For a powered-off Linux KVM guest, use `backend: "kvm"`, the returned
+`credential_entry`, the VM UUID, and a secondary virtio `target` such as
+`vdb`. Set `libvirt_uri` if using `qemu:///system`.
 The Debian guest sees an encrypted whole disk. To unlock it through
 Vault, install VeraCrypt at `/usr/bin/veracrypt`, create a dedicated `/mnt`
 mount directory, and identify the secondary disk's exact `/dev/disk/by-path/`

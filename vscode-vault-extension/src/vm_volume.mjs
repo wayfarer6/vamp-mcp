@@ -126,7 +126,7 @@ export async function kvmVolume(cli,args,{
   if (!/^vd[b-z]$/.test(target) || !['qemu:///session','qemu:///system'].includes(uri)) {
     throw new Error('Choose a secondary virtio disk target and a local libvirt connection.');
   }
-  const {medium,recheck,volume,mountPoint}=await workspaceDisk(cli,args);
+  const {medium,recheck,volume,mountPoint}=await (args.credentials ? guestDisk(cli,args) : workspaceDisk(cli,args));
   const registered={backend:'kvm',vm,target,uri,medium,volume,mountPoint};
   const virsh=(...argv)=>execute(['-c',uri,...argv]);
   const state=async()=>{
@@ -240,9 +240,10 @@ async function hypervCommand(request) {
 }
 
 async function guestDisk(cli, { volume, credentials }) {
-  if (!/^[a-z]:[\\/]/i.test(volume) || !/\.vhd$/i.test(volume)) throw new Error('Use the local Windows path to a managed guest VHD.');
+  const localPath = value => cli.platform === 'win32' ? /^[a-z]:[\\/]/i.test(value) : path.isAbsolute(value);
+  if (!localPath(volume) || !/\.vhd$/i.test(volume)) throw new Error('Use the local path to a managed guest VHD.');
   const medium = await realpath(volume);
-  if (!/^[a-z]:[\\/]/i.test(medium)) throw new Error('The guest VHD must resolve to a Windows drive path.');
+  if (!localPath(medium)) throw new Error('The guest VHD must resolve to a local absolute path.');
   const listing = await cli.listEntries(credentials);
   if (listing.entries.filter(item => item.path === credentials.entry).length !== 1) throw new Error('Choose one managed guest VHD entry.');
   const record = await cli.showEntry({ ...credentials, showProtected:false });

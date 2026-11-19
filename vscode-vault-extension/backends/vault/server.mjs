@@ -834,7 +834,7 @@ tool('vault_delete_group', {
 
 tool('vault_create_volume', {
   title: 'Create a managed encrypted volume',
-  description: 'Create a VeraCrypt container, or a guest VHD with an encrypted block device on Windows via WSL. Store the generated password in KeePassXC after approval.',
+  description: 'Create a VeraCrypt container or a fixed guest VHD with an encrypted block device on Linux or Windows via WSL. Store the generated password in KeePassXC after approval.',
   inputSchema: {
     volume: z.string().min(1).max(4096),
     name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
@@ -898,7 +898,7 @@ tool('vault_delete_volume', {
 
 for (const operation of ['attach','detach']) tool(`vault_${operation}_vm`, {
   title: `${operation === 'attach' ? 'Attach' : 'Detach'} a VeraCrypt workspace disk`,
-  description: 'Change a secondary disk slot of a powered-off VM. Supply a verified VeraCrypt mount and disk, or a managed guest VHD and its credential entry for Hyper-V or VirtualBox on Windows.',
+  description: 'Change a secondary disk slot of a powered-off VM. Supply a verified VeraCrypt mount and disk, or a managed guest VHD and its credential entry for Linux KVM or Windows Hyper-V and VirtualBox.',
   inputSchema: {
     vm: z.string().uuid(),
     volume: z.string().min(1).max(4096),
@@ -917,9 +917,10 @@ for (const operation of ['attach','detach']) tool(`vault_${operation}_vm`, {
   try {
     const wsl=process.platform==='win32' && args.backend!=='kvm' && Boolean(process.env.VAULT_VERACRYPT_WSL_DISTRO);
     const guestVhd=Boolean(args.credential_entry);
-    if (guestVhd ? (process.platform!=='win32' || args.backend==='kvm' || args.mount_point || args.disk)
+    const guestVhdSupported = args.backend==='kvm' ? process.platform==='linux' : process.platform==='win32';
+    if (guestVhd ? (!guestVhdSupported || args.mount_point || args.disk)
         : (!args.mount_point || !args.disk)) {
-      throw new Error('Specify a guest VHD credential entry for Hyper-V or VirtualBox on Windows, or both the mount point and disk filename.');
+      throw new Error('Specify a guest VHD credential entry for Linux KVM or Windows Hyper-V and VirtualBox, or both the mount point and disk filename.');
     }
     if (!guestVhd && (process.platform!=='linux' || args.backend==='hyperv') && !wsl) {
       throw new Error('Use VirtualBox or KVM on Linux, or VirtualBox or Hyper-V with configured WSL on Windows.');

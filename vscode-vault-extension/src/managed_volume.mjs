@@ -7,8 +7,9 @@ export async function createManagedVolume(cli, { file, volume, name, sizeBytes, 
   if (!path.isAbsolute(volume) || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name)) {
     throw new Error('Use an absolute volume path and a simple credential name.');
   }
-  if (format === 'guest-vhd' && (cli.platform !== 'win32' || !/^[a-z]:[\\/]/i.test(volume) || !/\.vhd$/i.test(volume))) {
-    throw new Error('Guest VHD creation requires a local Windows .vhd path and configured WSL.');
+  if (format === 'guest-vhd' && (!/\.vhd$/i.test(volume) ||
+      (cli.platform !== 'linux' && (cli.platform !== 'win32' || !/^[a-z]:[\\/]/i.test(volume))))) {
+    throw new Error('Use a local .vhd path on Linux or on a Windows drive with configured WSL.');
   }
   const parent = await realpath(path.dirname(volume));
   const destination = path.join(parent, path.basename(volume));
@@ -28,7 +29,7 @@ export async function createManagedVolume(cli, { file, volume, name, sizeBytes, 
     const password = randomBytes(32).toString('base64url');
     const result = await cli.createVolume({ file: container, password, sizeBytes, headless: true });
     if (!result.created || !(await stat(container)).isFile()) throw new Error('VeraCrypt did not confirm creation.');
-    if (format === 'guest-vhd') await cli.wrapGuestVolumeViaWsl(container, staged, sizeBytes);
+    if (format === 'guest-vhd') await cli.wrapGuestVolume(container, staged, sizeBytes);
     await cli.addEntry({
       file, group: 'VeraCrypt', entry: name, secret: password, databasePassword,
       url: pathToFileURL(destination).href,
