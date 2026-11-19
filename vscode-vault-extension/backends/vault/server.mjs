@@ -28,6 +28,7 @@ import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
 import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeholders.mjs';
+import { exportEncryptedFile } from '../../src/encrypted_export.mjs';
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
 import { hypervVolume, kvmVolume, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
@@ -1069,6 +1070,61 @@ tool('vault_unmount_volume', {
       return unmount();
     }) : await unmount();
     return text({ status: result.unmounted ? 'unmounted' : 'failed', ...result });
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+tool('vault_export_encrypted', {
+  title: 'Export an encrypted Vault file',
+  description: 'Copy the configured KeePass database or VeraCrypt file into an existing folder on the computer running the local Vault MCP server. Preview first and confirm the destination with the user. Returns paths and a checksum.',
+  inputSchema: {
+    kind: z.enum(['kdbx', 'volume']),
+    destination_folder: z.string().min(1).max(4096),
+    confirm: z.boolean().default(false),
+  },
+}, async (args, extra) => {
+  try {
+    if (settings.remoteHost) throw new Error('Export a remote Vault file through the local VS Code Vault connection.');
+    const options = { kind: args.kind, sourcePath: args.kind === 'kdbx' ? settings.kdbx : settings.volume,
+      destinationFolder: args.destination_folder, signal: extra?.signal };
+    const preview = await exportEncryptedFile(options);
+    if (!args.confirm) return text(preview);
+    if (settings.bridgeSocket) {
+      const bridge = await getBridge();
+      if (!bridge) throw new Error('Open VAMP Vault in VS Code to approve the export.');
+      const approval = await bridge.approve({ action: 'vault_export_encrypted', entry: preview.source_path,
+        detail: `Export the encrypted file ${preview.source_path} to ${preview.destination_path}?` });
+      if (!approval.approved) return text({ status: 'denied' });
+    }
+    const copy = () => exportEncryptedFile({ ...options, confirmed: true, expectedDestinationPath: preview.destination_path });
+    if (args.kind === 'kdbx') return text(await copy());
+
+    const result = await withVmVolumeState(async guard => {
+      const source = await realpath(options.sourcePath);
+      await guard.assertDetached({ volume: source });
+      const identity = await stat(source, { bigint: true });
+      const manager = await getCli();
+      const mounted = (await manager.listVolumes({ probeNative: true })).mounted;
+      for (const item of mounted) {
+        if (!item.volume) throw new Error('Dismount native VeraCrypt drives before exporting a container.');
+        const backing = await stat(item.volume, { bigint: true }).catch(error => {
+          if (error.code === 'ENOENT') return null;
+          throw error;
+        });
+        if (backing && backing.dev === identity.dev && backing.ino === identity.ino) {
+          throw new Error('Dismount the VeraCrypt volume before exporting it.');
+        }
+      }
+      if (process.platform === 'win32' && env.VAULT_VERACRYPT_WSL_DISTRO) {
+        const translated = await manager.windowsVolumePathInWsl(source);
+        if ((await manager.listWslVolumes()).some(item => item.volume === translated)) {
+          throw new Error('Dismount the VeraCrypt volume before exporting it.');
+        }
+      }
+      return copy();
+    });
+    return text(result);
   } catch (error) {
     return failure(error);
   }

@@ -54,7 +54,8 @@ try {
    $action=New-ScheduledTaskAction -Execute 'powershell.exe' -Argument ('-NoProfile -ExecutionPolicy Unrestricted -File "'+$resume+'"')
    $trigger=New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
    $principal=New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
-   Register-ScheduledTask -TaskName 'VAMP-Packer-Finish' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null
+   $settings=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
+   Register-ScheduledTask -TaskName 'VAMP-Packer-Finish' -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
    $login='HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon'
    foreach($item in (@{AutoAdminLogon='1';DefaultUserName='vboxuser';DefaultPassword='password123!';DefaultDomainName=$env:COMPUTERNAME}).GetEnumerator()){
     New-ItemProperty -Path $login -Name $item.Key -Value $item.Value -PropertyType String -Force | Out-Null
@@ -84,6 +85,11 @@ shutdown.exe /s /t 10
         host=bootstrap_origin(base)
         script=script.replace(" $env:VAMP_SCRIPT_BASE_URL='__BASE__'", " $env:VAMP_BOOTSTRAP_HOST='"+host+"'\n $env:VAMP_SCRIPT_BASE_URL='http://'+$env:VAMP_BOOTSTRAP_HOST+':8421'")
         script=script.replace("  Invoke-WebRequest -UseBasicParsing '__BASE__/postwin.ps1' -OutFile $entry\n  & $entry", "  $pending=$entry+'.download'\n  try {\n   Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop ($env:VAMP_SCRIPT_BASE_URL+'/postwin.ps1') -OutFile $pending\n   if(-not(Test-Path -LiteralPath $pending) -or (Get-Item -LiteralPath $pending).Length -eq 0){throw 'Bootstrap script download is empty'}\n   Move-Item -LiteralPath $pending -Destination $entry -Force\n   & $entry\n   if(-not $?){throw 'Bootstrap script failed'}\n  } catch {\n   Remove-Item -LiteralPath $pending -ErrorAction SilentlyContinue\n   throw 'Bootstrap script download or execution failed; completion was not reported'\n  }")
+    if backend=='virtualbox':
+        reset=script.index(" $reset=Join-Path")
+        resume=script.index(" @{status='completed'",reset)
+        display=callback.replace('/complete/','/display/',1)
+        script=script[:reset]+f" try {{ Invoke-WebRequest -UseBasicParsing -Method POST -TimeoutSec 45 '{display}' | Out-Null }}\n catch {{ Write-Warning 'VirtualBox Full HD request failed. Check the build status and guest display.' }}\n"+script[resume:]
     return script.replace('__BASE__',base).replace('__CALLBACK__',callback).replace('__BACKEND__',backend)
 
 

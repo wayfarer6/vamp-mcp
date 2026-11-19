@@ -1,14 +1,16 @@
 // VAMP Vault — client for a vault that lives on another machine.
 //
-// Every remote host keeps its own database under its own home directory. This
-// module never copies a database between hosts: it only runs the vault server
-// that already lives on that host, one command at a time, over SSH.
+// Every remote host keeps its own database. Ordinary operations run on the
+// remote server, and explicit exports stream only the encrypted file over SSH.
 //
 // The master password is never part of a command line. When a call needs it, it
 // is written to the remote process's standard input, which SSH encrypts for the
 // whole way and which leaves no trace in `ps` or in a shell history.
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
+import { Transform } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
+import { exportEncryptedFile } from './encrypted_export.mjs';
 
 const HOST_PATTERN = /^[A-Za-z0-9._:-]+$/;
 const USER_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -252,12 +254,110 @@ const CALL_TIMEOUTS = {
   vault_mount_volume: 180000,
 };
 
+const READ_ENCRYPTED_FILE = `
+  const fs = require('node:fs/promises');
+  const { O_RDONLY, O_NONBLOCK, O_NOFOLLOW } = require('node:fs').constants;
+  const { pipeline } = require('node:stream/promises');
+  async function copy() {
+    const file = await fs.open(process.argv[1], O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+    try {
+      const stat = await file.stat({ bigint: true });
+      if (!stat.isFile()) throw new Error('The remote export source is not a regular file.');
+      await new Promise((resolve, reject) => process.stdout.write('VAMP-ENC-1 ' + stat.size + '\\n', error => error ? reject(error) : resolve()));
+      await pipeline(file.createReadStream({ autoClose: false }), process.stdout, { end: false });
+      const finalStat = await file.stat({ bigint: true });
+      const current = await fs.lstat(process.argv[1], { bigint: true });
+      if ([finalStat, current].some(value => !value.isFile() ||
+          value.dev !== stat.dev || value.ino !== stat.ino || value.size !== stat.size ||
+          value.mtimeNs !== stat.mtimeNs || value.ctimeNs !== stat.ctimeNs)) {
+        throw new Error('The remote encrypted file changed during export.');
+      }
+    } finally { await file.close(); }
+  }
+  copy().catch(error => { console.error(error.message); process.exitCode = 1; });
+`;
+
+function encryptedTransferStream() {
+  let header = Buffer.alloc(0);
+  let remaining;
+  return new Transform({
+    transform(chunk, _encoding, callback) {
+      if (remaining === undefined) {
+        const newline = chunk.indexOf(10);
+        const fragment = newline < 0 ? chunk : chunk.subarray(0, newline);
+        if (header.length + fragment.length > 64) {
+          return callback(new Error('Unexpected data before the encrypted SSH transfer.'));
+        }
+        header = Buffer.concat([header, fragment]);
+        if (newline < 0) return callback();
+        const size = /^VAMP-ENC-1 (\d+)$/.exec(header.toString('latin1'));
+        if (!size) return callback(new Error('Unexpected data before the encrypted SSH transfer.'));
+        remaining = BigInt(size[1]);
+        chunk = chunk.subarray(newline + 1);
+      }
+      remaining -= BigInt(chunk.length);
+      if (remaining < 0n) return callback(new Error('The encrypted SSH transfer exceeded the expected file size.'));
+      callback(null, chunk);
+    },
+    flush(callback) {
+      callback(remaining === 0n ? undefined : new Error('The encrypted SSH transfer is incomplete.'));
+    },
+  });
+}
+
 export class RemoteVaultClient {
   constructor(config, { spawnImpl = spawn, timeoutMs = 120000, sshCommand = 'ssh' } = {}) {
     this.config = normalizeRemoteVaultConfig({ ...config, enabled: true });
     this.spawnImpl = spawnImpl;
     this.timeoutMs = timeoutMs;
     this.sshCommand = sshCommand;
+  }
+
+  exportEncrypted({ kind, destinationFolder, confirmed = false, expectedDestinationPath, signal } = {}) {
+    if (kind !== 'kdbx' && kind !== 'volume') throw new Error('Select the KDBX database or VeraCrypt container.');
+    const sourcePath = kind === 'kdbx' ? this.config.kdbxPath : this.config.volumePath;
+    return exportEncryptedFile({ kind, sourcePath, destinationFolder, confirmed, expectedDestinationPath, signal,
+      openSource: () => this.openEncryptedSource(sourcePath, signal) });
+  }
+
+  openEncryptedSource(sourcePath, signal) {
+    signal?.throwIfAborted();
+    const command = `exec ${remotePathExpression(this.config.remoteNodePath)} -e ${quote(READ_ENCRYPTED_FILE)} -- ${remotePathExpression(sourcePath)}`;
+    const environment = { ...process.env };
+    delete environment.VAULT_BRIDGE_SOCKET;
+    delete environment.VAULT_BRIDGE_TOKEN;
+    delete environment.VAULT_MASTER_PASSWORD;
+    const child = this.spawnImpl(this.sshCommand, sshArgs(this.config, command, { requireKnownHost: true }), {
+      stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true, env: environment,
+    });
+    const abort = () => { try { child.kill('SIGTERM'); } catch {} };
+    let stderr = '';
+    const exit = new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        abort();
+        reject(new RemoteVaultError('The encrypted export exceeded the SSH transfer timeout.', { code: 'ETIMEDOUT' }));
+      }, 30 * 60 * 1000);
+      timer.unref();
+      const cleanup = () => {
+        clearTimeout(timer);
+        signal?.removeEventListener('abort', abort);
+      };
+      signal?.addEventListener('abort', abort, { once: true });
+      child.stderr.on('data', chunk => { stderr = (stderr + chunk.toString()).slice(-4096); });
+      child.once('error', error => {
+        cleanup();
+        reject(new RemoteVaultError(friendly(error, this.config, stderr), { code: error.code }));
+      });
+      child.once('close', code => {
+        cleanup();
+        if (code === 0 && !signal?.aborted) resolve();
+        else reject(signal?.reason ?? new RemoteVaultError(friendly({ code }, this.config, stderr), { code }));
+      });
+    });
+    const stream = encryptedTransferStream();
+    const completion = Promise.all([exit, pipeline(child.stdout, stream)]);
+    completion.catch(() => {});
+    return { stream, completion, abort };
   }
 
   /** Run one shell command on the remote host through ssh. */

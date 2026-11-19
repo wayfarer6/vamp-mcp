@@ -234,6 +234,11 @@ async function handle(request, context, state, output,replay=false,signal) {
       return { password, source: 'vscode_input_box' };
     }
     case 'approve': {
+      if (request.params?.action === 'vault_export_encrypted') {
+        const choice = await vscode.window.showInformationMessage('Export encrypted Vault file?',
+          { modal: true, detail: request.params.detail }, 'Export');
+        return { approved: choice === 'Export', remember: false };
+      }
       const detail = request.params?.detail || 'Release a secret to the AI agent?';
       const entry = request.params?.entry ? `"${request.params.entry}"` : 'this entry';
       const choice = await vscode.window.showWarningMessage(
@@ -380,7 +385,7 @@ function activate(context) {
   //
   // A remote host owns its own database, its own master password and its own
   // session cache. Nothing below reads the local vault to answer a remote
-  // question, and no database is ever copied from one host to another.
+  // question. Remote exports are explicit copies of encrypted files.
   const remoteModule = () => loadModule(context, 'dist/runtime/src/remote_vault_client.mjs');
   const remoteCache = { key: '', at: 0, report: null, error: '', listing: null, listingKey: '', listingAt: 0, listingError: '' };
   const REMOTE_LISTING_TTL = 60 * 1000;
@@ -1493,35 +1498,40 @@ function activate(context) {
   }));
 
   context.subscriptions.push(vscode.commands.registerCommand('vampVault.exportKdbx', async () => {
-    const db = kdbxPath();
-    if (!fs.existsSync(db)) {
-      const choice = await vscode.window.showWarningMessage(`VAMP Vault: there is no database file at ${db} yet, so there is nothing to export.`, { modal: true }, 'Create Vault');
-      if (choice === 'Create Vault') await vscode.commands.executeCommand('vampVault.createVault');
-      return;
-    }
-    const target = await vscode.window.showSaveDialog({
-      title: 'Export a copy of the KeePassXC database',
-      saveLabel: 'Export Copy',
-      defaultUri: vscode.Uri.file(path.join(os.homedir(), path.basename(db))),
-      filters: { 'KeePassXC database': ['kdbx'], 'All files': ['*'] },
-    });
-    if (!target) return;
-    if (path.resolve(target.fsPath) === path.resolve(db)) {
-      vscode.window.showWarningMessage('VAMP Vault: that is the database itself, not a copy. Pick another folder or name.');
-      return;
-    }
     try {
-      fs.mkdirSync(path.dirname(target.fsPath), { recursive: true });
-      fs.copyFileSync(db, target.fsPath);
-      output.appendLine(`Exported a copy of ${db} to ${target.fsPath}`);
-      const choice = await vscode.window.showInformationMessage(
-        `Exported a copy to ${target.fsPath}. It is encrypted with the same master password, so keep it somewhere you would keep the vault and delete it when the copy is no longer needed.`,
-        'Reveal Copy',
+      const remote = await requireRemote({ quiet: true });
+      const sources = [
+        { label: 'KeePassXC database', description: 'Local Vault', kind: 'kdbx', path: kdbxPath() },
+        { label: 'VeraCrypt container', description: 'Local Vault', kind: 'volume', path: volumePath() },
+      ];
+      if (remote) sources.push(
+        { label: 'KeePassXC database', description: `SSH · ${remote.target}`, kind: 'kdbx', path: remote.settings.kdbxPath, remote },
+        { label: 'VeraCrypt container', description: `SSH · ${remote.target}`, kind: 'volume', path: remote.settings.volumePath, remote },
       );
-      if (choice === 'Reveal Copy') await vscode.commands.executeCommand('revealFileInOS', target);
+      const source = await vscode.window.showQuickPick(sources, { title: 'Export encrypted Vault file', placeHolder: 'Choose the file and source' });
+      if (!source) return;
+      const folders = await vscode.window.showOpenDialog({ title: 'Choose local export folder', openLabel: 'Select Folder', canSelectFolders: true, canSelectFiles: false, canSelectMany: false });
+      const folder = folders?.[0];
+      if (!folder) return;
+      if (folder.scheme !== 'file') throw Error('Select a folder on this computer.');
+      const { exportEncryptedFile } = await loadModule(context, 'dist/runtime/src/encrypted_export.mjs');
+      const request = { kind: source.kind, destinationFolder: folder.fsPath };
+      const copy = options => source.remote ? source.remote.client.exportEncrypted(options) : exportEncryptedFile({ ...options, sourcePath: source.path });
+      const preview = await copy(request);
+      const details = [`Source: ${source.description} · ${source.path}`, `Destination: ${preview.destination_path}`, source.kind === 'volume' ? 'Dismount the VeraCrypt volume before exporting its encrypted file.' : 'The copy uses the existing database master password.'].join('\n');
+      const approved = await vscode.window.showInformationMessage('Export encrypted file?', { modal: true, detail: details }, 'Export');
+      if (approved !== 'Export') return;
+      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Exporting encrypted Vault file', cancellable: true }, async (_progress, cancellation) => {
+        const controller = new AbortController();
+        const subscription = cancellation.onCancellationRequested?.(() => controller.abort());
+        if (cancellation.isCancellationRequested) controller.abort();
+        try { return await copy({ ...request, expectedDestinationPath: preview.destination_path, confirmed: true, signal: controller.signal }); }
+        finally { subscription?.dispose(); }
+      });
+      const choice = await vscode.window.showInformationMessage(`Encrypted copy saved to ${result.destination_path}.`, 'Reveal Copy');
+      if (choice === 'Reveal Copy') await vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(result.destination_path));
     } catch (error) {
-      vscode.window.showErrorMessage(`VAMP Vault: the copy could not be written (${error.message}).`);
-      output.appendLine(`export failed: ${error.message}`);
+      if (error.name !== 'AbortError') vscode.window.showErrorMessage(`VAMP Vault: export failed (${error.message}).`);
     }
   }));
 

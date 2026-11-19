@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.9
+
+- Create a stopped VirtualBox VM from a completed golden OVA in VM Manager or via MCP.
+- Fix Windows VirtualBox Guest Additions installation and verify Full HD during Packer setup and after deployment.
+
 ## 0.3.2 (preview)
 
 - Queue a dedicated Debian headless Podman VM through Packer and Vagrant from VS Code and MCP. Boot and SSH/rootless engine verification remain separate.

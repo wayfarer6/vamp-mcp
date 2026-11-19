@@ -8,9 +8,12 @@ from pathlib import Path
 import re
 import secrets
 import shutil
+import struct
 import subprocess
 import sys
+import tempfile
 import threading
+import time
 import uuid
 
 HERE=Path(__file__).resolve().parent
@@ -20,7 +23,7 @@ sys.path[:0]=[str(HERE),str(ROOT/'backends/common'),str(ASSETS/'scripts')]
 from toolchain import home,init,environment,executable,POLICY
 from guest_install import require_install_host,post_create_notice
 from templates import render
-from images import list_images,delete,directory
+from images import list_images,delete,directory,current_record
 
 def write(path,data):
     temp=path.with_suffix('.tmp');temp.write_text(json.dumps(data,indent=2)+'\n');temp.replace(path)
@@ -183,19 +186,102 @@ def create(request):
             'post_create_notice':notice,
             'next_action':'Read golden image status. Packer builds and verifies guest setup, then exports a golden image and deploys a separate live VM disk.'}
 
+def import_virtualbox(ova, live, name, image_id, windows=False):
+    live.mkdir(parents=True, exist_ok=False)
+    try:
+        run(vbox(), ['import', ova, '--vsys', '0', '--vmname', name, '--basefolder', live], timeout=1800)
+    except subprocess.CalledProcessError as error:
+        raise RuntimeError(error.stderr.strip() or str(error)) from error
+    finally:
+        if not any(live.iterdir()):
+            live.rmdir()
+    info = run(vbox(), ['showvminfo', name, '--machinereadable'])
+    vm_id = re.search(r'^UUID="([^"]+)"', info, re.M)[1]
+    cfg = Path(re.search(r'^CfgFile="([^"]+)"', info, re.M)[1])
+    if windows:
+        run(vbox(), ['setextradata', vm_id, 'GUI/AutoresizeGuest', 'false'])
+        run(vbox(), ['setextradata', vm_id, 'GUI/LastGuestSizeHint', '1920,1080'])
+    write(cfg.parent/'vamp-install.json', {'status': 'completed', 'installation_verified': True,
+          'installation_mode': 'packer', 'golden_image_id': image_id})
+    return vm_id, cfg
+
+
+def virtualbox_full_hd(name):
+    run(vbox(), ['controlvm', name, 'setvideomodehint', 1920, 1080, 32], timeout=10)
+    with tempfile.TemporaryDirectory() as temporary:
+        shot = Path(temporary)/'display.png'
+        for _ in range(5):
+            time.sleep(1)
+            run(vbox(), ['controlvm', name, 'screenshotpng', shot], timeout=5)
+            with shot.open('rb') as image:
+                header = image.read(24)
+            if len(header) == 24 and header[:8] == b'\x89PNG\r\n\x1a\n':
+                if struct.unpack('>II', header[16:24]) == (1920, 1080):
+                    return True
+    return False
+
+
+def import_image(image_id, name, confirmed):
+    if not isinstance(name, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_-]{0,62}', name):
+        raise ValueError('Invalid VM name')
+    require_install_host('virtualbox')
+    folder = directory(image_id or '')
+    record = current_record(folder)
+    if record.get('backend') != 'virtualbox' or record.get('status') != 'completed' or not record.get('installation_verified'):
+        raise ValueError('Select a completed VirtualBox golden image with verified guest installation')
+    artifact = folder/'artifact'
+    if not artifact.is_dir() or artifact.resolve() != artifact:
+        raise ValueError('Unsafe golden artifact directory')
+    appliances = [file for file in artifact.iterdir() if file.suffix.lower() == '.ova'
+                  and file.is_file() and file.resolve() == file]
+    if len(appliances) != 1:
+        raise ValueError('The golden image must contain exactly one OVA')
+    live = home()/'vms'/'virtualbox'/name
+    if live.exists() or name.casefold() in {vm.casefold() for vm in names('virtualbox', {})}:
+        raise ValueError('VM name or storage path already exists. Choose another name.')
+    result = {'status': 'needs_confirmation', 'image_id': image_id, 'vm': name,
+              'image_path': str(appliances[0]), 'vm_path': str(live)}
+    if confirmed:
+        locks = home()/'locks'
+        locks.mkdir(parents=True, exist_ok=True)
+        reservation = locks/('virtualbox-'+name+'.lock')
+        try:
+            with reservation.open('x') as handle:
+                handle.write(image_id)
+        except FileExistsError:
+            raise ValueError('Another VM operation has reserved this name') from None
+        try:
+            vm_id, cfg = import_virtualbox(appliances[0], live, name, image_id, record.get('guest_os')=='windows11')
+        finally:
+            reservation.unlink()
+        result.update(status='imported', vm_id=vm_id, vm_path=str(cfg.parent), vm_started=False)
+    return result
+
+
 def deploy(request,folder):
     backend=request['backend'];name=request['name'];live=home()/'vms'/backend/name
-    live.mkdir(parents=True,exist_ok=False);artifact=folder/'artifact'
+    artifact=folder/'artifact'
+    if backend!='virtualbox':live.mkdir(parents=True,exist_ok=False)
+    extra={}
     if backend=='virtualbox':
         ova=next(artifact.glob('*.ova'))
-        run(vbox(),['import',ova,'--vsys','0','--vmname',name,'--basefolder',live],timeout=1800)
-        info=run(vbox(),['showvminfo',name,'--machinereadable'])
-        vm_id=re.search(r'^UUID="([^"]+)"',info,re.M)[1]
-        cfg=Path(re.search(r'^CfgFile="([^"]+)"',info,re.M)[1]);journal={'status':'completed','installation_verified':True,'installation_mode':'packer','golden_image_id':folder.name}
-        write(cfg.parent/'vamp-install.json',journal)
+        windows=request['guest_os']=='windows11'
+        vm_id,_=import_virtualbox(ova,live,name,folder.name,windows)
         run(vbox(),['startvm',name,'--type','headless'])
         state=run(vbox(),['showvminfo',name,'--machinereadable'])
         if not re.search(r'^VMState="running"',state,re.M):raise RuntimeError('Deployed VM did not reach Running state')
+        if windows:
+            extra['deployed_display_resolution_verified']=False
+            deadline=time.monotonic()+90
+            while time.monotonic()<deadline:
+                try:
+                    additions=run(vbox(),['guestproperty','get',vm_id,'/VirtualBox/GuestAdd/Version'],timeout=5)
+                    if additions.startswith('Value:') and virtualbox_full_hd(vm_id):
+                        extra['deployed_display_resolution_verified']=True
+                        break
+                except (OSError,subprocess.SubprocessError):
+                    pass
+                time.sleep(3)
     elif backend=='kvm':
         uri=request.get('libvirt_uri','qemu:///session')
         profile=request['osinfo'];volume=None
@@ -223,7 +309,7 @@ def deploy(request,folder):
     ownership={'id':vm_id,'name':name,'folder':str(live),'guest_os':request['guest_os'],'golden_image_id':folder.name}
     if backend=='kvm':ownership.update(disk=str(disk),volume=volume,pool='default' if volume else None)
     write(live/'vamp-ui.json',ownership)
-    return {'vm_id':vm_id,'vm_path':str(live),'vm_disk_path':str(disk) if backend=='kvm' else str(live),'vm':name,'startup_verified':True}
+    return {'vm_id':vm_id,'vm_path':str(live),'vm_disk_path':str(disk) if backend=='kvm' else str(live),'vm':name,'startup_verified':True,**extra}
 
 def worker(image_id):
     folder=directory(image_id);record=json.loads((folder/'image.json').read_text());request=json.loads((folder/'request.json').read_text());server=None;bootstrap_server=None
@@ -249,6 +335,7 @@ def worker(image_id):
             return
         token=secrets.token_hex(32);completed=threading.Event()
         observe_preseed=request['backend']=='hyperv' and request['guest_os']=='debian'
+        virtualbox_windows=request['backend']=='virtualbox' and request['guest_os']=='windows11'
         if observe_preseed:
             update(installer_preseed_received=False)
         class Handler(BaseHTTPRequestHandler):
@@ -265,6 +352,13 @@ def worker(image_id):
                 self.end_headers()
                 self.wfile.write(data)
             def do_POST(self):
+                if virtualbox_windows and self.path=='/display/'+token:
+                    try:
+                        verified=virtualbox_full_hd('VAMP-build-'+folder.name[:12])
+                    except (OSError,subprocess.SubprocessError):
+                        verified=False
+                    update(display_resolution_verified=verified)
+                    self.send_response(200 if verified else 503);self.end_headers();return
                 if self.path!='/complete/'+token:self.send_error(404);return
                 update(guest_setup_completed=True,stage='golden_export');completed.set();self.send_response(200);self.end_headers();self.wfile.write(b'OK')
             def log_message(self,*args):pass
@@ -354,12 +448,13 @@ def delete_image(image_id,confirmed=False):
     return result
 
 def main():
-    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['prepare','check','create','worker','images','delete-image']);parser.add_argument('--backend',default='virtualbox');parser.add_argument('--id');parser.add_argument('--confirmed',action='store_true');args=parser.parse_args()
+    parser=argparse.ArgumentParser();parser.add_argument('action',choices=['prepare','check','create','worker','images','delete-image','import-image']);parser.add_argument('--backend',default='virtualbox');parser.add_argument('--id');parser.add_argument('--confirmed',action='store_true');args=parser.parse_args()
     if args.action=='worker':worker(args.id);return
     if args.action=='prepare':result=init(args.backend,home()/'tools/packer/init'/args.backend)
     elif args.action=='check':result={'status':'ready' if executable().is_file() else 'missing','executable':str(executable()),'engine':'packer'}
     elif args.action=='create':result=create(json.load(sys.stdin))
     elif args.action=='images':result={'images':list_images(),'storage':str(home())}
+    elif args.action=='import-image':result=import_image(args.id,json.load(sys.stdin).get('name'),args.confirmed)
     else:result=delete_image(args.id,args.confirmed)
     print(json.dumps(result))
 

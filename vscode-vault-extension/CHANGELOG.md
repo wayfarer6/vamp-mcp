@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- Export encrypted KeePassXC databases and VeraCrypt containers to a chosen local folder from VS Code or MCP, including configured SSH vaults.
+
 ## 0.1.8
 
 - Register only one VAMP Vault MCP definition. Choose the local target (default) or an explicitly configured remote target. Malformed remote settings never fall back to local.

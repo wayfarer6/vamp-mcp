@@ -223,6 +223,9 @@ server.tool('vm_create', 'Create a NEW VM through HashiCorp Packer: install CLI 
 const packerCall=packerModule.packer({runtime:fileURLToPath(new URL('../../',import.meta.url))});
 server.tool('vm_packer_prepare','Download checksum-pinned HashiCorp Packer CLI for this host and install the selected official hypervisor plugin. Does not create a VM.',{backend:z.enum(['virtualbox','hyperv','kvm']).default('virtualbox')},async args=>result(await packerCall('prepare',args)));
 server.tool('vm_golden_images','List Packer build status, golden image IDs, absolute file paths, byte sizes and log paths. Live VM disks are stored separately.',{},async()=>result(await packerCall('images')));
+server.tool('vm_golden_image_import','Create a stopped VirtualBox VM with its own disk from a completed golden image. Select id using vm_golden_images and choose a unique VM name. Without confirmed, preview the source and destination. Use confirmed:true after user authorization.',{
+  id:z.string().regex(/^[a-f0-9]{32}$/),name:z.string().regex(/^[A-Za-z][A-Za-z0-9_-]{0,62}$/),confirmed:z.boolean().default(false),
+},async args=>result(await packerCall('import-image',args)));
 server.tool('vm_golden_image_delete','Permanently delete one VAMP golden image and build logs by ID. Call without confirmed first to inspect its path/size, then obtain explicit user approval. Live VM disks remain separate.',{id:z.string().regex(/^[a-f0-9]{32}$/),confirmed:z.boolean().default(false)},async args=>result(await packerCall('delete-image',args)));
 server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach to an empty DVD slot of an OFF VM. Does not run installer or record.', {
   vm: z.string().optional(), controller: z.string().optional(),
@@ -257,7 +260,7 @@ if(path.basename(path.dirname(process.argv[1]||''))==='virtualbox'&&process.argv
 const {default:windowsAdmin}=await import('../common/windows-admin.cjs');
 try { await windowsAdmin.requireAdministrator(); }
 catch (error) { console.error(error.message); process.exit(1); }
-const server=new McpServer({name:'VAMP virtualbox',version:'0.3.8'},{instructions:virtualBoxInstructions});
+const server=new McpServer({name:'VAMP virtualbox',version:'0.3.9'},{instructions:virtualBoxInstructions});
 registerVirtualBoxTools(server);
 // Warm the local OCR/YOLO workers in the background. Detached, never blocking
 // stdio, and harmless when this host has no model environment.

@@ -21,7 +21,9 @@ The master password is asked once and stays in secret storage until you run **VA
 
 ## Browse your credentials
 
-Use **VAMP Vault: Browse Credentials**, or **VAMP → Browse Credentials**. **Open Existing Vault** selects a `.kdbx`; **Unlock Vault** asks for the master password in a native VS Code password prompt. Search by title/group/username and select an entry for its username, URL and notes. **Show for 15 Seconds** and **Copy Password** each ask for confirmation. Hiding the view or locking clears the displayed secret. **Export Encrypted Vault** saves an encrypted `.kdbx` copy.
+Use **VAMP Vault: Browse Credentials**, or **VAMP → Browse Credentials**. **Open Existing Vault** selects a `.kdbx`; **Unlock Vault** asks for the master password in a native VS Code password prompt. Search by title/group/username and select an entry for its username, URL and notes. **Show for 15 Seconds** and **Copy Password** each ask for confirmation. Hiding the view or locking clears the displayed secret.
+
+**Export Encrypted File** copies the configured KeePassXC database or VeraCrypt container to an existing folder on this computer. Choose Local Vault or a configured SSH Vault, choose the folder, and review the source and destination before confirming. Dismount a VeraCrypt container before exporting it for a consistent copy. The export retains the original filename and refuses to replace an existing file.
 
 The full [user guide](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/USER_GUIDE.md) is bundled in this VSIX under **VAMP Vault: Open Guide**. The companion VAMP **RPA Library** supports manual Create, AI-guided questions, keyword search and ZIP export.
 
@@ -31,14 +33,13 @@ A second machine can own a second vault. Turn on **VAMP Vault: Remote Enabled**,
 
 The isolation rule is the whole point: **a remote vault is never the local vault, and two hosts never share one.**
 
-- The local vault stays on this computer. A remote host's database lives on that host's filesystem and is never downloaded, uploaded or synced.
-- Host A and host B each get their own file, their own master password and their own approvals. Copying `~/.vamp/vault/vault.kdbx` between hosts is something you would have to do by hand — VAMP Vault has no code path that does it.
+- Each Vault uses its own file, master password and approvals. An explicit export can download an encrypted copy from the configured SSH Vault. The source Vault stays on its host.
 - Passwords are kept per host in VS Code secret storage under a key that names the host (`remote-ssh://user@host:port/~/.vamp/vault/vault.kdbx`). **Lock Remote Vault** forgets that one password and leaves the local vault untouched.
 - A password travels to the host on the SSH command's standard input, never in an argument, so it is absent from `ps`, shell history and any file on either machine. Nothing is written to the remote disk.
 
 **How it works.** The extension uploads a standalone `server.mjs` into `~/.vamp/vault` on the host (mode 600) and runs `remote_vault_setup.sh` there: it creates the vault directory as 700, checks Node.js 20+, and installs or reports `keepassxc-cli` (and optionally `veracrypt`) for apt, dnf, yum, zypper, pacman or apk. The setup script is idempotent and never deletes a database.
 
-**What the agent sees.** Set `vampVault.mcpTarget` to `remote` to route the single **VAMP Vault** MCP entry to the configured remote host. It defaults to `local`; only one target is active for MCP at a time. Its tools are the same nine, but each call runs on the selected host. The server on this side holds the bridge: it asks *you* for approval and for that host's master password, then sends the approved call over SSH. The host itself is headless and cannot reach your dialogs.
+**What the agent sees.** Set `vampVault.mcpTarget` to `remote` to route the single **VAMP Vault** MCP entry to the configured remote host. It defaults to `local`; only one target is active for MCP at a time. The local bridge handles approvals and prompts for that host's master password when a tool needs it. For an encrypted export, the local proxy writes the SSH transfer to the selected local folder without unlocking the Vault.
 
 **In the sidebar.** With a remote host configured, both views split into **📦 Local Vault** and **🌐 Remote Vault · host**. Entry rows under the remote section read that host's database only — the same entry path can exist in both vaults and the two rows stay separate. Remote rows offer the same Copy Username / Copy Password / Show Details actions.
 
@@ -115,6 +116,7 @@ VS Code extension host            remote proxy (Node, stdio)        SSH        r
 | `vault_update_credential` | Change `username`, `password`, `url` or `notes`; omitted fields are untouched. | `status: updated`, fields changed |
 | `vault_delete_credential` | Move an entry to the KeePassXC recycle bin after approval. | `status: deleted`, `recyclable` |
 | `vault_list_credentials` | Entry and group paths, no passwords. | `entries`, `groups`, `count` |
+| `vault_export_encrypted` | Preview `kind: "kdbx"` or `"volume"` and an absolute existing local `destination_folder`. Use `confirm: true` after approval. SSH mode uses the configured, previously trusted host. | Encrypted copy path, byte count and SHA-256 |
 | `vault_mount_volume` | Mount a VeraCrypt volume (PIM, key files, read-only, slot supported). | `status: mounted`, mount point |
 | `vault_unmount_volume` | Unmount one volume or all of them. | `status: unmounted` |
 | `vault_status` | CLI paths and versions, database presence, lock state, mounted volumes, cache window. Reads nothing secret. | Structured status plus `next_action` |

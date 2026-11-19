@@ -13,10 +13,10 @@ A unified stdio MCP server for virtual machines, RPA and Podman containers. Run 
 
 ## Install and run
 
-Download `vamp-mcp-0.3.8.tgz` and `SHA256SUMS` from the [GitHub release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.3.8). Compare the archive's SHA-256 with the corresponding release entry before installing it.
+Download `vamp-mcp-0.3.9.tgz` and `SHA256SUMS` from the [GitHub release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.3.9). Compare the archive's SHA-256 with the corresponding release entry before installing it.
 
 ```sh
-npm install -g ./vamp-mcp-0.3.8.tgz
+npm install -g ./vamp-mcp-0.3.9.tgz
 vamp-mcp --version
 ```
 
@@ -103,7 +103,7 @@ npm run build --prefix third_party/mcp-virtualbox
 npm ci --prefix vscode-extension --ignore-scripts
 npm run build --prefix npm-package
 npm pack ./npm-package --pack-destination /tmp
-VAMP_TEST_TARBALL=/tmp/vamp-mcp-0.3.8.tgz npm test --prefix npm-package
+VAMP_TEST_TARBALL=/tmp/vamp-mcp-0.3.9.tgz npm test --prefix npm-package
 ```
 
 The build reuses the VSIX runtime bundling and dependency license notices. The published package has no install scripts and no npm runtime dependencies; JavaScript dependencies are bundled. See the repository for backend-specific setup and validation limits.

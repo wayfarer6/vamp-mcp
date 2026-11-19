@@ -11,7 +11,7 @@ import assert from 'node:assert/strict';
 import Module, { createRequire } from 'node:module';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
 const require = createRequire(import.meta.url);
@@ -42,7 +42,7 @@ const kdbx = path.join(workdir, 'vault.kdbx');
 
 // ------------------------------------------------------------ stand-in vscode
 const messages = [];
-const answers = { info: [], warning: [], error: [], input: [], quickPick: [], save: [] };
+const answers = { info: [], warning: [], error: [], input: [], quickPick: [], save: [], open: [] };
 const next = kind => (answers[kind].length ? answers[kind].shift() : undefined);
 const answer = (kind, args) => {
   const value = next(kind);
@@ -147,6 +147,7 @@ const vscode = {
     },
     showInputBox: async options => answer('input', [options]),
     showQuickPick: async (items, options) => answer('quickPick', [items, options]),
+    showOpenDialog: async options => answer('open', [options]),
     showSaveDialog: async options => answer('save', [options]),
     withProgress: async (options, task) => task({ report() {} }, { isCancellationRequested: false }),
     setStatusBarMessage: () => ({ dispose() {} }),
@@ -442,13 +443,37 @@ if (!keepassCli) {
     assert.ok(executed.includes('revealFileInOS'));
   });
 
-  await check('export copies the database to the chosen path', async () => {
-    const target = path.join(workdir, 'exported', 'vault-copy.kdbx');
-    answers.save.push({ fsPath: target, scheme: 'file' });
-    answers.info.push(undefined);
+  await check('export copies the database to the chosen local folder after confirmation', async () => {
+    const folder = path.join(workdir, 'exported');
+    await mkdir(folder);
+    const target = path.join(folder, path.basename(kdbx));
+    const choose = () => {
+      answers.quickPick.push(items => items.find(item => item.kind === 'kdbx' && !item.remote));
+      answers.open.push(options => {
+        assert.ok(options.canSelectFolders && !options.canSelectFiles);
+        return [vscode.Uri.file(folder)];
+      });
+    };
+    choose();
+    await commandHandlers.get('vampVault.exportKdbx')();
+    await assert.rejects(readFile(target), { code: 'ENOENT' });
+    choose();
+    answers.info.push('Export', undefined);
     await commandHandlers.get('vampVault.exportKdbx')();
     const [original, copy] = await Promise.all([readFile(kdbx), readFile(target)]);
     assert.ok(copy.equals(original), 'the exported copy differs from the database');
+  });
+
+  await check('export can select the configured encrypted container', async () => {
+    const folder = path.join(workdir, 'container-export');
+    await mkdir(folder);
+    const encryptedBytes = Buffer.from([0, 255, 7, 125, 1]);
+    await writeFile(configValues.defaultVolumePath, encryptedBytes);
+    answers.quickPick.push(items => items.find(item => item.kind === 'volume' && !item.remote));
+    answers.open.push([vscode.Uri.file(folder)]);
+    answers.info.push('Export', undefined);
+    await commandHandlers.get('vampVault.exportKdbx')();
+    assert.deepEqual(await readFile(path.join(folder, path.basename(configValues.defaultVolumePath))), encryptedBytes);
   });
 
   await check('search picks an entry and copies its username', async () => {

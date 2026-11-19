@@ -425,6 +425,31 @@ if (!keepassCli) {
     assert.ok(list.tools.every(tool => tool.inputSchema?.type === 'object'));
   });
 
+  await check('the proxy previews, declines, and approves a remote encrypted export to the local folder', async () => {
+    const local = await mkdtemp(path.join(workdir, 'encrypted-export-'));
+    const source = path.join(hostOne.home, '.vamp/vault/vault.hc');
+    const fixture = Buffer.from([0, 127, 138, 254, 255, 0, 1, 2, 3]);
+    await writeFile(source, fixture);
+    const args = { kind: 'volume', destination_folder: local };
+    const call = arguments_ => proxy.callTool({ name: 'vault_export_encrypted', arguments: arguments_ }).then(payload);
+    const before = bridgeCalls.length;
+    const preview = await call(args);
+    assert.equal(preview.status, 'approval_required');
+    assert.equal(preview.destination_path, path.join(local, 'vault.hc'));
+    assert.equal(bridgeCalls.length, before);
+    approveNext = false;
+    try {
+      assert.equal((await call({ ...args, confirm: true })).status, 'denied');
+      await assert.rejects(stat(preview.destination_path));
+    } finally { approveNext = true; }
+    const result = await call({ ...args, confirm: true });
+    assert.equal(result.status, 'exported');
+    assert.equal(result.bytes, fixture.length);
+    assert.deepEqual(await readFile(preview.destination_path), fixture);
+    assert.deepEqual(await readFile(source), fixture);
+    assert.deepEqual(bridgeCalls.slice(before).map(item => item.op), ['approve', 'approve']);
+  });
+
   await check('a listing through the proxy only shows this host\'s entries', async () => {
     const result = payload(await proxy.callTool({ name: 'vault_list_credentials', arguments: {} }));
     assert.equal(result.status, 'ok');

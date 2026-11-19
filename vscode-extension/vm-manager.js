@@ -282,10 +282,22 @@ function registerManager(context,{pythonPath,runtime,output,setupPython,remote})
       if(message.type==='remoteVerify'){const report=await remote.verify({quiet:true});progress(report.ready?'Remote environment ready.':`Remote environment needs attention: ${(report.blockers||[]).map(item=>item.detail).join(' · ')}`);return;}
       if(message.type==='remoteSetup'){progress('Preparing the remote environment. This can take several minutes…');const result=await remote.setup();progress(result.after?.ready?'Remote environment ready.':'Remote setup finished with items that need attention. See the VAMP output log.');return;}
       if(message.type==='removeEnv'){if(await vscode.commands.executeCommand('vamp.removePython'))environment={state:'missing',message:'Deleted. Prepare Environment to create it again.'};return;}
-      if(['goldenOpen','goldenDelete'].includes(message.type)){
+      if(['goldenOpen','goldenDelete','goldenImport'].includes(message.type)){
         const image=(await packer('images')).images.find(row=>row.id===message.id);
         if(!image)throw Error('Golden image is no longer available. Refresh the list.');
         if(message.type==='goldenOpen'){await vscode.env.openExternal(vscode.Uri.file(image.path));return;}
+        if(message.type==='goldenImport'){
+          if(backend!=='virtualbox'||image.backend!=='virtualbox')throw Error('Select VirtualBox to create a VM from this image.');
+          const name=await vscode.window.showInputBox({title:'Create VM from '+image.name,prompt:'Enter a unique name for the new VirtualBox VM',validateInput:value=>/^[A-Za-z][A-Za-z0-9_-]{0,62}$/.test(value)?undefined:'Use 1–63 letters, digits, underscores or hyphens. Start with a letter.'});
+          if(!name)return;
+          const preview=await packer('import-image',{id:image.id,name});
+          const answer=await vscode.window.showInformationMessage('Create VM '+name+'?',{modal:true,detail:preview.image_path+'\n\nA separate disk will be created. The VM will remain stopped.'},'Create VM');
+          if(answer!=='Create VM')return;
+          progress('Importing golden image into '+name+'…');
+          await packer('import-image',{id:image.id,name,confirmed:true});
+          progress('VM created from golden image: '+name);
+          return;
+        }
         const answer=await vscode.window.showWarningMessage('Delete golden image '+image.name+'?',{modal:true,detail:image.path+'\n'+(image.bytes/1024**3).toFixed(2)+' GiB. This permanently deletes the golden artifact and build logs. Deployed VM disks are stored separately.'},'Delete Golden Image');
         if(answer==='Delete Golden Image'){const result=await packer('delete-image',{id:image.id,confirmed:true});progress('Golden image deleted: '+result.path);}
         return;
@@ -457,6 +469,9 @@ function renderGolden(message){
   }
   if(image.vm_disk_path||image.vm_path){const detail=document.createElement('p');detail.style.overflowWrap='anywhere';detail.textContent='Live VM storage: '+(image.vm_disk_path||image.vm_path);row.appendChild(detail);}
   for(const file of image.files||[]){const detail=document.createElement('p');detail.style.overflowWrap='anywhere';detail.textContent=file.path+' ('+(file.bytes/1024**3).toFixed(2)+' GiB)';row.appendChild(detail);}
+  if(message.backend==='virtualbox'&&image.backend==='virtualbox'&&image.status==='completed'&&image.installation_verified&&(image.files||[]).filter(file=>file.path.toLowerCase().endsWith('.ova')).length===1){
+   const button=document.createElement('button');button.className='secondary mutating';button.dataset.action='goldenImport';button.dataset.id=image.id;button.dataset.unavailable=String(!message.version);button.textContent='Create VM from image';button.setAttribute('aria-label','Create VM from '+image.name);row.appendChild(button);
+  }
   for(const [action,label] of [['goldenOpen','Open folder'],['goldenDelete','Delete golden image']]){
    const button=document.createElement('button');button.className='secondary';button.dataset.action=action;button.dataset.id=image.id;button.textContent=label;
    button.disabled=action==='goldenDelete'&&['queued','building','deploying'].includes(image.status);row.appendChild(button);

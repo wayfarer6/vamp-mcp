@@ -6,9 +6,17 @@ Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force
 $roots=Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Root
 $isoName=if($Backend -eq 'virtualbox'){'VBoxGuestAdditions.iso'}else{'virtio-win.iso'}
 $media=$roots | ForEach-Object {Join-Path $_ $isoName} | Where-Object {Test-Path -LiteralPath $_} | Select-Object -First 1
-if($media){Mount-DiskImage -ImagePath $media -StorageType ISO | Out-Null;$roots=Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Root}
 $logRoot=Join-Path $env:ProgramData 'VAMP-Packer'
 New-Item -ItemType Directory -Force -Path $logRoot | Out-Null
+if($media){
+    # Windows cannot reliably mount a nested image directly from an optical volume.
+    $localMedia=Join-Path $logRoot $isoName
+    if(-not (Get-DiskImage -ImagePath $localMedia -ErrorAction SilentlyContinue).Attached){
+        Copy-Item -LiteralPath $media -Destination $localMedia -Force
+        Mount-DiskImage -ImagePath $localMedia -StorageType ISO | Out-Null
+    }
+    $roots=Get-PSDrive -PSProvider FileSystem | Select-Object -ExpandProperty Root
+}
 if($Backend -eq 'virtualbox'){
     $installer=$roots | ForEach-Object {Join-Path $_ 'VBoxWindowsAdditions.exe'} | Where-Object {Test-Path -LiteralPath $_} | Select-Object -First 1
     if(-not $installer){throw 'VirtualBox Guest Additions ISO is not attached'}

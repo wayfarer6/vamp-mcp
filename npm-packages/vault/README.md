@@ -6,7 +6,7 @@ Standalone stdio MCP server for KeePassXC credential databases and optional Vera
 
 Requires Node.js 22+. Install KeePassXC (`keepassxc-cli`) and, for encrypted volume operations, VeraCrypt separately. npm installation does not install these applications or create databases/volumes.
 
-Download `vamp-mcp-vault-0.1.13.tgz` and `SHA256SUMS` from the [GitHub release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.3.8). Compare the archive's SHA-256 with the corresponding release entry before installing it.
+Download `vamp-mcp-vault-0.1.13.tgz` and `SHA256SUMS` from the [GitHub release](https://github.com/wayfarer6/vamp-mcp/releases/tag/v0.3.9). Compare the archive's SHA-256 with the corresponding release entry before installing it.
 
 ```sh
 npm install -g ./vamp-mcp-vault-0.1.13.tgz

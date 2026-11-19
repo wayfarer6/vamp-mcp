@@ -490,7 +490,7 @@ await check('server lists the expected vault tools', async () => {
   const { tools } = await client.listTools();
   const names = tools.map(tool => tool.name).sort();
   assert.deepEqual(names, [
-    'vault_add_credential', 'vault_attach_container', 'vault_attach_vm', 'vault_check_placeholders', 'vault_create', 'vault_create_group', 'vault_create_volume', 'vault_delete_credential', 'vault_delete_group', 'vault_delete_volume', 'vault_deliver_credential', 'vault_detach_vm', 'vault_get_credential',
+    'vault_add_credential', 'vault_attach_container', 'vault_attach_vm', 'vault_check_placeholders', 'vault_create', 'vault_create_group', 'vault_create_volume', 'vault_delete_credential', 'vault_delete_group', 'vault_delete_volume', 'vault_deliver_credential', 'vault_detach_vm', 'vault_export_encrypted', 'vault_get_credential',
     'vault_list_credentials', 'vault_list_groups', 'vault_mount_volume', 'vault_move_credential', 'vault_rename_group', 'vault_set_credential', 'vault_status',
     'vault_unmount_volume', 'vault_update_credential',
   ]);

@@ -14,6 +14,11 @@ function harness() {
   const answers={warning:undefined,confirm:'Create and Start',state:'poweroff',setup:true,missingPython:false};
   const child={stdin:{on(){},end(value){if(value)calls.push(['provision',JSON.parse(value)]);}}};
   const execFile=(exe,args,options,callback)=>{
+    if(String(args?.[0]||'').endsWith('runner.py')&&args[1]==='import-image'){
+      calls.push(['golden-import',...args.slice(2)]);
+      setImmediate(()=>callback(null,JSON.stringify({status:args.includes('--confirmed')?'imported':'needs_confirmation',image_path:'/golden/fixture.ova'}),''));
+      return child;
+    }
     if(String(args?.[0]||'').endsWith('runner.py')){setImmediate(()=>callback(null,JSON.stringify(args[1]==='images'?{images:answers.goldens||[]}:args[1]==='delete-image'?{status:'deleted',path:'/golden/fixture'}:{status:'installation_started',engine:'packer',installation_mode:'unattended'}),''));return {stdin:{on(){},end(value){if(value)calls.push(['provision',JSON.parse(value)]);}}};}
     if(String(args?.[0]||'').endsWith('script_server.py')){setImmediate(()=>callback(null,JSON.stringify({status:'running',port:8421,guest_urls:{virtualbox_nat:'http://10.0.2.2:8421'}}),''));return {stdin:{end(){}}};}
     setImmediate(()=>callback(null,JSON.stringify({status:'installation_started',installation_mode:'unattended'}),''));return child;
@@ -32,12 +37,29 @@ function harness() {
     commands:{registerCommand(name,fn){commands.set(name,fn);return {dispose(){}};},executeCommand:async(...args)=>{calls.push(['command',...args]);}},
     window:{createWebviewPanel:()=>panel,showOpenDialog:async()=>[{fsPath:'/tmp/installer.iso'}],showInformationMessage:async(...args)=>{notices.push(args);return answers.confirm;},showErrorMessage:async(...args)=>{notices.push(args);return undefined;},showWarningMessage:async(...args)=>{warnings.push(args);return answers.warning;},showQuickPick:async items=>answers.quickPick?items.find(item=>item.label===answers.quickPick):items?.[0],withProgress:async(_options,task)=>task({report(){}})}};
   const module={exports:{}};
+  vscode.window.showInputBox=async()=>answers.importName;
   const req=name=>name==='vscode'?vscode:name==='node:child_process'?{execFile}:name==='./guest-bootstrap'?require(path.join(root,'guest-bootstrap')):name==='./script-server'?require(path.join(root,'script-server')):name==='node:os'||name==='os'?{...require('node:os'),totalmem:()=>16*1024**3}:name==='./host-backends'?{packer:options=>require(path.join(root,'host-backends')).packer({...options,spawn:execFile}),hostBackends:(context,args)=>require(path.join(root,'host-backends')).hostBackends(context,{...args,execute:execFile[promisify.custom]})}:require(name);
   vm.runInNewContext(`(function(require,module,exports){${fs.readFileSync(path.join(root,'vm-manager.js'),'utf8')}\n})`,{setInterval,clearInterval,process,console})(req,module,module.exports);
   const api=module.exports;
   api.registerManager(context,{pythonPath:()=>__filename,runtime:'/runtime',output:{appendLine(){},show(){}},setupPython:async()=>{calls.push(['setup']);return answers.setup;}});
   return {api,calls,messages,warnings,answers,notices,commands,open:()=>commands.get('vamp.openManager')(),send:m=>receive(m),close:()=>panel.dispose()};
 }
+test('golden image import previews the selected ID and only creates after native confirmation',async()=>{
+  const h=harness();
+  const image='a'.repeat(32);
+  try {
+    h.answers.goldens=[{id:image,name:'Fixture',backend:'virtualbox',status:'completed',installation_verified:true}];
+    h.answers.importName='Agent-01';
+    await h.open();
+    await h.send({type:'goldenImport',id:image,name:'untrusted'});
+    assert.deepEqual(h.calls.filter(call=>call[0]==='golden-import'),[['golden-import','--backend','virtualbox','--id',image]]);
+    h.answers.confirm='Create VM';
+    await h.send({type:'goldenImport',id:image,name:'untrusted'});
+    assert.deepEqual(h.calls.filter(call=>call[0]==='golden-import').at(-1),['golden-import','--backend','virtualbox','--id',image,'--confirmed']);
+    assert.ok(h.calls.some(call=>call[0]==='provision'&&call[1].name==='Agent-01'));
+    assert.ok(h.messages.some(message=>message.message==='VM created from golden image: Agent-01'));
+  } finally {h.close();}
+});
 test('inventory parser handles quotes and markup without accepting malformed IDs',()=>{
   const h=harness();const rows=h.api.parseInventory(`"My \"Lab\" <img>" {${id}}\n"bad" {bad}`);
   assert.equal(rows.length,1);assert.equal(rows[0].name,'My "Lab" <img>');

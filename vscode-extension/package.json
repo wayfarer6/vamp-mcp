@@ -2,7 +2,7 @@
   "name": "vamp-mcp-tools",
   "displayName": "VAMP MCP Tools \u2014 VM Automation & Vault",
   "description": "Packer-powered VM setup, post-install automation and golden image management over MCP. Includes VM GUI automation and VAMP Vault.",
-  "version": "0.3.8",
+  "version": "0.3.9",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -340,7 +340,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.8.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.9.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
     "test:manager": "node --test test/vm-manager.cjs test/script-server.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs test/vagrant-backend.cjs test/vision-preload.cjs test/containers-panel.cjs test/podman-packaging.cjs",

@@ -17,6 +17,47 @@ import runner
 import osinfo
 
 class PackerTests(unittest.TestCase):
+    def test_windows_packer_requests_host_full_hd_only_for_virtualbox(self):
+        url = 'http://10.0.2.2:1234/complete/token'
+        script = templates.windows_postinstall('http://10.0.2.2:8421', url)
+        self.assertIn('http://10.0.2.2:1234/display/token', script)
+        self.assertIn('-AllowStartIfOnBatteries -DontStopIfGoingOnBatteries', script)
+        self.assertLess(script.index('Get-Service VBoxService'), script.index('/display/token'))
+        self.assertLess(script.index('/display/token'), script.index('/complete/token'))
+        kvm = templates.windows_postinstall('http://10.0.2.2:8421', url, 'kvm')
+        self.assertNotIn('/display/token', kvm)
+        self.assertIn('Set-Resolution-1920x1080.ps1', kvm)
+
+    def test_virtualbox_golden_import_previews_then_creates_a_stopped_vm(self):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(os.environ, {'VAMP_HOME': temporary}):
+            image_id = 'a' * 32
+            folder = images.directory(image_id)
+            artifact = folder/'artifact'
+            artifact.mkdir(parents=True)
+            ova = artifact/'golden.ova'
+            ova.touch()
+            runner.write(folder/'image.json', {'status': 'completed', 'backend': 'virtualbox', 'guest_os': 'windows11', 'installation_verified': True})
+            live = toolchain.home()/'vms'/'virtualbox'/'Agent-01'
+            cfg = live/'Agent-01.vbox'
+
+            def vbox_command(executable, args, **options):
+                if args[0] == 'import':
+                    cfg.touch()
+                return f'UUID="vm-id"\nCfgFile="{cfg}"\n'
+
+            with patch.object(runner, 'require_install_host'), patch.object(runner, 'names', return_value=[]), patch.object(runner, 'run', side_effect=vbox_command) as run:
+                self.assertEqual(runner.import_image(image_id, 'Agent-01', False)['status'], 'needs_confirmation')
+                run.assert_not_called()
+                result = runner.import_image(image_id, 'Agent-01', True)
+                self.assertEqual(result['status'], 'imported')
+                self.assertFalse(result['vm_started'])
+                self.assertEqual([call.args[1][0] for call in run.call_args_list],
+                                 ['import', 'showvminfo', 'setextradata', 'setextradata'])
+                self.assertEqual(run.call_args.args[1], ['setextradata', 'vm-id', 'GUI/LastGuestSizeHint', '1920,1080'])
+                self.assertEqual(json.loads((live/'vamp-install.json').read_text())['golden_image_id'], image_id)
+                with self.assertRaisesRegex(ValueError, 'already exists'):
+                    runner.import_image(image_id, 'Agent-01', True)
+
     def test_native_osinfo_xml_inherits_minima_and_selects_the_requested_guest(self):
         with tempfile.TemporaryDirectory() as directory:
             folder=Path(directory)/'os/microsoft.com';folder.mkdir(parents=True)

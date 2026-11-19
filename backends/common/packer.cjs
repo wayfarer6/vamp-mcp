@@ -12,11 +12,11 @@ function packer({runtime,python=()=>process.env.RPA_HOST_PYTHON||(process.platfo
   const args=[await resolveRuntimeAsset(runtime,'backends/packer/runner.py'),action,'--backend',backend];
   if(id)args.push('--id',id);if(confirmed)args.push('--confirmed');
   return new Promise((resolve,reject)=>{
-   const child=spawn(typeof python==='function'?python():python,args,{windowsHide:true,timeout:600000,maxBuffer:4*1024**2},(error,stdout,stderr)=>{
+   const child=spawn(typeof python==='function'?python():python,args,{windowsHide:true,timeout:action==='import-image'?2100000:600000,maxBuffer:4*1024**2},(error,stdout,stderr)=>{
     let data;try{data=JSON.parse(stdout);}catch{}
     if(error||data?.status==='failed')reject(Error(data?.error||stderr||error?.message||'Packer response was invalid'));else resolve(data);
    });
-   child.stdin.on('error',()=>{});child.stdin.end(action==='create'?JSON.stringify({backend,...request}):'');
+   child.stdin.on('error',()=>{});child.stdin.end(['create','import-image'].includes(action)?JSON.stringify({backend,...request}):'');
   });
  };
 }

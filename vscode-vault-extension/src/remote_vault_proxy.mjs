@@ -6,8 +6,8 @@
 // as one SSH command; the password rides on that command's standard input, so it
 // never appears in a process list, a shell history or a file on either machine.
 //
-// Nothing is mirrored: there is no copy of the remote database here, and the
-// local vault is never read for a remote call.
+// Explicit exports write encrypted copies to the selected local folder. Remote
+// tools never read or automatically synchronize the local vault.
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { parseVaultPlaceholder } from './placeholders.mjs';
@@ -54,6 +54,21 @@ const vaultId = remoteVaultId(config);
 const label = remoteVaultLabel(config);
 const approvalMode = config.approvalMode;
 const client = new RemoteVaultClient(config);
+const exportTool = {
+  name: 'vault_export_encrypted',
+  title: 'Export an encrypted Vault file',
+  description: 'Preview or copy the configured remote KDBX database or VeraCrypt container over SSH into an existing folder on this computer. Call with confirm:true to request local approval for the exact destination.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      kind: { type: 'string', enum: ['kdbx', 'volume'] },
+      destination_folder: { type: 'string', minLength: 1, maxLength: 4096 },
+      confirm: { type: 'boolean', default: false },
+    },
+    required: ['kind', 'destination_folder'],
+    additionalProperties: false,
+  },
+};
 
 // Tools whose answer contains a secret, or that change the database, need the
 // user's yes on this computer before anything is sent.
@@ -188,7 +203,7 @@ const server = new Server(
     capabilities: { tools: {} },
     instructions: [
       `This is the vault of the remote host ${remoteVaultTarget(config)}.`,
-      'Its entries exist only on that host: they are not the entries of the local VAMP Vault, and nothing is copied or synced between the two.',
+      'Remote and local VAMP Vaults have separate entries. An approved export can save an encrypted copy to a folder on this computer.',
       'Read a secret only when the current step of the task needs it, one entry at a time, and never repeat it in a summary, log or file.',
       'The user approves each read on their own computer before the request leaves it.',
     ].join(' '),
@@ -198,7 +213,7 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = await loadTools();
   return {
-    tools: tools.filter(tool => tool.name !== 'vault_attach_container').map(tool => ({
+    tools: [...tools.filter(tool => !['vault_attach_container', exportTool.name].includes(tool.name)), exportTool].map(tool => ({
       name: tool.name,
       title: tool.title,
       description: tool.name === 'vault_deliver_credential'
@@ -213,6 +228,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request, {signal}) => {
   const tool = request.params?.name;
   const args = { ...(request.params?.arguments ?? {}) };
   try {
+    if (tool === exportTool.name) {
+      const { kind, destination_folder: destinationFolder, confirm = false } = args;
+      if (Object.keys(args).some(key => !Object.hasOwn(exportTool.inputSchema.properties, key)) ||
+          !['kdbx', 'volume'].includes(kind) || typeof destinationFolder !== 'string' ||
+          destinationFolder.length === 0 || destinationFolder.length > 4096 || typeof confirm !== 'boolean') {
+        throw new Error('Choose an encrypted file and an existing absolute local destination folder.');
+      }
+      const selection = { kind, destinationFolder, signal };
+      const preview = await client.exportEncrypted(selection);
+      if (!confirm) return textResult(preview);
+      const detail = `Copy ${remoteVaultTarget(config)}:${preview.source_path} to ${preview.destination_path}.`;
+      const approval = await approve({ tool, entry: preview.destination_path, detail, always: true });
+      if (approval.unreachable) throw new Error('Open the remote Vault in VS Code to approve this export.');
+      if (!approval.approved) return textResult({ status: 'denied' });
+      return textResult(await client.exportEncrypted({ ...selection, confirmed: true, expectedDestinationPath: preview.destination_path }));
+    }
     if (tool === 'vault_deliver_credential') {
       const selected = args.reference === undefined ? args : parseVaultPlaceholder(args.reference);
       if (!selected?.entry || typeof selected.entry !== 'string' || selected.entry.length > 1024 || /[\x00-\x1f\x7f]/.test(selected.entry) ||
