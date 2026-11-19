@@ -102,7 +102,7 @@ async function connect({ kdbx, volume, env = {}, fallback = true }) {
     env: {
       PATH: process.env.PATH ?? '',
       HOME: process.env.HOME ?? process.env.USERPROFILE ?? '',
-      ...(process.env.VAULT_TEST_HYPERV_VM ? { USERPROFILE: path.dirname(kdbx) } : {}),
+      ...(process.env.VAULT_TEST_HYPERV_VM || process.env.VAULT_TEST_WSL_CREATE === '1' ? { USERPROFILE: path.dirname(kdbx) } : {}),
       LD_LIBRARY_PATH: process.env.LD_LIBRARY_PATH ?? '',
       VAULT_KDBX: kdbx,
       VAULT_VOLUME: volume,
@@ -780,6 +780,20 @@ if (!status.cli.keepassxc.available) {
     });
   }
   if (process.env.VAULT_TEST_WSL_CREATE === '1') {
+    await check('Windows MCP refuses managed creation while another workspace operation holds the lock', async () => {
+      const lock = path.join(workdir, '.vamp', 'vault-vm-disks', 'active');
+      const volume = path.join(workdir, 'blocked concurrent volume.hc');
+      await mkdir(lock, { recursive: true });
+      try {
+        const result = await client.callTool({ name: 'vault_create_volume', arguments: { volume, name: 'BlockedConcurrent', size_mb: 8, confirm: true } });
+        const failure = payload(result);
+        assert.equal(failure.status, 'error');
+        assert.match(failure.error, /workspace disk operation is active/);
+        await assert.rejects(stat(volume), { code: 'ENOENT' });
+      } finally {
+        await rm(lock, { recursive: true, force: true });
+      }
+    });
     if (process.env.VAULT_TEST_WSL_VBOX_MEDIA === '1') {
       await check('Windows MCP creates and deletes a fixed guest VHD with an encrypted payload', async () => {
         const volume = path.join(workdir, 'guest volume.vhd');

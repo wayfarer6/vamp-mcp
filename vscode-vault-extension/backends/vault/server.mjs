@@ -787,10 +787,10 @@ tool('vault_create_volume', {
     if (!decision.approved) return text({ status: 'denied' });
     const cli = await getCli();
     const master = await masterPassword({ file: settings.kdbx });
-    return text(await createManagedVolume(cli, {
+    return text(await withVmVolumeState(() => createManagedVolume(cli, {
       file: settings.kdbx, volume: args.volume, name: args.name,
       sizeBytes: args.size_mb * 1024 * 1024, databasePassword: master.password, format: args.format,
-    }));
+    })));
   } catch (error) {
     return failure(error);
   }
