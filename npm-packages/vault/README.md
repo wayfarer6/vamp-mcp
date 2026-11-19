@@ -56,6 +56,42 @@ VAULT_APPROVAL_MODE = "each-read"
 - Where configured, `VAULT_BRIDGE_SOCKET` and `VAULT_BRIDGE_TOKEN` connect to the running VAMP Vault VS Code extension for private unlock and approval dialogs. They are session-specific and not automatically discovered by npm.
 - Without that bridge, the existing server supports `VAULT_MASTER_PASSWORD` as a headless fallback, supplied locally through your process environment. Do not commit the master password to config, paste it into a prompt, or pass it in command arguments. A headless environment variable is not equivalent to VS Code secret storage.
 - Without a bridge, sensitive tools return an approval-required result unless their explicit `confirm` argument is authorized. This is caller confirmation, not an independent human dialog. The MCP client must obtain user authorization before confirming. This package preserves the server's existing policy; it does not disable approvals.
+
+### Send a field with chat approval
+
+`vault_deliver_credential` can ask the standalone MCP client to show an approval
+form when it advertises MCP form elicitation. Configure `VAULT_KDBX`,
+`VAULT_MASTER_PASSWORD`, and `VAULT_DELIVERY_TARGETS` in the server's local
+environment. The last variable is a JSON object with named targets. For example,
+the value below binds `demo-vm` to a single Vault field and a verified SSH guest.
+
+```json
+{
+  "demo-vm": {
+    "entry": "Demo/Login",
+    "field": "password",
+    "host": "guest.example",
+    "user": "demo",
+    "port": 22,
+    "vmId": "970ffaa7-25cf-4b80-bcd5-e872681be153",
+    "identityFile": "/home/operator/.ssh/demo",
+    "knownHostsFile": "/home/operator/.ssh/demo-known-hosts"
+  }
+}
+```
+
+Start the guest's `vamp-vault-receive --listen password` in the active X11
+session with the intended field focused. Call `vault_deliver_credential` with
+`destination: "demo-vm"`, the matching `entry`, `field`, and `vm_id`. The
+client shows the destination and field, and the user must check the approval box
+and accept the form for each transfer. The tool returns only the delivery status
+and destination. Clients without form elicitation cannot use this path.
+
+For a container, configure its full `containerId` in place of `vmId` and omit
+`vm_id` from the request. A local receiver can be configured with an absolute
+`executable` and fixed `args` in place of the SSH fields. Use only receiver
+programs and destinations you control. The environment configuration contains
+destination metadata, so keep passwords in the Vault rather than in the JSON.
 - A configured but unavailable bridge blocks policy-protected reads. Restore the bridge rather than bypassing its policy.
 - Without an unlock source, operations requiring a database password report a locked/password-required result. Merely installing this package does not unlock anything.
 - Approved credential reads return secrets to the calling MCP client. Request only what the task requires and keep secrets out of logs and summaries.

@@ -16,11 +16,12 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
-import { mkdir, mkdtemp, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, realpath, rename, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { ElicitRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { parseEntryList, parseMountList, parseShowAll, splitEntryPath, VaultCli } from '../src/vault_cli.mjs';
 import { BridgeClient } from '../src/bridge_client.mjs';
 import { deleteManagedVolume } from '../src/managed_volume.mjs';
@@ -95,7 +96,7 @@ async function startFakeHost({ password = masterPassword, approve = true } = {})
   };
 }
 
-async function connect({ kdbx, volume, env = {}, fallback = true }) {
+async function connect({ kdbx, volume, env = {}, fallback = true, elicit }) {
   const transport = new StdioClientTransport({
     command: process.execPath,
     args: [server],
@@ -123,7 +124,9 @@ async function connect({ kdbx, volume, env = {}, fallback = true }) {
     },
     stderr: 'pipe',
   });
-  const client = new Client({ name: 'vamp-vault-smoke', version: '0.0.0' });
+  const client = new Client({ name: 'vamp-vault-smoke', version: '0.0.0' },
+    elicit ? {capabilities:{elicitation:{form:{}}}} : {});
+  if (elicit) client.setRequestHandler(ElicitRequestSchema,elicit);
   await client.connect(transport);
   return client;
 }
@@ -538,6 +541,43 @@ if (!status.cli.keepassxc.available) {
   await check('vault_set_credential creates group and entry', () => {
     assert.equal(set.status, 'created');
     assert.equal(set.path, 'Mail/Example');
+  });
+
+  await check('standalone delivery requires one chat approval and never returns the field', async () => {
+    const received=path.join(workdir,'chat-received');
+    const receiver=path.join(workdir,'chat-receiver.cjs');
+    await writeFile(receiver, "const fs=require('node:fs'); fs.writeFileSync(process.argv[2],fs.readFileSync(0));");
+    const env={VAULT_DELIVERY_TARGETS:JSON.stringify({fixture:{
+      executable:process.execPath,args:[receiver,received],entry:'Mail/Example',field:'password',
+    }})};
+    const args={destination:'fixture',entry:'Mail/Example',field:'password'};
+    const deliver = async target => payload(await target.callTool({name:'vault_deliver_credential',arguments:args}));
+    const unsupported=await connect({kdbx,volume,env});
+    try {
+      assert.match((await deliver(unsupported)).error,/cannot show.*approval form/);
+      await assert.rejects(stat(received),{code:'ENOENT'});
+    } finally { await unsupported.close(); }
+    const decisions=[{action:'decline'},{action:'cancel'},{action:'accept',content:{approve:false}},
+      {action:'accept',content:{approve:true}},{action:'accept',content:{approve:true}}];
+    let prompts=0;
+    const client=await connect({kdbx,volume,env,elicit:async ({params})=>{
+      assert.match(params.message,/password.*Mail\/Example.*fixture/);
+      assert.ok(!JSON.stringify(params).includes(entryPassword));
+      assert.deepEqual(Object.keys(params.requestedSchema.properties),['approve']);
+      if (prompts===3) await utimes(kdbx,new Date(),new Date(0));
+      return decisions[prompts++];
+    }});
+    try {
+      for (let index=0;index<3;index++) {
+        assert.deepEqual(await deliver(client),{status:'denied'});
+        await assert.rejects(stat(received),{code:'ENOENT'});
+      }
+      assert.match((await deliver(client)).error,/files changed/);
+      await assert.rejects(stat(received),{code:'ENOENT'});
+      assert.deepEqual(await deliver(client),{status:'delivered',destination:'fixture'});
+      assert.equal(await readFile(received,'utf8'),entryPassword+'\n');
+      assert.equal(prompts,5);
+    } finally {await client.close();}
   });
 
   const added = payload(await client.callTool({

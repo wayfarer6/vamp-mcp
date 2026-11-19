@@ -116,9 +116,14 @@ export async function deliverCredential(target, value, field, signal) {
     : target.containerId
     ? `/usr/bin/podman --remote=false exec -i ${target.containerId} ${receiver}`
     : receiver;
-  const ssh = process.platform === 'win32'
-    ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'OpenSSH', 'ssh.exe')
+  const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+  const windows = process.platform === 'win32';
+  const ssh = windows
+    ? path.join(systemRoot, 'System32', 'OpenSSH', 'ssh.exe')
     : '/usr/bin/ssh';
+  // MCP clients may start us with a reduced environment. Windows OpenSSH
+  // requires ProgramData even when the known-hosts and identity paths are set.
+  const env = windows ? { SystemRoot:systemRoot, ProgramData:process.env.ProgramData || path.join(path.parse(systemRoot).root,'ProgramData') } : {};
   try {
     signal?.throwIfAborted();
     await new Promise((resolve, reject) => {
@@ -126,7 +131,7 @@ export async function deliverCredential(target, value, field, signal) {
         '-o', 'StrictHostKeyChecking=yes', '-o', `UserKnownHostsFile="${target.knownHostsFile}"`,
         '-o', 'GlobalKnownHostsFile=none', '-o', 'ConnectTimeout=8', '-i', target.identityFile,
         '-p', String(target.port), `${target.user}@${target.host}`, command], {
-        stdio: ['pipe', target.guestVolume ? 'ignore' : 'pipe', 'ignore'], windowsHide: true, signal,
+        stdio: ['pipe', target.guestVolume ? 'ignore' : 'pipe', 'ignore'], windowsHide: true, signal, env,
       });
       let receipt = '';
       let inputFailed = false;

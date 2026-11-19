@@ -21,7 +21,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { access, realpath } from 'node:fs/promises';
+import { access, realpath, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { sep } from 'node:path';
 import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
@@ -31,7 +31,7 @@ import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeho
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
 import { hypervVolume, kvmVolume, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
-import { auditRemoteDelivery, deliverCredential, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
+import { auditRemoteDelivery, deliverCredential, deliveryTarget, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
 import podmanModule from '../../../backends/podman/adapter.cjs';
 import manifest from '../../package.json' with { type: 'json' };
 
@@ -110,6 +110,7 @@ const settings = {
   bridgeSocket: env.VAULT_BRIDGE_SOCKET?.trim() || '',
   bridgeToken: env.VAULT_BRIDGE_TOKEN?.trim() || '',
   fallbackPassword: env.VAULT_MASTER_PASSWORD ?? '',
+  deliveryTargets: env.VAULT_DELIVERY_TARGETS ?? '',
   remoteHost: cli.flags.remoteHost?.trim() || '',
 };
 
@@ -421,9 +422,84 @@ tool('vault_get_credential', {
   }
 });
 
+async function resolveDeliveryField(selected) {
+  const vault = await getCli();
+  const master = await masterPassword({file:settings.kdbx});
+  const input = {file:settings.kdbx,entry:selected.entry,databasePassword:master.password};
+  const listing = await vault.listEntries(input);
+  if (listing.entries.filter(item=>item.path===selected.entry).length !== 1) throw new Error('The credential path did not resolve uniquely.');
+  let record;
+  try {
+    record = selected.field === 'totp' ? {totp:(await vault.totp(input)).code}
+      : await vault.showEntry({...input,showProtected:selected.field==='password'});
+  } catch {
+    throw new Error('Could not resolve the selected credential field.');
+  }
+  return validateCredentialField(record,selected.field);
+}
+
+async function deliveryFileIdentity(files) {
+  return Promise.all(files.map(async file => {
+    const info = await stat(file,{bigint:true}).catch(()=>null);
+    if (!info?.isFile()) throw new Error('The configured vault or destination file is unavailable.');
+    return [info.dev,info.ino,info.size,info.mtimeNs,info.ctimeNs].join(':');
+  })).then(identities=>identities.join('|'));
+}
+
+async function deliverWithChatApproval(args,selected,extra) {
+  if (!extra || cli.mode !== 'stdio' || !settings.deliveryTargets || settings.bridgeSocket) {
+    throw new Error('Open VAMP Vault in VS Code to approve this delivery, or configure chat approval in a standalone Vault MCP.');
+  }
+  if (!server.server.getClientCapabilities()?.elicitation?.form) {
+    throw new Error('This MCP client cannot show a credential delivery approval form.');
+  }
+  if (!settings.fallbackPassword || !settings.kdbx) throw new Error('Configure a local vault and unlock it in the standalone server environment.');
+  let targets;
+  try {
+    if (settings.deliveryTargets.length > 65536) throw new Error();
+    targets=JSON.parse(settings.deliveryTargets);
+  } catch {
+    throw new Error('VAULT_DELIVERY_TARGETS must contain a JSON object of configured destinations.');
+  }
+  if (!targets || typeof targets !== 'object' || Array.isArray(targets) || !Object.hasOwn(targets,args.destination)) {
+    throw new Error('Choose a configured credential destination.');
+  }
+  const {entry,field,...config} = targets[args.destination] ?? {};
+  if (entry !== selected.entry || field !== selected.field || /[\x00-\x1f\x7f]/.test(entry)) {
+    throw new Error('The field does not match the configured destination.');
+  }
+  const target = deliveryTarget(args.destination,{[args.destination]:config},args.vm_id);
+  if (target.guestVolume || (!target.executable && !target.containerId && (!target.vmId || !args.vm_id))) {
+    throw new Error('Choose a configured login receiver and supply its VM UUID when targeting a VM.');
+  }
+  const files=[settings.kdbx,...(target.executable ? [target.executable] : [target.identityFile,target.knownHostsFile])];
+  const before=await deliveryFileIdentity(files);
+  const identity=target.executable ? `${target.executable} ${JSON.stringify(target.args)}`
+    : `${target.user}@${target.host}:${target.port} · ${target.vmId || target.containerId}`;
+  if (identity.length > 2000) throw new Error('The configured destination description is too long to approve.');
+  let answer;
+  try {
+    answer=await server.server.elicitInput({
+      mode:'form',
+      message:`Send the ${field} for “${entry}” to “${args.destination}” (\n${identity}\n)? The receiver gets this field directly.`,
+      requestedSchema:{type:'object',properties:{approve:{type:'boolean',title:'Approve credential delivery'}},required:['approve']},
+    },{signal:extra.signal,timeout:120000,relatedRequestId:extra.requestId});
+  } catch {
+    throw new Error('Credential delivery approval did not complete.');
+  }
+  if (answer.action !== 'accept' || answer.content?.approve !== true) return {status:'denied'};
+  extra.signal.throwIfAborted();
+  if (await deliveryFileIdentity(files) !== before) throw new Error('The vault or destination files changed. Review the transfer again.');
+  const value = await resolveDeliveryField(selected);
+  if (await deliveryFileIdentity(files) !== before) throw new Error('The vault or destination files changed. Review the transfer again.');
+  const receipt=await deliverCredential(target,value,field,extra.signal);
+  console.error(JSON.stringify({action:'credential_delivered',approval:'mcp_elicitation',entry,field,destination:args.destination}));
+  return receipt;
+}
+
 tool('vault_deliver_credential', {
   title: 'Send a credential to a configured VM or container',
-  description: 'Request VS Code confirmation for one field. Configured programs read it on standard input, a guest receiver can type it, or a configured guest VeraCrypt command can unlock a workspace. Supply the VM UUID for guest VeraCrypt.',
+  description: 'Request user approval for one field in VS Code or an elicitation-capable standalone MCP client. The configured receiver gets the field directly and the tool returns only a receipt.',
   inputSchema: {
     entry: z.string().min(1).max(1024).optional(),
     reference: z.string().min(1).max(1024).optional(),
@@ -431,7 +507,7 @@ tool('vault_deliver_credential', {
     vm_id: z.string().uuid().optional(),
     field: z.enum(['username','password','totp']).optional(),
   },
-}, async args => {
+}, async (args,extra) => {
   try {
     const selected = args.reference === undefined ? args : parseVaultPlaceholder(args.reference);
     if (!selected?.entry || !['username','password','totp'].includes(selected.field) ||
@@ -442,23 +518,13 @@ tool('vault_deliver_credential', {
       if (cli.mode !== 'call' || !cli.stdinPassword || args.vm_id) throw new Error('Use the approved remote Vault proxy for remote process delivery.');
       const destination = await remoteProcessTarget(args.destination);
       if (selected.entry !== destination.entry || selected.field !== destination.field) throw new Error('The field does not match the configured remote destination.');
-      const vault = await getCli();
-      const master = await masterPassword({file:settings.kdbx});
-      const input = {file:settings.kdbx,entry:selected.entry,databasePassword:master.password};
-      const listing = await vault.listEntries(input);
-      if (listing.entries.filter(item=>item.path===selected.entry).length !== 1) throw new Error('The remote credential path did not resolve uniquely.');
-      let record;
-      try {
-        record = selected.field === 'totp' ? {totp:(await vault.totp(input)).code}
-          : await vault.showEntry({...input,showProtected:selected.field==='password'});
-      } catch { throw new Error('Could not resolve the selected remote credential field.'); }
-      const value = validateCredentialField(record,selected.field);
+      const value = await resolveDeliveryField(selected);
       await auditRemoteDelivery(destination.directory,{ action:'credential_resolved', caller:'vault_deliver_credential',
         entry:selected.entry, field:selected.field, destination:args.destination });
       return text(await deliverCredential(destination.target,value,selected.field));
     }
     const bridge = await getBridge();
-    if (!bridge) throw new Error('Open VAMP Vault in VS Code to approve this delivery.');
+    if (!bridge) return text(await deliverWithChatApproval(args,selected,extra));
     return text(await bridge.request('deliver-credential', {
       entry: selected.entry, field: selected.field, destination: args.destination, vmId: args.vm_id,
     },{timeout:180000}));
