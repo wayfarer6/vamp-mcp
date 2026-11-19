@@ -290,7 +290,7 @@ if (!keepassCli) {
       await assert.rejects(replayBridge.request('unlock', {kdbx}), /invalid bridge token/);
       const preflight={destination:'fixture',vmId,references:[{entry:args.entry,field:args.field}]};
       assert.deepEqual(await replayBridge.request('check-replay-destination',preflight),{status:'ready'});
-      await assert.rejects(replayBridge.request('check-replay-destination',{...preflight,references:[{entry:'Missing',field:'password'}]}),/could not be resolved/);
+      assert.deepEqual(await replayBridge.request('check-replay-destination',{...preflight,references:[{entry:'Missing',field:'password'}]}),{status:'placeholder_unresolved'});
       const prompts = messages.length;
       await assert.rejects(bridge.request('deliver-credential', {...args,vmId:'9725c44b-288f-491f-bb75-1d414ba2ee87'}), /does not match the requested VM UUID/);
       assert.equal(messages.length,prompts);

@@ -1360,10 +1360,11 @@ function activate(context) {
     if(!opened||opened.db!==database)throw Error('The vault changed.');
     const listing=await opened.cli.listEntries({file:database,databasePassword:password});
     for(const {entry,field} of references) {
-      if(typeof entry!=='string'||!['username','password','totp'].includes(field)||
-        listing.entries.filter(item=>item.path===entry).length!==1||
-        !(await opened.cli.placeholderFieldPresent({file:database,entry,field,databasePassword:password}).catch(()=>false))) {
-        throw Error('A replay credential reference could not be resolved.');
+      if(typeof entry!=='string'||!['username','password','totp'].includes(field)) return {status:'placeholder_unresolved'};
+      const matches=listing.entries.filter(item=>item.path===entry).length;
+      if(matches>1) return {status:'placeholder_ambiguous'};
+      if(matches===0 || !(await opened.cli.placeholderFieldPresent({file:database,entry,field,databasePassword:password}))) {
+        return {status:'placeholder_unresolved'};
       }
     }
     return {status:'ready'};

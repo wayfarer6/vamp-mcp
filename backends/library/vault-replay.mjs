@@ -48,10 +48,13 @@ export async function runWithVault(python,script,request,{ socketPath,token,time
       const message=JSON.parse(line);
       if (message.vault==='preflight' && !references) {
         references=message.references;
-        let ready=false;
-        try { ready=(await bridge.request('check-replay-destination',{...target,references})).status==='ready'; }
+        let status;
+        try { status=(await bridge.request('check-replay-destination',{...target,references})).status; }
         catch {}
-        send({ok:ready});
+        if(status==='placeholder_unresolved'||status==='placeholder_ambiguous') {
+          return {status,actions_completed:0,message:'Check the Vault references before retrying.'};
+        }
+        send({ok:status==='ready'});
       } else if (message.vault==='deliver' && references) {
         const expected=references[next];
         let delivered=false;

@@ -79,12 +79,12 @@ runpy.run_path(${JSON.stringify(engine)}, run_name='__main__')
   git('-c','user.name=QA','-c','user.email=qa@example.invalid','commit','-qm','fixture');
   const socketPath=process.platform==='win32'?`\\\\.\\pipe\\vamp-rpa-${id}`:path.join(root,'bridge.sock');
   let consent=false;
-  let ready=true;
+  let readiness='ready';
   const calls=[];
   const server=net.createServer(socket=>createInterface({input:socket}).on('line',line=>{
     const call=JSON.parse(line);
     calls.push(call);
-    const status=call.op==='check-replay-destination'?(ready?'ready':'denied'):(consent?'delivered':'denied');
+    const status=call.op==='check-replay-destination'?readiness:(consent?'delivered':'denied');
     socket.write(JSON.stringify({id:call.id,ok:true,result:{status,value:'fixture-must-not-leave-bridge'}})+'\n');
   }));
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,resolve);});
@@ -110,13 +110,22 @@ runpy.run_path(${JSON.stringify(engine)}, run_name='__main__')
   assert.equal(finished.resolved,1);
   assert.deepEqual(await keys(),['tab','enter']);
   assert.ok(!JSON.stringify(finished).includes('fixture-must-not-leave-bridge'));
-  ready=false;
+  readiness='denied';
   await writeFile(trace,'');
   const rejected=await run();
   assert.equal(rejected.status,'approval_required');
   assert.equal(rejected.actions_completed,0);
   assert.equal(await readFile(trace,'utf8'),'');
+  for (const missing of ['placeholder_unresolved','placeholder_ambiguous']) {
+    readiness=missing;
+    const result=await run();
+    assert.equal(result.status,missing);
+    assert.equal(result.actions_completed,0);
+    assert.ok(!JSON.stringify(result).includes('fixture-must-not-leave-bridge'));
+    assert.equal(await readFile(trace,'utf8'),'');
+  }
   assert.deepEqual(calls.map(call=>call.op),['check-replay-destination','deliver-credential',
-    'check-replay-destination','deliver-credential','check-replay-destination']);
+    'check-replay-destination','deliver-credential','check-replay-destination',
+    'check-replay-destination','check-replay-destination']);
   assert.ok(calls.every(call=>call.token===token && call.params.vmId===vmId));
 });
