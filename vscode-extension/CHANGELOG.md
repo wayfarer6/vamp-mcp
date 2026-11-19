@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.10
+
+- Fix unattended Debian VirtualBox setup when GNOME reports inactive VMSVGA outputs. Verify and persist the active 1920x1080 display configuration.
+
 ## 0.3.9
 
 - Create a stopped VirtualBox VM from a completed golden OVA in VM Manager or via MCP.
