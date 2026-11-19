@@ -25,10 +25,10 @@ flowchart TB
     A -->|작업 ID · 입력값| R
     R -->|결과 요약 · 상세 기록 경로| A
     B <-->|하이퍼바이저 콘솔| V
-    B <-->|관리형 화면 캡처·뷰어| C
+    B <-->|관리형 RFB 화면 캡처·입력| C
 ```
 
-Robot 시나리오와 Python 코드는 제어 호스트에서 실행합니다. VirtualBox는 호스트의 VBoxManage·SDK, SPICE는 화면·입력 채널을 사용합니다. SPICE Robot 작업은 MCP 없이도 SPICE에 연결할 수 있습니다. Podman 데스크톱은 호스트에서 화면 캡처와 VNC 뷰어 연결을 제공하며, RPA가 사용할 수 있는 입력 기능은 백엔드에 따라 달라집니다. 원격 VM에서는 원격 하이퍼바이저 호스트가 콘솔 캡처와 입력을 수행하고, 제어 호스트가 반환된 이미지를 분석할 수 있습니다.
+Robot 시나리오와 Python 코드는 제어 호스트에서 실행합니다. VirtualBox는 호스트의 VBoxManage·SDK, SPICE는 화면·입력 채널을 사용합니다. SPICE Robot 작업은 MCP 없이도 SPICE에 연결할 수 있습니다. Podman은 지정된 컨테이너의 RFB 스트림을 호스트 Robot/Python에 프로세스 파이프로 전달합니다. 원격 VM에서는 원격 하이퍼바이저 호스트가 콘솔 캡처와 입력을 수행하고, 제어 호스트가 반환된 이미지를 분석할 수 있습니다.
 
 ## 구성 요소
 

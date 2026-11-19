@@ -216,7 +216,7 @@ test('desktop permits only declared benign tmpfs, never bind or code-shadowing m
  }
 });
 
-test('human control stream allows only exact fixed mode flag; default stays view-only',async()=>{
+test('human and RPA control use distinct fixed mode flags; default stays view-only',async()=>{
  const {EventEmitter}=require('node:events');const {PassThrough}=require('node:stream');const spawned=[];
  const {adapter,calls}=desktopFixture(()=>{},'b'.repeat(64),(exe,args)=>{spawned.push(args);const child=new EventEmitter();child.stdin=new PassThrough();child.stdout=new PassThrough();child.stderr=new PassThrough();child.kill=()=>{};return child;});
  for(const options of [{mode:'exec'},{mode:'control',args:['bad']},['control'],null,{command:'shell'}])await assert.rejects(adapter.openScreenStream('qa',id,binding,options),/options/);
@@ -224,7 +224,9 @@ test('human control stream allows only exact fixed mode flag; default stays view
  const view=await adapter.openScreenStream('qa',id,binding);assert.equal(view.mode,'view_only');assert.equal(view.viewOnly,true);assert.equal(spawned[0].at(-1),'/opt/vamp-desktop/view.py');view.close();
  const control=await adapter.openScreenStream('qa',id,binding,{mode:'control'});assert.equal(control.mode,'control');assert.equal(control.viewOnly,false);
  assert.deepEqual(spawned[1].slice(7),['exec','--user','1000:1000','--interactive','--',id,'/usr/bin/python3','-I','-B','/opt/vamp-desktop/view.py','--interactive']);control.close();
- assert.equal(calls.filter(c=>c.args[7]==='inspect').length,2);
+ const rpa=await adapter.openScreenStream('qa',id,binding,{mode:'rpa'});assert.equal(rpa.viewOnly,false);
+ assert.deepEqual(spawned[2].slice(7),[...spawned[1].slice(7,-1),'--rpa']);rpa.close();
+ assert.equal(calls.filter(c=>c.args[7]==='inspect').length,3);
 });
 
 test('local workspace uses checked binding, pinned image, single disposable container and verified scope',async()=>{

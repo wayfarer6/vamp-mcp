@@ -1,9 +1,11 @@
 """Shared-session VNC guest transport. No host keyboard/mouse or guest agent."""
 import asyncio
-import fcntl
+from contextlib import asynccontextmanager
 import hashlib
 import os
 from pathlib import Path
+import re
+import tempfile
 import threading
 import time
 from urllib.parse import urlparse
@@ -15,6 +17,23 @@ from robot.api.deco import keyword, library
 KEYS = {'ctrl':'Ctrl', 'alt':'Alt', 'shift':'Shift', 'super':'Super_L',
         'enter':'Return', 'esc':'Escape', 'space':'space', 'backspace':'BackSpace',
         'delete':'Delete', 'tab':'Tab', 'left':'Left', 'right':'Right', 'up':'Up', 'down':'Down'}
+
+
+@asynccontextmanager
+async def podman_client(command):
+    import asyncvnc
+    process = await asyncio.create_subprocess_exec(
+        *command, stdin=asyncio.subprocess.PIPE, stdout=asyncio.subprocess.PIPE,
+    )
+    try:
+        yield await asyncvnc.Client.create(process.stdout, process.stdin)
+    finally:
+        process.stdin.close()
+        try:
+            await asyncio.wait_for(process.wait(), 2)
+        except asyncio.TimeoutError:
+            process.kill()
+            await process.wait()
 
 
 @library(scope='SUITE', auto_keywords=False)
@@ -30,11 +49,10 @@ class VncRobot:
     def _run(self, coroutine, timeout=20):
         return asyncio.run_coroutine_threadsafe(coroutine, self.loop).result(timeout)
 
-    async def _serve(self, host, port, ready):
-        import asyncvnc
+    async def _serve(self, connection, ready):
         self.stop = asyncio.Event()
         try:
-            async with asyncvnc.connect(host, port, password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
+            async with connection as client:
                 from vnc_video import enable_resize
                 enable_resize(client)
                 self.client = client
@@ -49,29 +67,68 @@ class VncRobot:
         finally:
             self.client = None
 
-    async def _connect(self, host, port):
+    async def _connect(self, connection):
         ready = asyncio.get_running_loop().create_future()
-        self.task = asyncio.create_task(self._serve(host, port, ready))
+        self.task = asyncio.create_task(self._serve(connection, ready))
         await ready
 
     @keyword
     def connect_vnc(self, uri='vnc://127.0.0.1:5900', timeout=20):
+        import asyncvnc
         parsed = urlparse(uri)
         if parsed.scheme != 'vnc' or not parsed.hostname or parsed.username or parsed.password:
             raise ValueError('Use vnc://host:port; credentials must not be embedded in the URI')
-        digest = hashlib.sha256(uri.encode()).hexdigest()[:16]
-        self._lock = open(f'/tmp/vamp-vnc-{os.getuid()}-{digest}.lock', 'a')
+        return self._open(uri, asyncvnc.connect(parsed.hostname, parsed.port or 5900,
+                                               password=os.environ.get('VAMP_VNC_PASSWORD')), timeout)
+
+    @keyword
+    def connect_podman(self, connection, container_id, binding, timeout=20, *, confirmed=False,
+                       node='node', cli='vamp-mcp'):
+        """Open an explicitly approved Podman desktop without a network viewer."""
+        if confirmed is not True or not connection or not all(re.fullmatch('[a-f0-9]{64}', value)
+                                                               for value in (container_id, binding)):
+            raise ValueError('Approve a checked Podman connection, full container ID and binding first')
+        from shutil import which
+        entry = which(cli) if cli == 'vamp-mcp' else cli
+        if not entry:
+            raise RuntimeError('Install the VAMP MCP package or supply the path to its CLI')
+        if os.name == 'nt' and Path(entry).suffix.lower() != '.mjs':
+            # npm's Windows shim resolves ../package-name from node_modules/.bin.
+            shim = Path(entry).absolute()
+            modules = shim.parent.parent if shim.parent.name == '.bin' else shim.parent / 'node_modules'
+            entry = str(modules / 'vamp-mcp' / 'bin' / 'vamp-mcp.mjs')
+        command = [node, entry, 'podman-screen', '--connection', connection, '--id', container_id,
+                   '--binding', binding, '--confirmed']
+        info = self._open(f'podman:{container_id}', podman_client(command), timeout, 'podman-rfb')
+        if (info['width'], info['height']) != (1920, 1080):
+            self.disconnect_vnc()
+            raise RuntimeError('The Podman desktop must provide a 1920×1080 framebuffer')
+        return info
+
+    def _open(self, endpoint, connection, timeout, transport='vnc'):
+        if self.loop is not None:
+            raise RuntimeError('Disconnect the current desktop first')
+        digest = hashlib.sha256(endpoint.encode()).hexdigest()[:16]
+        if os.name == 'nt':
+            import msvcrt
+            self._lock = open(Path(tempfile.gettempdir()) / f'vamp-vnc-{digest}.lock', 'a+b')
+            lock = lambda: msvcrt.locking(self._lock.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            self._lock = open(f'/tmp/vamp-vnc-{os.getuid()}-{digest}.lock', 'a')
+            lock = lambda: fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         try:
-            fcntl.flock(self._lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+            lock()
+        except OSError:
             self._lock.close()
             self._lock = None
             raise RuntimeError('Another RPA controls this VNC endpoint; observation viewers may still connect')
+        self.transport = transport
         self.loop = asyncio.new_event_loop()
         self.thread = threading.Thread(target=self.loop.run_forever, daemon=True)
         self.thread.start()
         try:
-            self._run(self._connect(parsed.hostname, parsed.port or 5900), timeout)
+            self._run(self._connect(connection), float(timeout))
             self._capture()
             return self.screen_info()
         except BaseException:
@@ -101,7 +158,6 @@ class VncRobot:
         finally:
             self.loop = self.thread = self.client = self.frame = None
             if self._lock:
-                fcntl.flock(self._lock, fcntl.LOCK_UN)
                 self._lock.close()
                 self._lock = None
 
@@ -140,7 +196,7 @@ class VncRobot:
     def screen_info(self):
         image = self._raw_image()
         return {'width':image.width, 'height':image.height, 'mouse_mode':2,
-                'transport':'vnc', 'shared_session':True}
+                'transport':self.transport, 'shared_session':True}
 
     @keyword
     def capture_guest_screen(self, path='artifacts/guest.png'):
@@ -172,6 +228,8 @@ class VncRobot:
             # keysyms even while Shift is pressed, so preserve uppercase here.
             base=SHIFTED.get(char, char)
             shifted=char in SHIFTED or char.isupper()
+            if self.transport == 'podman-rfb' and shifted:
+                base = SHIFTED[char] if char in SHIFTED else char.lower()
             self._run(self._keys(['Return'] if char=='\n' else (['Shift',base] if shifted else [base])))
             self._pump(float(interval))
 

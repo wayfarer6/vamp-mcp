@@ -26,19 +26,23 @@ SESSION_SECONDS = 3600
 
 
 def parse_mode(argv):
-    """Only the managed paired-human route may append this one fixed flag."""
+    """Only the managed host viewer or RPA can request fixed input modes."""
     if argv == []:
         return False
     if argv == ['--interactive']:
         return True
-    raise RuntimeError('Viewer accepts only the optional --interactive flag')
+    if argv == ['--rpa']:
+        return 'rpa'
+    raise RuntimeError('Viewer accepts only one fixed input mode')
 
 
 def command_for(interactive=False):
-    if type(interactive) is not bool:
+    if type(interactive) is not bool and interactive != 'rpa':
         raise RuntimeError('Interactive mode must be explicit')
     # No caller command, environment, display, port or x11vnc arguments pass
-    # through. Interactive changes exactly one fixed server-side restriction.
+    # through. Host RPA sends physical modifier state for the fixed US layout.
+    if interactive == 'rpa':
+        return ['-nomodtweak' if arg == '-viewonly' else arg for arg in COMMAND]
     return [arg for arg in COMMAND if not (interactive and arg == '-viewonly')]
 
 

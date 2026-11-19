@@ -86,6 +86,7 @@ class HelperTests(unittest.TestCase):
     def test_view_mode_accepts_only_default_or_single_interactive_flag(self):
         self.assertFalse(view.parse_mode([]))
         self.assertTrue(view.parse_mode(['--interactive']))
+        self.assertEqual(view.parse_mode(['--rpa']), 'rpa')
         for argv in [['--interactive=true'], ['interactive'], ['--view-only'],
                      ['--interactive', '--interactive'], ['--interactive', '-listen', '0.0.0.0'],
                      ['--display=:0'], ['--help'], ['--interactive', '--']]:
@@ -95,6 +96,7 @@ class HelperTests(unittest.TestCase):
         command = view.command_for(True)
         self.assertNotIn('-viewonly', command)
         self.assertEqual(command, [arg for arg in view.COMMAND if arg != '-viewonly'])
+        self.assertIn('-nomodtweak', view.command_for('rpa'))
         for flag in ['-nosel', '-noclipboard', '-nosetclipboard', '-nosetprimary',
                      '-norc', '-safer', '-nocmds', '-inetd']:
             self.assertIn(flag, command)
@@ -145,7 +147,7 @@ class HelperTests(unittest.TestCase):
             if child_socket:
                 child_socket.close()
 
-    def test_interactive_spawn_changes_only_viewonly_after_readiness(self):
+    def test_interactive_spawn_uses_the_fixed_command_after_readiness(self):
         calls = []
         class Child:
             def poll(self): return 0
@@ -157,7 +159,7 @@ class HelperTests(unittest.TestCase):
         with patch.object(view.common, 'require_ready') as ready:
             self.assertEqual(view.serve(spawn, lambda peer, child: None, interactive=True), 0)
             ready.assert_called_once()
-        self.assertEqual(calls, [[arg for arg in view.COMMAND if arg != '-viewonly']])
+        self.assertEqual(calls, [view.command_for(True)])
 
     def test_actual_bounded_relay_fixture_pipes_socketpair_and_eof(self):
         peer, fake_child = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)

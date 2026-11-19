@@ -85,5 +85,19 @@ class VNCTransportTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.guest.connect_vnc('vnc://user:password@127.0.0.1:5900')
         self.assertEqual(self.server.shared,[])
 
+    def test_podman_requires_approval_and_the_exact_target_binding(self):
+        for confirmed, binding in [(False, 'b'*64), (True, 'short')]:
+            with self.subTest(confirmed=confirmed), self.assertRaisesRegex(ValueError, 'Approve'):
+                self.guest.connect_podman('local-linux', 'a'*64, binding, confirmed=confirmed)
+            self.assertIsNone(self.guest.loop)
+
+    def test_podman_emits_physical_shift_and_keysyms_for_fixed_us_layout(self):
+        self.guest.connect_vnc(self.uri)
+        self.guest.transport = 'podman-rfb'
+        self.guest.guest_write('A_>', interval=0)
+        self.guest._image()
+        self.assertEqual(self.server.keys, [event for char in 'a-.' for event in
+                         [(1, 65505), (1, ord(char)), (0, ord(char)), (0, 65505)]])
+
 
 if __name__=='__main__':unittest.main()

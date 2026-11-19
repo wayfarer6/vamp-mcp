@@ -47,6 +47,15 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       assert.equal(unsupported.stdout, '');
       assert.match(unsupported.stderr, /requires a Linux KVM host/);
     });
+    await t.test('packaged Podman RPA stream requires approval and an exact binding', () => {
+      const target=['podman-screen','--connection','local-linux','--id','a'.repeat(64)];
+      for (const args of [[...target,'--binding','b'.repeat(64)],[...target,'--binding','short','--confirmed']]) {
+        const result=spawnSync(process.execPath,[cli,...args],{encoding:'utf8'});
+        assert.equal(result.status,1);
+        assert.equal(result.stdout,'');
+        assert.match(result.stderr,/Approve one checked Podman connection/);
+      }
+    });
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async scenario=>{
       const source=path.join(temporary,'installer.iso');await writeFile(source,'test');
       const args={name:'Blocked-Test',iso_path:source,confirmed:false};

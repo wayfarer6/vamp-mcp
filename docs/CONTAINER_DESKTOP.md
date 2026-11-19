@@ -54,6 +54,35 @@ This prerelease requires an independently verified immutable desktop image ID. R
 - **Standalone MCP:** `podman_view_container_screen` returns JSON containing `url`, `container_id`, `mode`, and `scope: "same_machine"`. For human keyboard/mouse control, explicitly request `mode: "control"` and obtain approval for that exact target. The AI should send the complete URL only to that requester in a private conversation, never to logs, shared chats, screenshots, or release notes. The URL is reusable during one short session with no password prompt. Open it in the browser **on the computer that runs MCP**. A remotely hosted MCP makes its own loopback URL, not the user's PC loopback. Do not broaden the bind or copy its URL to resolve that topology automatically.
 - **MCP capture:** `podman_capture_container_screen` returns one verified 1920×1080 PNG for the selected desktop. Capture only at the user's request; do not capture while credentials are entered.
 
+### Control an approved desktop from host Robot/Python
+
+Install the standalone `vamp-mcp` package and run Robot/Python with the VAMP
+checkout and its VNC dependencies. Build the desktop image from the same
+checkout so it contains the RPA input helper. Set `VAMP_DESKTOP_IMAGE_IDS` in the host
+environment. Use `podman_check` and `podman_list` to obtain the current
+connection binding and the full container ID. After the user has approved
+RPA control of that exact target, open the stream with `VMRobot.Connect Podman`.
+
+```robot
+*** Settings ***
+Library           vm_robot.VMRobot
+Suite Teardown    Disconnect Spice
+
+*** Test Cases ***
+Inspect Approved Desktop
+    Connect Podman    ${CONNECTION}    ${CONTAINER_ID}    ${BINDING}    confirmed=${True}
+    Capture Guest Screen    artifacts/podman-screen.png
+```
+
+Use the usual `Guest Click`, `Guest Write`, and `Guest Hotkey` keywords after
+checking the screen. Screen recognition runs on the host against the captured
+framebuffer. The `vamp-mcp podman-screen` subprocess carries RFB over private
+stdin/stdout pipes and uses the same trusted-image, rootless and connection
+checks as the viewer. The stream closes when Robot disconnects and has the
+same duration and byte limits as the managed viewer. On Windows, use
+`cli=<absolute path to vamp-mcp.mjs>` if the npm shim is outside the usual
+installation layout.
+
 Local browser listeners are restricted to `127.0.0.1` and allocate the lowest open port from 6080 through 6111. Knowledge of the port is not access; the private URL contains a session capability. Browser and VS Code viewer paths are still awaiting real engine/UI testing; clipboard and file transfer are disabled in the fixed screen helper.
 
 ## Native Linux: attach an already-opened VeraCrypt workspace

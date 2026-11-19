@@ -31,6 +31,18 @@ class VMRobot(GuestVision):
                 self.transport.disconnect_spice()
             self.transport = None
 
+    @keyword
+    def connect_podman(self, connection, container_id, binding, timeout=20, *,
+                       confirmed: bool = False, node='node', cli='vamp-mcp'):
+        """Connect host-side Robot keywords to an approved Podman desktop."""
+        from vnc_robot import VncRobot
+        self.disconnect_spice()
+        transport = VncRobot()
+        result = transport.connect_podman(connection, container_id, binding, timeout,
+                                          confirmed=confirmed, node=node, cli=cli)
+        self.transport = transport
+        return result
+
     @property
     def inputs(self):
         return self.transport.inputs

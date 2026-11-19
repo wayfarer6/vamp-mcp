@@ -266,7 +266,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     const {metadata}=await desktop(connection,id,binding);
     return {connection:metadata.connection,id:metadata.id,imageId:metadata.imageId,width:metadata.width,height:metadata.height};
   }
-  const desktopArgs=(snapshot,id,helper,mode='view_only')=>args(snapshot,['exec','--user','1000:1000',...(helper==='view'?['--interactive']:[]),'--',id,'/usr/bin/python3','-I','-B',`/opt/vamp-desktop/${helper}.py`,...(helper==='view'&&mode==='control'?['--interactive']:[])]);
+  const desktopArgs=(snapshot,id,helper,mode='view_only')=>args(snapshot,['exec','--user','1000:1000',...(helper==='view'?['--interactive']:[]),'--',id,'/usr/bin/python3','-I','-B',`/opt/vamp-desktop/${helper}.py`,...(mode==='rpa'?['--rpa']:mode==='control'?['--interactive']:[])]);
   async function capture(connection,id,binding){
     const {snapshot,metadata}=await desktop(connection,id,binding);
     const {exe,options}=commandOptions(snapshot);
@@ -277,7 +277,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     return {...metadata,png};
   }
   async function openScreenStream(connection,id,binding,streamOptions={}){
-    if(!streamOptions||typeof streamOptions!=='object'||Array.isArray(streamOptions)||Object.keys(streamOptions).some(key=>key!=='mode')||!['view_only','control'].includes(streamOptions.mode??'view_only'))throw Error('Unsupported desktop stream options');
+    if(!streamOptions||typeof streamOptions!=='object'||Array.isArray(streamOptions)||Object.keys(streamOptions).some(key=>key!=='mode')||!['view_only','control','rpa'].includes(streamOptions.mode??'view_only'))throw Error('Unsupported desktop stream options');
     const mode=streamOptions.mode??'view_only';
     const {snapshot,metadata}=await desktop(connection,id,binding);
     const {exe,options}=commandOptions(snapshot);

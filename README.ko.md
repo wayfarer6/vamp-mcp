@@ -144,7 +144,7 @@ flowchart TD
     VM["격리된 VM 데스크톱"]
     Container["격리된 데스크톱 컨테이너"]
     Desktop <-->|콘솔 화면 캡처·입력| VM
-    Desktop <-->|관리형 화면 캡처·뷰어| Container
+    Desktop <-->|관리형 RFB 화면 캡처·입력| Container
 ```
 
 Robot Framework와 Python RPA, 로컬 YOLO·OCR 워커는 제어 호스트에서

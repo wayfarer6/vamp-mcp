@@ -29,6 +29,7 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
   proxy        Connect to a remote Linux KVM MCP server over SSH; pass --host
   bootstrap    Check Linux KVM access and upload the remote server; pass --host
   podman       Legacy standalone container server; no separate registration needed
+  podman-screen  Approved Podman desktop RFB stream over stdin/stdout for host RPA
   assets install <archive> [sha256]  Verify and install an offline provisioning archive
   assets download [sha256]           Verify and cache provisioning assets from this release
   --version    Package version
@@ -56,6 +57,41 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     }
   } catch(error) {
     console.error(`vamp-mcp ${command}: ${error.message}`);
+    process.exitCode=1;
+  }
+} else if (command==='podman-screen') {
+  try {
+    const {values}=parseArgs({args,options:{
+      connection:{type:'string'}, id:{type:'string'}, binding:{type:'string'}, confirmed:{type:'boolean'},
+    }});
+    if (!values.confirmed || !values.connection || !/^[a-f0-9]{64}$/.test(values.id||'') ||
+        !/^[a-f0-9]{64}$/.test(values.binding||'')) {
+      throw new Error('Approve one checked Podman connection, full container ID and binding first.');
+    }
+    const {default:{createPodmanAdapter}}=await import('../runtime/backends/podman/adapter.cjs');
+    const {pipeline}=await import('node:stream/promises');
+    const handle=await createPodmanAdapter().openScreenStream(values.connection,values.id,values.binding,{mode:'rpa'});
+    const close=()=>handle.close();
+    const exit=new Promise(resolve=>{
+      handle.child.once('error',()=>resolve(1));
+      handle.child.once('close',resolve);
+    });
+    process.once('SIGTERM',close);
+    process.once('SIGINT',close);
+    const send=pipeline(process.stdin,handle.child.stdin).catch(close);
+    try {
+      await pipeline(handle.child.stdout,process.stdout,{end:false});
+      const code=await exit;
+      if (code!==0 && !process.stdin.readableEnded) throw Error('The Podman desktop stream ended.');
+    } finally {
+      close();
+      process.stdin.destroy();
+      await send;
+      process.removeListener('SIGTERM',close);
+      process.removeListener('SIGINT',close);
+    }
+  } catch(error) {
+    console.error(`vamp-mcp podman-screen: ${error.message}`);
     process.exitCode=1;
   }
 } else if (command==='assets') {
