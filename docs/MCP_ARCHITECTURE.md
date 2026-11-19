@@ -10,6 +10,14 @@ AI는 작업의 설명·입력값·성공 조건을 보고 실행할 패키지�
 flowchart TB
     A["AI 에이전트"]
     subgraph Host ["제어 호스트"]
+        M["VAMP MCP"]
+        subgraph VaultMCP ["VAMP Vault MCP"]
+            VA["Vault 도구 · 사용자 승인"]
+            K["KeePassXC KDBX · 볼륨 소유 에이전트 ID"]
+            VC["VeraCrypt"]
+            VA --> K
+            VA --> VC
+        end
         R["Robot 시나리오"]
         P["Python 동작 · 검증"]
         B["콘솔 어댑터"]
@@ -22,8 +30,15 @@ flowchart TB
     end
     V["VM 데스크톱"]
     C["데스크톱 컨테이너"]
-    A -->|작업 ID · 입력값| R
-    R -->|결과 요약 · 상세 기록 경로| A
+    A <-->|MCP 호출 · 결과| M
+    A <-->|별도 MCP 호출 · 전달 결과| VA
+    M -->|작업 ID · 입력값| R
+    R -->|결과 요약 · 상세 기록 경로| M
+    VC --> D["할당된 암호화 볼륨"]
+    D -->|보조 디스크| V
+    D -->|지정된 작업 공간| C
+    VA -->|승인된 값을 지정 수신기로 전달| V
+    VA -->|승인된 값을 지정 수신기로 전달| C
     B <-->|하이퍼바이저 콘솔| V
     B <-->|관리형 RFB 화면 캡처·입력| C
 ```

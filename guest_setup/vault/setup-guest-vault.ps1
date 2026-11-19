@@ -7,7 +7,7 @@
     1. Installs KeePassXC (winget or direct download).
     2. Registers KeePassXC-Browser native messaging host for Chrome/Edge (Passkey support).
     3. Installs VeraCrypt CLI (winget or silent installer).
-    4. Creates Start-MountVault.cmd helper using VeraCrypt '/m rm' flag to expose NPKI as a removable USB drive.
+    4. Creates Start-MountVault.cmd to mount the VeraCrypt volume as removable media.
 #>
 
 $ErrorActionPreference = 'Stop'

@@ -100,7 +100,7 @@ destination metadata, so keep passwords in the Vault rather than in the JSON.
 
 Use `--env-check`, `--list-tools`, and `vault_status` to inspect setup. Remote access can run the same executable over `ssh -T user@host vamp-mcp-vault`; the database and installed CLIs belong to that host.
 
-Use `vault_create_volume` with `format: "guest-vhd"` to create a fixed VeraCrypt VHD. Install VeraCrypt and `qemu-img` on Linux or in the configured Windows WSL distribution. Use the returned credential entry with `vault_attach_vm` on a powered-off Linux KVM, Windows VirtualBox or Hyper-V guest, then detach it with `vault_detach_vm` before deleting the volume. See the [Vault volume guide](https://github.com/wayfarer6/vamp-mcp/blob/main/vscode-vault-extension/README.md) for backend parameters and guest unlocking.
+Use `vault_create_volume` with `format: "guest-vhd"` to create a fixed VeraCrypt VHD. Supply the assigned `owner_agent_id`; Vault stores it in the encrypted KeePassXC entry's username field. Install VeraCrypt and `qemu-img` on Linux or in the configured Windows WSL distribution. Use the returned credential entry with `vault_attach_vm` on a powered-off Linux KVM, Windows VirtualBox or Hyper-V guest, then detach it with `vault_detach_vm` before deleting the volume. See the [Vault volume guide](https://github.com/wayfarer6/vamp-mcp/blob/main/vscode-vault-extension/README.md) for backend parameters and guest unlocking.
 
 ## Build from source
 

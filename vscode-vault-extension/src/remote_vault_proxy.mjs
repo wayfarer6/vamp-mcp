@@ -254,7 +254,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, {signal}) => {
         : tool === 'vault_delete_group' ? `Move "${args.group}"${args.recursive ? ' and all its contents' : ' if empty'} to the recycle bin`
         : tool === 'vault_list_groups' ? 'the default Vault group paths and credential counts'
         : tool === 'vault_move_credential' ? `${args.entry} → ${args.group}`
-        : tool === 'vault_create_volume' ? `${args.volume} (${args.size_mb ?? 64} MiB, ${args.format ?? 'container'}) → VeraCrypt/${args.name}`
+        : tool === 'vault_create_volume' ? `${args.volume} (${args.size_mb ?? 64} MiB, ${args.format ?? 'container'}) for agent ${args.owner_agent_id} → VeraCrypt/${args.name}`
         : tool === 'vault_delete_volume' ? `${args.volume} and its vault entry ${args.entry}`
         : tool === 'vault_attach_vm' || tool === 'vault_detach_vm'
           ? `${args.credential_entry ? `${args.volume} (${args.credential_entry})` : `${args.disk} in ${args.volume} mounted at ${args.mount_point}`}, ${args.backend ?? 'virtualbox'} VM ${args.vm}, ${

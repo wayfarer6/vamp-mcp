@@ -825,7 +825,7 @@ if (!status.cli.keepassxc.available) {
       const volume = path.join(workdir, 'blocked concurrent volume.hc');
       await mkdir(lock, { recursive: true });
       try {
-        const result = await client.callTool({ name: 'vault_create_volume', arguments: { volume, name: 'BlockedConcurrent', size_mb: 8, confirm: true } });
+        const result = await client.callTool({ name: 'vault_create_volume', arguments: { volume, name: 'BlockedConcurrent', owner_agent_id: 'qa-agent', size_mb: 8, confirm: true } });
         const failure = payload(result);
         assert.equal(failure.status, 'error');
         assert.match(failure.error, /workspace disk operation is active/);
@@ -838,7 +838,7 @@ if (!status.cli.keepassxc.available) {
       const volumes = ['concurrent-first.hc', 'concurrent-second.hc'].map(name => path.join(workdir, name));
       const name = 'ConcurrentVolume';
       const results = await Promise.all(volumes.map(async volume => payload(await client.callTool({
-        name: 'vault_create_volume', arguments: { volume, name, size_mb: 8, confirm: true },
+        name: 'vault_create_volume', arguments: { volume, name, owner_agent_id: 'qa-agent', size_mb: 8, confirm: true },
       }))));
       const created = results.find(result => result.status === 'created');
       assert.equal(results.filter(result => result.status === 'created').length, 1);
@@ -854,7 +854,7 @@ if (!status.cli.keepassxc.available) {
       await check('Windows MCP creates and deletes a fixed guest VHD with an encrypted payload', async () => {
         const volume = path.join(workdir, 'guest volume.vhd');
         const call = async (name, arguments_) => payload(await client.callTool({ name, arguments: arguments_ }));
-        const created = await call('vault_create_volume', { volume, name:'GuestVhd', size_mb:8, format:'guest-vhd', confirm:true });
+        const created = await call('vault_create_volume', { volume, name:'GuestVhd', owner_agent_id:'qa-agent', size_mb:8, format:'guest-vhd', confirm:true });
         assert.equal(created.status, 'created', JSON.stringify(created));
         assert.equal(created.format, 'guest-vhd');
         let verified=false;
@@ -923,11 +923,12 @@ if (!status.cli.keepassxc.available) {
       assert.equal(process.platform,'win32');
       const volume = path.join(workdir,'managed wsl fixture.hc');
       const created = payload(await client.callTool({ name: 'vault_create_volume',
-        arguments: { volume, name:'WslFixture',size_mb:8,confirm:true } }));
+        arguments: { volume, name:'WslFixture',owner_agent_id:'qa-agent',size_mb:8,confirm:true } }));
       assert.equal(created.status,'created');
       assert.equal((await stat(volume)).size,8*1024*1024);
       const cli = new VaultCli({keepassxcCli:status.cli.keepassxc.path,kdbxPath:kdbx});
       const record = await cli.showEntry({file:kdbx,entry:created.entry,databasePassword:masterPassword});
+      assert.equal(record.username,'qa-agent');
       assert.match(record.password,/^[A-Za-z0-9_-]{43}$/);
       assert.ok(!JSON.stringify(created).includes(record.password));
       const mount_point=process.env.VAULT_TEST_WSL_MOUNT_POINT;
@@ -1017,7 +1018,7 @@ if (!status.cli.keepassxc.available) {
       const file = path.join(workdir, 'managed-live.hc');
       const mountPoint = path.join(workdir, 'mnt');
       await mkdir(mountPoint, { recursive: true });
-      const created = await call('vault_create_volume', { volume: file, name: 'ManagedLive', size_mb: 8, confirm: true });
+      const created = await call('vault_create_volume', { volume: file, name: 'ManagedLive', owner_agent_id: 'qa-agent', size_mb: 8, confirm: true });
       assert.equal(created.status, 'created');
       const target = { volume: file, entry: created.entry };
       assert.equal((await call('vault_delete_volume', target)).status, 'approval_required');

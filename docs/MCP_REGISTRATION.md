@@ -15,7 +15,7 @@ For an external client, point **VAMP MCP** at the verified installed `vamp-mcp` 
 
 The AI calls each server directly from the same MCP client. For a sign-in, use VAMP MCP to reach and focus the intended input field, then call `vault_deliver_credential` on VAMP Vault with the configured destination. A client that supports MCP form elicitation can show the Vault approval in chat. After approval, Vault sends the field directly to the configured receiver and returns a receipt to the AI.
 
-For encrypted workspaces, call `vault_create_volume`, `vault_mount_volume`, `vault_attach_vm`, and `vault_detach_vm` on VAMP Vault as needed. For a configured native Linux container workspace, call Vault's `vault_attach_container` to check and approve the binding. Use VAMP MCP's `podman_workspace_detach` with the returned container ID and binding before calling Vault to unmount or delete the volume.
+For encrypted workspaces, call `vault_create_volume` with the assigned `owner_agent_id`, then use `vault_mount_volume`, `vault_attach_vm`, and `vault_detach_vm` on VAMP Vault as needed. Vault stores the owner ID in the encrypted KeePassXC entry. For a configured native Linux container workspace, call Vault's `vault_attach_container` to check and approve the binding. Use VAMP MCP's `podman_workspace_detach` with the returned container ID and binding before calling Vault to unmount or delete the volume.
 
 ## Updating from the previous registrations
 

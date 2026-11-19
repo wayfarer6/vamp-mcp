@@ -838,6 +838,8 @@ tool('vault_create_volume', {
   inputSchema: {
     volume: z.string().min(1).max(4096),
     name: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/),
+    owner_agent_id: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$/)
+      .describe('Stable ID of the agent assigned to this volume. Stored in its encrypted Vault entry.'),
     size_mb: z.number().int().min(8).max(32768).default(64),
     format: z.enum(['container', 'guest-vhd']).default('container'),
     confirm: z.boolean().default(false),
@@ -847,14 +849,14 @@ tool('vault_create_volume', {
     if (process.platform !== 'linux' && (process.platform !== 'win32' || !process.env.VAULT_VERACRYPT_WSL_DISTRO)) {
       throw new Error('Managed volume creation requires Linux or VAULT_VERACRYPT_WSL_DISTRO on Windows.');
     }
-    const detail = `Create ${args.volume} (${args.size_mb} MiB, ${args.format}) and store its credential as VeraCrypt/${args.name}.`;
+    const detail = `Create ${args.volume} (${args.size_mb} MiB, ${args.format}) for agent ${args.owner_agent_id} and store its credential as VeraCrypt/${args.name}.`;
     const decision = await approve({ action: 'create_volume', entry: detail, detail, confirm: args.confirm });
     if (decision.pending) return approvalNotice(args.volume, detail);
     if (!decision.approved) return text({ status: 'denied' });
     const cli = await getCli();
     const master = await masterPassword({ file: settings.kdbx });
     return text(await withVmVolumeState(() => createManagedVolume(cli, {
-      file: settings.kdbx, volume: args.volume, name: args.name,
+      file: settings.kdbx, volume: args.volume, name: args.name, ownerAgentId: args.owner_agent_id,
       sizeBytes: args.size_mb * 1024 * 1024, databasePassword: master.password, format: args.format,
     })));
   } catch (error) {

@@ -90,7 +90,7 @@ Sidebar for the vault, and the .kdbx file as a first-class object.
 
 ## 0.1.0
 
-Initial VAMP Vault preview: credential and certificate isolation for AI agents.
+Initial VAMP Vault preview: credential and encrypted workspace management.
 
 - KeePassXC MCP vault over stdio with `vault_create`, `vault_get_credential`, `vault_set_credential`,
   `vault_update_credential`, `vault_delete_credential`, `vault_list_credentials`, `vault_mount_volume`,

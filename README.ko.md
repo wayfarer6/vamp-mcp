@@ -78,7 +78,7 @@ VAMP MCP 서버는 기동 시 stdio 핸드셰이크를 블로킹하지 않고 �
 
 ### 4. 🔐 제로 트러스트 자격증명 금고 (`vamp-vault`)
 - **KeePassXC** (`.kdbx`) 및 **VeraCrypt** (`.vhd`) 기반의 강력한 암호화 볼트.
-- 암호와 인증서는 CLI 인자(`argv`) 대신 오직 **표준 입력(`stdin`) 파이프로만 전달**되어 `ps aux` 프로세스 목록 노출을 원천 차단합니다.
+- Vault가 CLI에 암호를 제공할 때는 명령 인자 대신 표준 입력(`stdin`)을 사용합니다.
 - **호스트별 엄격한 격리**: 원격 서버는 각자의 로컬 볼트를 독립적으로 소유하며, 호스트 간 자격증명을 절대 공유하거나 동기화하지 않습니다.
 
 ### 5. 📦 게스트 초기 설정
@@ -114,16 +114,22 @@ Windows 호스트 PowerShell 실행 정책 및 별도의 Hyper-V/CIM 권한 확�
 ```mermaid
 flowchart TD
     subgraph Host ["호스트 머신"]
-        Agent["Claude / Cursor / AI 에이전트"]
-        MCP["VAMP MCP Server"]
-        Vault["VAMP Vault (KeePassXC)"]
-        HTTP["호스트 스크립트 서버 :8421"]
+        Agent["AI 에이전트 / MCP 클라이언트"]
+        MCP["VAMP MCP (vamp-mcp)"]
+        subgraph VaultService ["VAMP Vault MCP (vamp-mcp-vault)"]
+            Vault["Vault 도구 · 사용자 승인"]
+            DB["KeePassXC KDBX · 자격 증명과 볼륨 소유 에이전트 ID"]
+            VC["VeraCrypt"]
+            Vault --> DB
+            Vault --> VC
+        end
+        HTTP["Postinstall Script 서버 :8421"]
         RPA["Robot Framework / Python RPA 실행기"]
         Vision["로컬 YOLO / OCR 워커"]
         Desktop["데스크톱 어댑터"]
 
         Agent <-->|MCP Stdio 프로토콜| MCP
-        MCP --> Vault
+        Agent <-->|MCP stdio · 도구 호출과 결과| Vault
         MCP --> HTTP
         MCP --> RPA
         RPA -->|키보드·마우스 입력| Desktop
@@ -143,6 +149,12 @@ flowchart TD
 
     VM["격리된 VM 데스크톱"]
     Container["격리된 데스크톱 컨테이너"]
+    Disk["할당된 VeraCrypt 볼륨"]
+    VC --> Disk
+    Disk -->|보조 디스크| VM
+    Disk -->|지정된 작업 공간| Container
+    Vault -->|승인된 자격 증명을 지정 수신기로 전달| VM
+    Vault -->|승인된 자격 증명을 지정 수신기로 전달| Container
     Desktop <-->|콘솔 화면 캡처·입력| VM
     Desktop <-->|관리형 RFB 화면 캡처·입력| Container
 ```
@@ -152,6 +164,10 @@ Robot Framework와 Python RPA, 로컬 YOLO·OCR 워커는 제어 호스트에서
 캡처하고 키보드·마우스 입력을 보냅니다. 원격 VM은 SSH를 통해 원격
 하이퍼바이저 호스트에 콘솔 캡처·입력을 요청하고, 받은 화면은 제어 호스트에서
 분석할 수 있습니다. 지원하는 조작은 데스크톱 백엔드에 따라 달라집니다.
+
+MCP 클라이언트는 데스크톱 제어에 VAMP MCP를, 자격 증명과 암호화 볼륨 관리에
+VAMP Vault MCP를 각각 호출합니다. 사용자 승인 후 `vault_deliver_credential`은
+지정된 수신기에 값을 직접 전달하고 MCP 호출에는 전달 결과를 반환합니다.
 
 ---
 
@@ -167,6 +183,6 @@ Robot Framework와 Python RPA, 로컬 YOLO·OCR 워커는 제어 호스트에서
 ## 🔒 책임 한계와 안전한 사용 (Responsible Use)
 
 VAMP는 로컬 자동화 및 보안 인프라 연구를 위해 제작된 오픈소스입니다.
-- **인간의 직접 승인(HITL) 원칙**: 자율적인 금전 거래(은행 송금, 결제, 가상자산 이동 등)에 사용하는 것을 권장하지 않으며, 민감한 작업은 반드시 사용자의 확인을 거쳐야 합니다.
+- **사용자 승인**: 민감한 작업에는 명시적 사용자 확인이 필요합니다.
 - **격리된 샌드박스**: 게스트 VM 내부에서 실행된 스크립트와 에이전트 조작의 최종 책임은 사용자 본인에게 있습니다.
 - **오픈소스 라이선스**: 코드는 [MIT 라이선스](LICENSE)를 따릅니다. 타사 구성 요소는 해당 라이선스를 준수합니다 ([THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).

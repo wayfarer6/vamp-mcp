@@ -2,13 +2,11 @@
   <img src="https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/vscode-vault-extension/assets/vault-brand.png" width="128" height="128" alt="VAMP bat holding a monitor with a mint vault door">
 </p>
 
-# VAMP Vault · Credential & Certificate Isolation for AI Agents
+# VAMP Vault · Credential and Encrypted Workspace Management
 
 **VM-isolated GUI RPA & Encrypted Vault Execution for AI Agents**
 
-The AI agent on this machine can click, type and read screens, but it should not be able to take your passwords with it. VAMP Vault keeps them in a local KeePassXC database, keeps the certificates that prove who you are in an encrypted VeraCrypt volume, and hands a single approved value to the agent only when the current step of a task needs it.
-
-It is the companion to [VAMP](https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools), the local hypervisor MCP extension. VAMP gives an agent a machine to work in; VAMP Vault gives that work an identity. Enterprise identity tokens and certificates are the primary concrete case: mount the encrypted volume as removable media, let the agent perform signing or authentication in the isolated guest VM, and unmount when the step is finished.
+VAMP Vault stores credentials in KeePassXC and manages encrypted VeraCrypt workspaces for isolated desktops. The MCP client calls VAMP to control the desktop and VAMP Vault to manage the workspace or request an approved credential delivery.
 
 [Source](https://github.com/wayfarer6/vamp-mcp/tree/main/vscode-vault-extension) · [Releases](https://github.com/wayfarer6/vamp-mcp/releases) · [VAMP documentation](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/README.md)
 
@@ -374,8 +372,11 @@ Set `VAULT_KDBX_PYTHON` to that interpreter if it differs from the default
 in an encrypted staging file, checks that the renamed database can be read
 and verifies its contents before replacing the original.
 
-`vault_create_volume` creates an encrypted file and stores the generated
-password in the default KeePassXC database under `VeraCrypt/`. On Windows,
+`vault_create_volume` requires `owner_agent_id`, a stable identifier for the assigned agent.
+It creates an encrypted file and stores the generated password and owner ID in the
+default KeePassXC database under `VeraCrypt/`. The entry's username field holds the
+owner ID as assignment metadata. Existing entries can be updated with
+`vault_update_credential` by setting `username` on the managed volume entry. On Windows,
 set `vampVault.veracryptWslDistribution` (or `VAULT_VERACRYPT_WSL_DISTRO`
 for the CLI) to an installed WSL distribution with the VeraCrypt console
 binary at `/usr/bin/veracrypt`. The CLI can override that path with

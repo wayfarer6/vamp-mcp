@@ -3,9 +3,12 @@ import { link, lstat, mkdtemp, realpath, rename, rm, rmdir, stat, unlink } from 
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export async function createManagedVolume(cli, { file, volume, name, sizeBytes, databasePassword, format = 'container' }) {
+export async function createManagedVolume(cli, { file, volume, name, ownerAgentId, sizeBytes, databasePassword, format = 'container' }) {
   if (!path.isAbsolute(volume) || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(name)) {
     throw new Error('Use an absolute volume path and a simple credential name.');
+  }
+  if (!/^[A-Za-z0-9][A-Za-z0-9._:@/-]{0,127}$/.test(ownerAgentId ?? '')) {
+    throw new Error('Specify a stable agent ID for the volume owner.');
   }
   if (format === 'guest-vhd' && (!/\.vhd$/i.test(volume) ||
       (cli.platform !== 'linux' && (cli.platform !== 'win32' || !/^[a-z]:[\\/]/i.test(volume))))) {
@@ -31,7 +34,7 @@ export async function createManagedVolume(cli, { file, volume, name, sizeBytes, 
     if (!result.created || !(await stat(container)).isFile()) throw new Error('VeraCrypt did not confirm creation.');
     if (format === 'guest-vhd') await cli.wrapGuestVolume(container, staged, sizeBytes);
     await cli.addEntry({
-      file, group: 'VeraCrypt', entry: name, secret: password, databasePassword,
+      file, group: 'VeraCrypt', entry: name, username: ownerAgentId, secret: password, databasePassword,
       url: pathToFileURL(destination).href,
       ...(format === 'guest-vhd' ? { notes: 'VAMP format: guest-vhd' } : {}),
     });

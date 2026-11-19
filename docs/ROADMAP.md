@@ -8,7 +8,7 @@ This document outlines the strategic engineering roadmap for VAMP (Virtual Agent
 
 VAMP was initially designed for **local-first** execution: the VS Code extension host, the MCP server, and the hypervisor (VirtualBox, KVM, Hyper-V) run on the user's local machine.
 
-However, many cutting-edge AI agents (cloud-hosted autonomous agents, remote dev containers, mobile-driven assistants) execute outside the local physical workstation. Because cloud Linux containers cannot install Windows-native desktop security software (`exe` kernel modules, NPKI accredited certificates, proprietary desktop clients), they need a secure bridge to drive isolated desktop VMs running on the user's hardware.
+AI agents can run outside the local workstation, for example in a cloud service or remote development container. A secure bridge lets them use isolated desktop VMs on the user's hardware when a task requires a native desktop application.
 
 ```
 Cloud / Remote AI Agent
@@ -34,7 +34,7 @@ Rather than implementing complex, proprietary remote hypervisor network protocol
 
 ### 2.1 The Transport-Level SSH Bridge (Primary Strategy)
 1. **Local Hypervisor Drivers Remain Untouched:** The VAMP MCP server continues running locally on the machine hosting VirtualBox, KVM, or Hyper-V.
-2. **Zero Credential Leakage:** Master keys, certificates, and `.kdbx` databases never leave the local host filesystem. Secrets are read into guest RAM or mounted as virtual USB storage locally.
+2. **Scoped credential delivery:** Vault stores workspace metadata and credentials in KeePassXC. After approval, it sends a requested value to the configured receiver.
 3. **Native MCP Transport Compatibility:** MCP natively supports running server binaries over standard input/output (`stdio`). Wrapping the local server with SSH allows any remote agent to communicate via standard MCP JSON-RPC:
 
 ```json

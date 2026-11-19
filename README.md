@@ -114,16 +114,22 @@ After installing, check the VAMP entries with `code --list-extensions --show-ver
 ```mermaid
 flowchart TD
     subgraph Host ["Host machine"]
-        Agent["Claude / Cursor / AI Agent"]
-        MCP["VAMP MCP Server"]
-        Vault["VAMP Vault (KeePassXC)"]
-        HTTP["Host Script Server :8421"]
+        Agent["AI agent / MCP client"]
+        MCP["VAMP MCP (vamp-mcp)"]
+        subgraph VaultService ["VAMP Vault MCP (vamp-mcp-vault)"]
+            Vault["Vault tools · user approval"]
+            DB["KeePassXC KDBX · credentials and volume owner agent IDs"]
+            VC["VeraCrypt"]
+            Vault --> DB
+            Vault --> VC
+        end
+        HTTP["Postinstall Script Server :8421"]
         RPA["Robot Framework / Python RPA runner"]
         Vision["Local YOLO / OCR workers"]
         Desktop["Desktop adapter"]
 
         Agent <-->|MCP Stdio Protocol| MCP
-        MCP --> Vault
+        Agent <-->|MCP stdio · tools and receipts| Vault
         MCP --> HTTP
         MCP --> RPA
         RPA -->|Keyboard and mouse| Desktop
@@ -143,6 +149,12 @@ flowchart TD
 
     VM["Isolated VM desktop"]
     Container["Isolated desktop container"]
+    Disk["Assigned VeraCrypt volume"]
+    VC --> Disk
+    Disk -->|Secondary disk| VM
+    Disk -->|Scoped workspace| Container
+    Vault -->|Approved credential to configured receiver| VM
+    Vault -->|Approved credential to configured receiver| Container
     Desktop <-->|Console capture and input| VM
     Desktop <-->|Managed RFB capture and input| Container
 ```
@@ -153,6 +165,11 @@ keyboard and mouse events, as a person would through a VM console. With a
 remote VM, the remote hypervisor host handles console capture and input over
 SSH while the controller can analyze the returned frames locally. Supported
 operations depend on the desktop backend.
+
+The MCP client calls VAMP MCP for desktop control and calls VAMP Vault MCP
+separately for credentials and encrypted volumes. After user approval,
+`vault_deliver_credential` sends a value directly to the configured receiver
+and returns a delivery receipt over MCP.
 
 ---
 
@@ -168,6 +185,6 @@ Don't reinvent the wheel. Browse pre-built, community-verified RPA packages on t
 ## 🔒 Responsible Use & Security
 
 VAMP is built for research, productivity, and secure local automation.
-- **Human-in-the-Loop (HITL) by Default**: We strongly advise against fully autonomous financial transactions (banking, transfers, cryptocurrency). Sensitive actions should always require explicit user confirmation.
+- **User approval**: Require explicit confirmation for sensitive actions.
 - **Isolated Sandbox**: Use sandboxed credentials and test environments. You remain responsible for all operations executed inside guest VMs.
 - **Open Source**: Licensed under the [MIT License](LICENSE). Third-party components retain their respective licenses (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
