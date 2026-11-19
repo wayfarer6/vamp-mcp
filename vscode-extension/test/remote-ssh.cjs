@@ -106,8 +106,40 @@ test('stdio proxy drains stdin and preserves SSH failure at EOF without reconnec
     input.end();
     assert.equal(await result, code === 0 ? 0 : 1);
     assert.equal(attempts, 1);
-    if (code !== 0) assert.match(diagnostic.read().toString(), /^remote_session_lost: The remote SSH host key changed.*trusted source/);
+    if (code !== 0) assert.match(diagnostic.read().toString(), /^remote_host_key_untrusted: The remote SSH host key changed.*trusted source/);
     else assert.equal(diagnostic.read(), null);
+  }
+});
+
+test('stdio proxy distinguishes initial authentication, network and Node failures without printing remote stderr', async () => {
+  const { proxyRemoteStdio } = await load('client.mjs');
+  for (const [exit,stderr,status] of [
+    [255,'Permission denied (publickey).','remote_auth_failed'],
+    [255,'Connection refused','remote_unreachable'],
+    [127,'node: command not found','remote_node_missing'],
+  ]) {
+    const diagnostic = new PassThrough();
+    let attempts = 0;
+    const result = await proxyRemoteStdio({host:'lab-host.local'}, {
+      input:new PassThrough(),output:new PassThrough(),diagnostic,
+      spawnImpl:()=>{
+        attempts++;
+        const child = new (require('node:events').EventEmitter)();
+        child.stdin = new PassThrough();
+        child.stdout = new PassThrough();
+        child.stderr = new PassThrough();
+        setImmediate(()=>{
+          child.stderr.write(stderr + '\nremote-private-path');
+          child.emit('close',exit);
+        });
+        return child;
+      },
+    });
+    assert.equal(result,1);
+    assert.equal(attempts,1);
+    const message=diagnostic.read().toString();
+    assert.ok(message.startsWith(status+':'));
+    assert.ok(!message.includes('remote-private-path'));
   }
 });
 
@@ -566,7 +598,7 @@ test('upload refuses a host without Node.js and setup runs the uploaded script',
   const blocked = new client.RemoteSshClient(config, { spawnImpl: spawnReturning('', 127) });
   blocked.exec = async command => command === 'uname -s'
     ? { code: 0, stdout: 'Linux\n' } : { code: 127, stdout: '', stderr: '' };
-  await assert.rejects(() => blocked.upload({ serverFile: __filename }), /Node\.js was not found at "node"/);
+  await assert.rejects(() => blocked.upload({ serverFile: __filename }), { code: 'remote_node_missing' });
 
   const commands = [];
   const responses = ['Linux\n', 'v22.14.0\n', '', '', '0.1.7\n'];
@@ -624,7 +656,7 @@ test('KVM upload reports SSH loss during OS detection', async () => {
       assert.equal(command, 'uname -s');
       return { code: 127, stdout: '', stderr: '' };
     };
-    await assert.rejects(client.upload({ serverFile: __filename }), { code: 255 });
+    await assert.rejects(client.upload({ serverFile: __filename }), { code: 'remote_unreachable' });
   }
 });
 
@@ -638,7 +670,7 @@ test('KVM bootstrap checks read-only libvirt access before uploading', async () 
     if (command.endsWith('--version')) return { code: 0, stdout: 'v22.14.0\n' };
     return { code: 1, stderr: 'Permission denied' };
   };
-  await assert.rejects(client.bootstrap(__filename), /usermod -aG libvirt -- 'labuser'/);
+  await assert.rejects(client.bootstrap(__filename), { code: 'remote_libvirt_unavailable', message: /usermod -aG libvirt -- 'labuser'/ });
   assert.equal(commands.length, 3);
   assert.equal(commands[2], "virsh -r -c 'qemu:///system' list --name");
 });

@@ -166,6 +166,20 @@ function friendly(error, config, stderr) {
   return tail ? `${tail}` : (error?.message || 'SSH command failed.');
 }
 
+function connectionFailure(stderr) {
+  if (hostKeyMessage(stderr)) return 'remote_host_key_untrusted';
+  if (/permission denied \(publickey|authentication failed/i.test(stderr)) return 'remote_auth_failed';
+  return 'remote_unreachable';
+}
+
+function connectionError(stderr) {
+  const code = connectionFailure(stderr);
+  const message = hostKeyMessage(stderr) || (code === 'remote_auth_failed'
+    ? 'SSH authentication failed. Check the private key and remote authorized_keys.'
+    : 'SSH could not connect to the remote host. Check the address, port and network.');
+  return new RemoteSshError(message, { code });
+}
+
 export class RemoteSshClient {
   constructor(config, { spawnImpl = spawn, timeoutMs = 120000 } = {}) {
     this.config = config;
@@ -218,12 +232,13 @@ export class RemoteSshClient {
   async probe() {
     const node = this.config.remoteNodePath;
     const result = await this.exec(`command -v ${quote(node)} >/dev/null 2>&1 && exec ${quote(node)} --version`, { timeoutMs: 60000 });
+    if (result.code === 255) {
+      throw connectionError(result.stderr);
+    }
     if (result.code !== 0) {
-      const major = /^v?(\d+)/.exec(String(result.stdout).trim())?.[1];
       throw new RemoteSshError(
-        `Node.js was not found at "${node}" on the remote host, so the VAMP remote server cannot start. `
-        + `Install Node.js 20 or newer there, or set vamp.remote.remoteNodePath. ${friendly({ code: result.code }, this.config, result.stderr)}`.trim(),
-        { code: result.code, stderr: result.stderr },
+        'Node.js was not found on the remote host. Install Node.js 20 or newer there, or set the remote Node path.',
+        { code: 'remote_node_missing' },
       );
     }
     const version = String(result.stdout).trim();
@@ -257,7 +272,7 @@ export class RemoteSshClient {
       const probePlatform = async command => {
         const result = await this.exec(command, { timeoutMs: 60000 });
         if (result.code === 255) {
-          throw new RemoteSshError(friendly({ code: result.code }, this.config, result.stderr), { code: result.code, stderr: result.stderr });
+          throw connectionError(result.stderr);
         }
         return result;
       };
@@ -277,10 +292,9 @@ export class RemoteSshClient {
     if (checkLibvirt) {
       const result = await this.exec(`virsh -r -c ${quote(this.config.libvirtUri)} list --name`, { timeoutMs: 30000 });
       if (result.code !== 0) {
-        let message = result.stderr.trim() || 'Read-only libvirt probe failed.';
-        if (result.code === 255) {
-          message = friendly({ code: result.code }, this.config, result.stderr);
-        } else if (this.config.libvirtUri === 'qemu:///system' && /permission denied|not authorized|authentication/i.test(message)) {
+        let message = 'Read-only libvirt probe failed. Check the libvirt service and account access on the remote host.';
+        if (result.code === 255) throw connectionError(result.stderr);
+        if (this.config.libvirtUri === 'qemu:///system' && /permission denied|not authorized|authentication/i.test(result.stderr)) {
           const identity = this.config.username ? null : await this.exec('id -un', { timeoutMs: 10000 }).catch(() => null);
           const login = this.config.username || (identity?.code === 0 ? identity.stdout.trim() : '');
           if (USER_PATTERN.test(login)) {
@@ -289,7 +303,7 @@ export class RemoteSshClient {
             message += '\nHave an administrator check libvirt permissions for the remote SSH account, then reconnect.';
           }
         }
-        throw new RemoteSshError(message, { code: result.code, stderr: result.stderr });
+        throw new RemoteSshError(message, { code: 'remote_libvirt_unavailable' });
       }
     }
     const bytes = await readFile(serverFile);
@@ -521,7 +535,7 @@ function openProxyChild(definition, spawnImpl) {
     child.once('error', () => resolve(1));
     child.once('close', resolve);
   });
-  return { child, closed, keyError: () => hostKeyMessage(stderr) };
+  return { child, closed, keyError: () => hostKeyMessage(stderr), stderr: () => stderr };
 }
 
 function restoreProxySession(connection, initialize, initialized, original) {
@@ -626,6 +640,15 @@ export async function proxyRemoteStdio(config, { input = process.stdin, output =
   let connection = openProxyChild(definition, spawnImpl);
   let code = await relay(connection, true);
   if (input.readableEnded && code === 0) return 0;
+  if (!original && code === 255) {
+    const error = connectionError(connection.stderr());
+    diagnostic.write(`${error.code}: ${error.message}\n`);
+    return 1;
+  }
+  if (!original && code === 127) {
+    diagnostic.write('remote_node_missing: The remote Node command is unavailable. Check the configured Node path.\n');
+    return 1;
+  }
   if (!input.readableEnded && !connection.keyError() && initialize && initialized && original &&
       requests.size === 0 && outbound.atBoundary() && inbound.atBoundary()) {
     connection = openProxyChild(definition, spawnImpl);

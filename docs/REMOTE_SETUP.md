@@ -49,6 +49,10 @@ disconnects between requests, the proxy reconnects to the same host once and
 restores the session if the handshake still matches. If a request was in flight
 or the retry fails, the proxy reports `remote_session_lost` on stderr. Start a
 new MCP session and check the operation's outcome before retrying it.
+Initial SSH failures report `remote_unreachable`, `remote_auth_failed`, or
+`remote_host_key_untrusted`. A missing remote Node command reports
+`remote_node_missing`, and a failed libvirt bootstrap check reports
+`remote_libvirt_unavailable`.
 
 In desktop VS Code, **VAMP Remote: Open Live Viewer** opens a tunnel to a
 noVNC/websockify service already listening on the Linux host at `127.0.0.1:6080`.

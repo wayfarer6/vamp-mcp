@@ -56,7 +56,8 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
       process.exitCode=await proxyRemoteStdio(config, { expectedVersion:version });
     }
   } catch(error) {
-    console.error(`vamp-mcp ${command}: ${error.message}`);
+    const code=typeof error.code==='string'&&/^remote_[a-z_]+$/.test(error.code) ? `${error.code}: ` : '';
+    console.error(`vamp-mcp ${command}: ${code}${error.message}`);
     process.exitCode=1;
   }
 } else if (command==='podman-screen') {
