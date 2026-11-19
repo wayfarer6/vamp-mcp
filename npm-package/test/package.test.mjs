@@ -32,7 +32,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       const inventory = await readdir(runtime, { recursive: true, withFileTypes: true });
       const unexpected = inventory.filter(item => !item.isDirectory() && (!item.isFile() || !/\.(?:mjs|cjs|js|json)$/i.test(item.name)));
       assert.deepEqual(unexpected.map(item => item.name), []);
-      for (const relative of ['guest_setup', 'third_party/pyautogui-recorder', 'backends/packer']) {
+      for (const relative of ['guest_setup', 'third_party/pyautogui-recorder', 'backends/packer', 'rpas', 'backends/virtualbox/rpas']) {
         await assert.rejects(access(path.join(runtime, relative)), { code: 'ENOENT' });
       }
     });
@@ -160,6 +160,9 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       await access(path.join(installed,'backends/packer/runner.py'));
       await access(path.join(installed,'backends/packer/podman/host_job.py'));
       await access(path.join(installed,'backends/library/replay.py'));
+      for (const relative of ['rpas', 'backends/virtualbox/rpas']) {
+        await assert.rejects(access(path.join(installed, relative)), {code:'ENOENT'});
+      }
       await access(path.join(installed,'requirements-mcp.txt'));
     });
     await t.test('concurrent offline installs publish one usable cache',async()=>{

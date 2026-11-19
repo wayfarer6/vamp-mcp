@@ -250,7 +250,7 @@ server.tool('vm_prepare_recorder' , 'Build guest recorder ISO; optionally attach
 return server;
 }
 if(path.basename(path.dirname(process.argv[1]||''))==='virtualbox'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
-const server=new McpServer({name:'VAMP virtualbox',version:'0.3.6'},{instructions:virtualBoxInstructions});
+const server=new McpServer({name:'VAMP virtualbox',version:'0.3.7'},{instructions:virtualBoxInstructions});
 registerVirtualBoxTools(server);
 // Warm the local OCR/YOLO workers in the background. Detached, never blocking
 // stdio, and harmless when this host has no model environment.
