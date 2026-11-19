@@ -10,13 +10,18 @@ VAMP의 목적은 반복하는 GUI 작업을 로컬 RPA로 남겨 두는 것입�
 sequenceDiagram
     participant U as 사용자 또는 CUA
     participant A as AI 에이전트
-    participant P as RPA 패키지
-    participant V as 로컬 VM
+    participant P as 호스트의 Robot/Python RPA
+    participant M as 호스트의 YOLO/OCR 워커
+    participant V as VM 또는 컨테이너 화면
     U->>V: GUI 작업을 한 번 수행
     U->>A: 지원 형식의 동작 기록과 성공 조건 전달
     A->>P: 기록 검토, 변환, OCR 검증 조건 작성
-    P->>V: 처음 실행해 동작 확인
-    V-->>P: 화면과 검증 결과
+    P->>V: 콘솔에 키보드·마우스 입력
+    V-->>P: 캡처한 화면
+    opt 화면 분석이 필요할 때
+        P->>M: 캡처 이미지로 분석 요청
+        M-->>P: 탐지 영역과 텍스트
+    end
     Note over A,P: 검토와 실제 검증을 마친 패키지 보관
     A->>P: 다음 요청에서 작업 ID와 입력값으로 호출
     P->>V: 로컬 코드로 같은 순서 실행

@@ -113,15 +113,23 @@ After installing, check the VAMP entries with `code --list-extensions --show-ver
 
 ```mermaid
 flowchart TD
-    subgraph Host ["Host Machine / AI Agent"]
+    subgraph Host ["Host machine"]
         Agent["Claude / Cursor / AI Agent"]
         MCP["VAMP MCP Server"]
         Vault["VAMP Vault (KeePassXC)"]
         HTTP["Host Script Server :8421"]
+        RPA["Robot Framework / Python RPA runner"]
+        Vision["Local YOLO / OCR workers"]
+        Desktop["Desktop adapter"]
 
         Agent <-->|MCP Stdio Protocol| MCP
         MCP --> Vault
         MCP --> HTTP
+        MCP --> RPA
+        RPA -->|Keyboard and mouse| Desktop
+        Desktop -->|Captured frames| RPA
+        RPA -->|Selected images| Vision
+        Vision -->|Detections and text| RPA
     end
 
     subgraph Infrastructure ["Virtualization Abstraction Layer"]
@@ -130,19 +138,21 @@ flowchart TD
         MCP --> Packer
         MCP --> Vagrant
         Packer -->|Golden Images| Vagrant
-        Vagrant -->|VirtualBox / KVM / Hyper-V| Guest
+        Vagrant -->|VirtualBox / KVM / Hyper-V| VM
     end
 
-    subgraph Guest ["Isolated Guest VM (Windows / Debian)"]
-        SSH["OpenSSH Server :22"]
-        RPA["Deterministic RPA Runner"]
-        Vision["Local OCR / YOLO Daemon"]
-
-        Vagrant -. SSH Transport .-> SSH
-        SSH --> RPA
-        RPA --> Vision
-    end
+    VM["Isolated VM desktop"]
+    Container["Isolated desktop container"]
+    Desktop <-->|Console capture and input| VM
+    Desktop <-->|VNC capture and input| Container
 ```
+
+Robot Framework and Python run on the controller host, alongside the local YOLO
+and OCR workers. The desktop adapter captures the target's screen and sends
+keyboard and mouse events, as a person would through a VM console. With a
+remote VM, the remote hypervisor host handles console capture and input over
+SSH while the controller can analyze the returned frames locally. Supported
+operations depend on the desktop backend.
 
 ---
 

@@ -8,22 +8,27 @@ AI는 작업의 설명·입력값·성공 조건을 보고 실행할 패키지�
 
 ```mermaid
 flowchart TB
-    A[AI 에이전트] -->|작업 ID · 입력값| R[Robot 시나리오]
-    R --> P[Python 동작 · 검증]
-    P --> B{백엔드}
-    B -->|VirtualBox| M[MCP stdio · 호스트 VBoxManage와 SDK]
-    B -->|KVM| S[SPICE 화면 · 입력 채널]
-    M --> V[로컬 VM]
-    S --> V
-    V --> C[화면 캡처]
-    C --> O[선택적 로컬 YOLO · OCR]
-    O --> P
-    R --> Q[결과 요약 · 상세 기록 경로]
-    Q --> A
-    A -. 직접 VM 도구 호출 .-> M
+    A["AI 에이전트"]
+    subgraph Host ["제어 호스트"]
+        R["Robot 시나리오"]
+        P["Python 동작 · 검증"]
+        B["콘솔 어댑터"]
+        O["선택적 로컬 YOLO · OCR"]
+        R --> P
+        P -->|키보드·마우스 입력| B
+        B -->|캡처한 화면| P
+        P -->|분석할 이미지| O
+        O -->|탐지 영역·텍스트| P
+    end
+    V["VM 데스크톱"]
+    C["데스크톱 컨테이너"]
+    A -->|작업 ID · 입력값| R
+    R -->|결과 요약 · 상세 기록 경로| A
+    B <-->|하이퍼바이저 콘솔| V
+    B <-->|VNC 콘솔| C
 ```
 
-VirtualBox MCP는 `main`, SPICE MCP 래퍼는 `feat/vm-mcp-server` 브랜치에 있습니다. SPICE Robot 작업은 MCP 없이도 SPICE 엔진을 직접 사용합니다. Hyper-V는 실험적 VMConnect 기동 코드이며 이 경로의 실제 검증 대상에는 포함되지 않습니다.
+Robot 시나리오와 Python 코드는 제어 호스트에서 실행합니다. VirtualBox는 호스트의 VBoxManage·SDK, SPICE는 화면·입력 채널을 사용합니다. SPICE Robot 작업은 MCP 없이도 SPICE에 연결할 수 있습니다. Podman 데스크톱은 호스트에서 화면 캡처와 VNC 뷰어 연결을 제공하며, RPA가 사용할 수 있는 입력 기능은 백엔드에 따라 달라집니다. 원격 VM에서는 원격 하이퍼바이저 호스트가 콘솔 캡처와 입력을 수행하고, 제어 호스트가 반환된 이미지를 분석할 수 있습니다.
 
 ## 구성 요소
 
@@ -32,7 +37,7 @@ VirtualBox MCP는 `main`, SPICE MCP 래퍼는 `feat/vm-mcp-server` 브랜치에 
 | VirtualBox MCP | `backends/virtualbox/server.mjs` | 화면·입력·VM 관리·녹화 소스·실행 이력·게스트 부트스트랩 도구 24개 |
 | Robot 클라이언트 | `backends/virtualbox/client.py` | Node MCP 서버 호출과 이미지 파일 저장 |
 | 작업 패키지 | `rpas/<id>/`, `backends/virtualbox/rpas/<id>/` | Robot 순서, Python 구현, manifest와 작업 설명 |
-| 화면 인식 | `vision.py`, `model_daemon.py` | 선택적으로 설치하는 YOLO·PaddleOCR 프로세스 |
+| 화면 인식 | `vision.py`, `model_daemon.py` | 제어 호스트에서 캡처 이미지를 분석하는 선택적 YOLO·PaddleOCR 프로세스 |
 | 게스트 준비 | `guest_setup/recorder/` | 레코더, 로그인 시 해상도 설정과 Debian 미러 설정 |
 | 실행 기록 | `history.py`, `recording_listener.py` | SQLite 이력, 스크린샷과 선택적 영상 |
 | VS Code 확장 | `vscode-extension/` | VirtualBox MCP 번들, 호스트 Python 환경 준비와 명령 |

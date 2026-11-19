@@ -113,15 +113,23 @@ Windows 호스트 PowerShell 실행 정책 및 별도의 Hyper-V/CIM 권한 확�
 
 ```mermaid
 flowchart TD
-    subgraph Host ["호스트 머신 / AI 에이전트"]
+    subgraph Host ["호스트 머신"]
         Agent["Claude / Cursor / AI 에이전트"]
         MCP["VAMP MCP Server"]
         Vault["VAMP Vault (KeePassXC)"]
         HTTP["호스트 스크립트 서버 :8421"]
+        RPA["Robot Framework / Python RPA 실행기"]
+        Vision["로컬 YOLO / OCR 워커"]
+        Desktop["데스크톱 어댑터"]
 
         Agent <-->|MCP Stdio 프로토콜| MCP
         MCP --> Vault
         MCP --> HTTP
+        MCP --> RPA
+        RPA -->|키보드·마우스 입력| Desktop
+        Desktop -->|캡처한 화면| RPA
+        RPA -->|분석할 이미지| Vision
+        Vision -->|탐지 영역·텍스트| RPA
     end
 
     subgraph Infrastructure ["가상화 추상화 레이어"]
@@ -130,19 +138,20 @@ flowchart TD
         MCP --> Packer
         MCP --> Vagrant
         Packer -->|골든 이미지| Vagrant
-        Vagrant -->|VirtualBox / KVM / Hyper-V| Guest
+        Vagrant -->|VirtualBox / KVM / Hyper-V| VM
     end
 
-    subgraph Guest ["격리된 게스트 VM (Windows / Debian)"]
-        SSH["OpenSSH Server :22"]
-        RPA["결정론적 RPA 실행기"]
-        Vision["로컬 OCR / YOLO 데몬"]
-
-        Vagrant -. SSH 전송 .-> SSH
-        SSH --> RPA
-        RPA --> Vision
-    end
+    VM["격리된 VM 데스크톱"]
+    Container["격리된 데스크톱 컨테이너"]
+    Desktop <-->|콘솔 화면 캡처·입력| VM
+    Desktop <-->|VNC 화면 캡처·입력| Container
 ```
+
+Robot Framework와 Python RPA, 로컬 YOLO·OCR 워커는 제어 호스트에서
+실행합니다. 사람이 VM 콘솔을 조작하듯 데스크톱 어댑터가 대상 화면을
+캡처하고 키보드·마우스 입력을 보냅니다. 원격 VM은 SSH를 통해 원격
+하이퍼바이저 호스트에 콘솔 캡처·입력을 요청하고, 받은 화면은 제어 호스트에서
+분석할 수 있습니다. 지원하는 조작은 데스크톱 백엔드에 따라 달라집니다.
 
 ---
 
