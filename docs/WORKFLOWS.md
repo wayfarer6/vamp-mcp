@@ -100,3 +100,13 @@ Windows VM을 쓴다면 설치 ISO·라이선스·정품 인증은 사용자가 
 ## 커뮤니티 스크립트에서 시작하기
 
 직접 기록하기 전에 같은 작업이 이미 있는지 [VAMP Script Hub](https://wayfarer6.github.io/vamp-script-hub/)에서 먼저 찾습니다. 스크립트마다 PyAutoGUI 소스, 입력 계약, 검증 기준, `rpa_run_saved` 호출 예시가 함께 있어, 맞는 항목이면 좌표와 검증 조건을 다시 만들 필요가 없습니다. 내보낸 폴더는 VS Code **RPA Library → Add RPA Folder**로 가져오고, 내 기록은 **Export ZIP**으로 제출합니다. 자세한 절차는 [사용 안내의 커뮤니티 스크립트 절](USER_GUIDE.md#커뮤니티-스크립트-vamp-script-hub)과 [기여 가이드](https://github.com/wayfarer6/vamp-script-hub/blob/main/CONTRIBUTING.md)에 있습니다. 사본은 [`docs/hub/`](hub/)에 보관합니다.
+## 60-second VirtualBox split-screen demo
+
+Use a Windows VirtualBox guest at 1920×1080, a saved ERP workflow, and the standalone [demo ERP](https://github.com/wayfarer6/vamp-demo-erp). Reset the ERP to its synthetic fixtures before each take. Keep the host VS Code editor and AI chat on the left and the guest console on the right. Encode separate English and Korean recordings at 2560×1440.
+
+| Time | What to show | English narration | 한국어 내레이션 |
+| --- | --- | --- | --- |
+| 0–10 s | Show the saved workflow and the pending order in the guest browser. | “VAMP runs this saved workflow in a VirtualBox guest on my computer.” | “VAMP는 이 컴퓨터의 VirtualBox 게스트에서 저장한 작업을 실행합니다.” |
+| 10–25 s | Start the saved run in VS Code. Continue typing in a host scratch file while the guest searches for the order. | “The guest searches for the order while I keep typing in the host editor.” | “게스트가 주문을 찾는 동안 호스트 편집기에서 계속 입력할 수 있습니다.” |
+| 25–45 s | Keep both panes visible as the guest marks the order shipped and exports the CSV. | “The recorded steps update the order and download the CSV inside the guest.” | “기록해 둔 동작이 게스트 안에서 주문 상태를 바꾸고 CSV를 내려받습니다.” |
+| 45–60 s | Show the Robot Framework result and the exported order row. If usage telemetry is available, show the replay's measured vision API usage. | “The report shows the replay result, and the CSV confirms the order shipped.” | “실행 보고서와 CSV에서 주문이 발송 처리된 것을 확인할 수 있습니다.” |
