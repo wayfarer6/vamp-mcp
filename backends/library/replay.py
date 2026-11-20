@@ -269,6 +269,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
         actual = driver.geometry()
         if actual != resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {actual}; recalibrate rather than guessing')
         if start_text is not None:
+            if pause_on_uac:
+                await require_clear_elevation_screen(driver, resolution, completed, 'before_starting_screen')
             await verify_start(driver, resolution, start_text)
             if driver.geometry() != resolution:
                 raise ValueError('Guest resolution changed during starting-screen verification. Replay stopped.')

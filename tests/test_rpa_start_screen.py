@@ -91,6 +91,21 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(driver.closed)
         verify.assert_not_called()
 
+    async def test_virtualbox_uac_precedes_starting_screen_and_rechecks_before_input(self):
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        for screens, phase in [([True], 'before_starting_screen'), ([False, True], 'before_action')]:
+            with self.subTest(phase=phase):
+                driver = FixtureDriver()
+                with patch('backends.library.replay.inspect_elevation_screen', side_effect=screens), \
+                     patch('backends.library.replay.verify_start') as verify:
+                    with self.assertRaises(ElevationHandoff) as blocked:
+                        await replay(driver, actions, [1920, 1080], pause_on_uac=True, start_text='QA-042')
+                self.assertEqual(blocked.exception.phase, phase)
+                self.assertEqual(blocked.exception.completed, 0)
+                self.assertEqual(verify.await_count, len(screens) - 1)
+                self.assertEqual(driver.events, [])
+                self.assertTrue(driver.closed)
+
     async def test_uncertain_uac_ocr_stops_before_guest_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         fixtures = [
