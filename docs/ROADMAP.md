@@ -171,3 +171,22 @@ A repeat with CSV baseline verification took **248.54 seconds** in the same two-
 | Screen-driven CUA | Pending | Pending | Pending |
 | Fixed recorded workflow | Pending | Pending | Pending |
 | VAMP saved replay | Pending | Pending | Pending |
+
+### Eight-stage showcase checklist
+
+Use this sequence for the [VirtualBox ERP showcase](https://github.com/wayfarer6/vamp-mcp/issues/17). Start each layout trial from the same synthetic order state and keep each stage's files in its own report directory.
+
+| Stage | Action | Evidence to retain |
+| --- | --- | --- |
+| 1. Start infrastructure | Boot the disposable VirtualBox guest and launch the standalone ERP fixture. Open its Orders page in the guest. | Guest UUID, 1920×1080 desktop, ERP checkout revision, and initial order state. |
+| 2. Author the recording | In the side-by-side AI chat, ask to find pending orders, mark them shipped, and export a CSV. Review the generated PyAutoGUI source and confirm it uses guest coordinates. | Prompt, reviewed source, and provider usage report when available. |
+| 3. Package | Run `package` on the reviewed source and inspect the generated `run.robot`. | `conversion-result.json`, generated Robot suite, and dry-run report. |
+| 4. Replay v1 | Register and review the recording in RPA Library. Run `verified-replay` against a fresh v1 fixture and an unused shared CSV path. | `saved-replay.json`, `csv-verification.json`, and the visible shipped orders. |
+| 5. Switch layouts | Reset the ERP, switch to v2, then run the original recording with `saved-replay` on the authorized guest. | `starting_screen_blocked` and zero completed actions. |
+| 6. Prepare the repair | Inspect v2 in the guest through CUA, update the source and starting-screen condition, then run `repair --validate`. | AI usage when available, reviewed source diff, and static validation report. |
+| 7. Verify in scratch | Run `repair --commit` against the disconnected scratch guest with OCR, the configured YOLO check, and the CSV hash check. | `repair.json` with the check results and Git revisions. Failed verification must preserve HEAD. |
+| 8. Review and replay v2 | Review the new revision in RPA Library, reset the v2 fixture, and run `verified-replay` with a new CSV output path. | Fresh CSV verification, saved replay duration, and a split-screen view of the result. |
+
+The launcher runs the packaging, replay, and repair commands in the table. Keep the live AI authoring, guest inspection, and review confirmations visible during filming. Use separate Korean and English recordings, with the guest at 1920×1080 and video output at 2560×1440. Track installed VSIX UI capture in [#19](https://github.com/wayfarer6/vamp-mcp/issues/19).
+
+For the matched benchmark, record every trial before calculating medians. The [ERP benchmark guide](https://github.com/wayfarer6/vamp-demo-erp#compare-replay-methods) documents the observation fields and the `python benchmark.py observations.json` command. Keep the observations and aggregate output alongside the Robot and MCP reports.
