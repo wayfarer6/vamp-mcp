@@ -116,6 +116,14 @@ Report the versions, sample size, timing boundaries and raw outcomes alongside a
 
 ### Observed ERP run
 
+With the standalone ERP and a disposable VirtualBox browser guest ready, set the environment variables documented in the [ERP replay guide](https://github.com/wayfarer6/vamp-demo-erp#replay-against-a-virtualbox-browser-guest). From Bash (Git Bash on Windows), run:
+
+```bash
+bash scripts/demo_e2e_showcase.sh replay ../vamp-demo-erp ./erp-qa
+```
+
+Choose a new output directory. The launcher saves the Robot reports and the checkout revisions in `run-metadata.txt`. Set `VAMP_DEMO_PYTHON` to the host Python that has Robot Framework and the VirtualBox SDK. Append `--dryrun` to check the suite without guest input. This command covers the scripted ERP replay phases.
+
 One full scripted ERP run took **239.05 seconds** in Robot Framework 7.5.1. The measurement starts at the Robot test case, after the ERP and guest browser are ready. It includes both layouts, local OCR, two CSV checks, and the stale-replay check. Both CSVs matched and the stale v1 action completed zero inputs against v2. The setup used a Windows VirtualBox browser guest at 1920×1080 and rootless Podman in a Debian VirtualBox guest. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/de856ab)
 
 A repeat with CSV baseline verification took **248.54 seconds** in the same two-guest setup. The v1 CSV verification took 90.03 seconds, the reset and stale-replay check on v2 took 24.75 seconds, and the v2 CSV verification took 121.26 seconds. The two downloads matched by SHA-256 and the stale action completed zero inputs. The test case also includes startup and preflight. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/cdd925e)
