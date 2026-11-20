@@ -23,6 +23,18 @@
 
 ---
 
+## How to use
+
+VirtualBox 설치 데모를 QHD MP4로 볼 수 있습니다.
+
+| 운영체제 | MCP | VS Code |
+| --- | --- | --- |
+| Debian | [영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01A-Debian-MCP-QHD.mp4) | [영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02A-Debian-VSCode-QHD.mp4) |
+| Windows 11 | [영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01B-Windows11-MCP-QHD.mp4) | [영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02B-Windows11-VSCode-QHD.mp4) |
+
+- [Podman · Debian / VirtualBox 구성 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD.mp4)
+- [Robot Framework 코드 및 QA 결과](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-v0.3.10-demo-source-and-qa.zip)
+
 ## 💡 왜 VAMP인가요?
 
 화면을 직접 보고 컴퓨터를 조작하는 AI 에이전트(Computer-Using Agent, CUA)는 강력하지만, 실제 환경에서는 두 가지 치명적인 한계에 부딪힙니다:

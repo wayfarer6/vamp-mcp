@@ -21,6 +21,18 @@
 
 ---
 
+## How to use
+
+VirtualBox setup demos are available as QHD MP4s.
+
+| Guest OS | MCP | VS Code |
+| --- | --- | --- |
+| Debian | [Video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01A-Debian-MCP-QHD.mp4) | [Video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02A-Debian-VSCode-QHD.mp4) |
+| Windows 11 | [Video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01B-Windows11-MCP-QHD.mp4) | [Video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02B-Windows11-VSCode-QHD.mp4) |
+
+- [Podman · Debian / VirtualBox setup video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD.mp4)
+- [Robot Framework sources and QA results](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-v0.3.10-demo-source-and-qa.zip)
+
 ## 💡 Why VAMP?
 
 Computer-Using AI agents (CUA) are powerful, but they suffer from two fundamental problems in the real world:
