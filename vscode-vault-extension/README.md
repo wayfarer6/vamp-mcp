@@ -204,6 +204,8 @@ A winget install is the one step that leaves the extension: winget fetches the p
 
 ## Development
 
+On Windows, run `npm test` from an administrator terminal because the suite starts the Vault MCP server. Put the Git for Windows `usr\bin` directory on that terminal's `PATH` so the SSH harness can start `sh`. Set `VAULT_TEST_KEEPASSXC` to the full path of `keepassxc-cli.exe` to exercise real encrypted database operations in the SSH harness. The harness uses temporary fixtures.
+
 ```bash
 npm install
 npm run build                    # bundle backends/vault/server.mjs into dist/
