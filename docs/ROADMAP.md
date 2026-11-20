@@ -103,9 +103,9 @@ Rather than implementing complex, proprietary remote hypervisor network protocol
 
 ## 5. Six-stage replay demonstration
 
-Use the same synthetic ERP order, browser, guest resolution and reset procedure for every run. Keep Windows UI capture within the retry tracked in [#19](https://github.com/wayfarer6/vamp-mcp/issues/19).
+Use the same synthetic ERP order, browser, guest resolution and reset procedure for every run. Use Codex for the live AI steps.
 
-1. Show the ERP and the AI chat beside the guest view. Reset the ERP and capture the initial order state.
+1. Show the ERP and Codex beside the guest view. Reset the ERP and capture the initial order state.
 2. Complete the task once using screen-driven CUA, then capture the actions as PyAutoGUI source.
 3. Convert the source into a Robot Framework package and show the generated `run.robot`.
 4. Start the saved package through `rpa_run_saved` and retain its timing and run record.
@@ -201,7 +201,7 @@ Save each synthetic ERP CSV to its designated shared download path. After verify
 | 7. Verify in scratch | Run `repair --commit` against the disconnected scratch guest with OCR, the configured YOLO check, and the CSV hash check. | `repair.json` with the check results and Git revisions. Failed verification must preserve HEAD. |
 | 8. Review and replay v2 | Review the new revision in RPA Library, reset the v2 fixture, and run `verified-replay` with a new CSV output path. | Fresh CSV verification, saved replay duration, and a split-screen view of the result. |
 
-The launcher runs the packaging, replay, and repair commands in the table. Keep the live AI authoring, guest inspection, and review confirmations visible during filming. Use separate Korean and English recordings, with the guest at 1920×1080 and video output at 2560×1440. Track installed VSIX UI capture in [#19](https://github.com/wayfarer6/vamp-mcp/issues/19).
+The launcher runs the packaging, replay, and repair commands in the table. Keep Codex authoring, guest inspection, and review confirmations visible during filming. Use separate Korean and English recordings, with the guest at 1920×1080 and video output at 2560×1440. The separate VirtualBox Notepad recording shows the guest capture and OCR validation steps in [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/04-Windows-VirtualBox-Notepad-QHD-ko.mp4) and [English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/04-Windows-VirtualBox-Notepad-QHD-en.mp4).
 
 Stage 5 was rerun on a 1920×1080 Windows VirtualBox guest with the v2 Orders page open. The launcher exited successfully after reporting `starting_screen_blocked` and zero completed actions in 11.937 seconds. The RPA catalog was in a Korean-named host folder.
 
