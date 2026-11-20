@@ -10,8 +10,63 @@ usage() {
     echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm|--confirm-expect-blocked]" >&2
     echo "       $0 verified-replay <request.json> <ERP checkout> <fresh CSV path> <new report directory> --confirm" >&2
     echo "       $0 repair <request.json> <new report directory> [--validate|--test|--commit]" >&2
+    echo "       $0 showcase <ERP checkout> <new report directory> <recording.py> <package ID> <saved request.json> <repair request.json> <fresh v1 CSV> <fresh v2 CSV>" >&2
     exit 2
 }
+
+confirm_stage() {
+    local response
+    printf '\n%s\nType continue when ready, or press Enter to stop: ' "$1" >&2
+    read -r response && [[ $response == continue ]] || {
+        echo 'Showcase stopped by the operator.' >&2
+        exit 1
+    }
+}
+
+if [[ ${1:-} == showcase ]]; then
+    [[ $# -eq 9 && -f $2/scenario.py && -t 0 ]] || usage
+    demo=$2 reports=$3 recording=$4 package_id=$5 saved_request=$6 repair_request=$7
+    csv_v1=$8 csv_v2=$9
+    host_url=${VAMP_DEMO_HOST_URL:-http://127.0.0.1:8080}
+    [[ -n ${VAMP_RPA_REGISTRY:-} ]] || { echo 'Set VAMP_RPA_REGISTRY to the reviewed demo catalog.' >&2; exit 2; }
+    mkdir -- "$reports"
+    confirm_stage '1/8 Start the disposable VirtualBox guest and the standalone ERP. Confirm the fixture URL and open Orders in the guest.'
+    "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/01-baseline.json"
+    confirm_stage '2/8 Ask the AI to write a recording that ships the pending orders and exports a CSV. Review the guest coordinates and save the Python file.'
+
+    echo '3/8 Convert the reviewed recording to Robot Framework.'
+    bash "$repo/scripts/demo_e2e_showcase.sh" package "$recording" "$package_id" "$reports/03-package"
+    confirm_stage '4/8 Register and review this source in the demo RPA Library. Save the request with the authorized guest UUID and confirm v1 replay.'
+    "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/04-baseline.json"
+    bash "$repo/scripts/demo_e2e_showcase.sh" verified-replay "$saved_request" "$demo" "$csv_v1" "$reports/04-v1" --confirm
+
+    confirm_stage '5/8 Confirm that the original RPA should be tested on the same guest after the ERP switches to v2.'
+    "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/05-baseline.json"
+    "$python" "$demo/scenario.py" --url "$host_url" layout v2 | tee "$reports/05-layout.json"
+    confirm_stage 'Refresh Orders in the guest and confirm the v2 layout is visible.'
+    bash "$repo/scripts/demo_e2e_showcase.sh" saved-replay "$saved_request" "$reports/05-stale" --confirm-expect-blocked
+
+    confirm_stage '6/8 Use CUA to inspect the changed guest UI. Review the proposed repair, then save the repair request for the same RPA.'
+    "$python" - "$saved_request" "$repair_request" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+saved, repair = [json.loads(Path(name).read_text(encoding='utf-8-sig')) for name in sys.argv[1:]]
+if saved['id'].lower() != repair['id'].lower() or saved['vm_id'].lower() == repair['scratch_vm'].lower():
+    raise SystemExit('Use the same RPA and a separate scratch VM for repair.')
+PY
+    bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/06-validation" --validate
+    confirm_stage '7/8 Prepare the disconnected scratch guest and its OCR, modal and CSV checks. Authorize the scratch test and promotion on success.'
+    bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/07-repair" --commit
+
+    confirm_stage '8/8 Review the promoted RPA in the library. Confirm the v2 rerun and use a fresh CSV output path.'
+    "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/08-baseline.json"
+    "$python" "$demo/scenario.py" --url "$host_url" layout v2 | tee "$reports/08-layout.json"
+    confirm_stage 'Refresh Orders in the target guest and verify that the v2 fixture is visible.'
+    bash "$repo/scripts/demo_e2e_showcase.sh" verified-replay "$saved_request" "$demo" "$csv_v2" "$reports/08-v2" --confirm
+    exit
+fi
 
 if [[ ${1:-} == verified-replay ]]; then
     [[ $# -eq 6 && $6 == --confirm ]] || usage

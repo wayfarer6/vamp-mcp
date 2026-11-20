@@ -176,6 +176,16 @@ A repeat with CSV baseline verification took **248.54 seconds** in the same two-
 
 Use this sequence for the [VirtualBox ERP showcase](https://github.com/wayfarer6/vamp-mcp/issues/17). Start each layout trial from the same synthetic order state and keep each stage's files in its own report directory.
 
+Use the guided launcher from an interactive Bash terminal. Set `VAMP_RPA_REGISTRY` to an isolated demo catalog. Set `VAMP_DEMO_HOST_URL` if the standalone ERP uses a different local URL or port.
+
+```bash
+bash scripts/demo_e2e_showcase.sh showcase ../vamp-demo-erp ./showcase-report \
+  ./erp-recording.py erp_showcase ./erp-request.json ./erp-repair.json \
+  ./shared/v1/orders.csv ./shared/v2/orders.csv
+```
+
+Use a new report directory and two unused CSV paths in existing shared download folders. Change the guest browser's download destination for the final run. The launcher stops at each operator checkpoint and on a failed verification. Save the live AI recording and the request files at the prompts. The repair request must name the saved RPA and a separate scratch VM.
+
 | Stage | Action | Evidence to retain |
 | --- | --- | --- |
 | 1. Start infrastructure | Boot the disposable VirtualBox guest and launch the standalone ERP fixture. Open its Orders page in the guest. | Guest UUID, 1920×1080 desktop, ERP checkout revision, and initial order state. |
