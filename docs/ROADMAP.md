@@ -188,6 +188,10 @@ bash scripts/demo_e2e_showcase.sh showcase ../vamp-demo-erp ./showcase-report \
 
 Use a new report directory and two unused CSV paths in existing shared download folders. Change the guest browser's download destination for the final run. The launcher stops at each operator checkpoint and on a failed verification. Save the live AI recording and the request files at the prompts. The repair request must name the saved RPA and a separate scratch VM.
 
+For a terminal-only walkthrough, save the registration request as UTF-8 JSON and run `python backends/library/registry.py < registration.json` from the repository in Bash. Set `registry` to the same isolated catalog as `VAMP_RPA_REGISTRY`, `source_path` to the reviewed recording, `backend` to `virtualbox`, and `width` and `height` to `1920` and `1080`. Include `title`, `description`, `expected_result`, `start_text`, and the declared `inputs`. Set `reviewed: true` after reviewing the source. Use the response's `definition.id` in the saved replay request alongside the guest `vm_id` and runtime `inputs` object.
+
+After scratch promotion, inspect the promoted revision with `rpa_revision read-source`. To record the operator's review in the terminal, submit a new registration request with the same `id`, the promoted `commit` as `expected_commit`, and the promoted `source_sha256` as `verified_source_hash`. Use the promoted catalog `source.py` as `source_path` and retain the definition's metadata, including the revised starting text. Set `reviewed: true` only after reviewing that exact source. The registry checks the commit and source bytes before saving the review.
+
 The launcher checks that the v1 and stale-layout replays use the source SHA-256 from packaging. The final v2 replay must use the source verified in scratch. A mismatch stops playback before any guest input.
 
 Save each synthetic ERP CSV to its designated shared download path. After verifying the order contents in both runs, the launcher compares the files byte for byte using SHA-256 and writes both hashes to `08-csv-comparison.json`. Different hashes fail the showcase.
