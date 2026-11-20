@@ -30,7 +30,7 @@ import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
 import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeholders.mjs';
 import { exportEncryptedFile } from '../../src/encrypted_export.mjs';
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
-import { hypervVolume, kvmVolume, reconcileVirtualBoxDisks, virtualBoxVolume } from '../../src/vm_volume.mjs';
+import { hypervVolume, kvmVolume, reconcileVirtualBoxDisks, releaseWindowsVirtualBoxMount, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
 import { auditRemoteDelivery, deliverCredential, deliveryTarget, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
 import podmanModule from '../../../backends/podman/adapter.cjs';
@@ -1360,6 +1360,10 @@ const main = async () => {
       reconciling = true;
       try {
         scope.workspaceCleanup = await withVmVolumeState(guard => {
+          if (process.platform === 'win32') {
+            return reconcileVirtualBoxDisks(guard, undefined, async target =>
+              releaseWindowsVirtualBoxMount(await getCli(), guard, target));
+          }
           const releaseHostMount = process.platform !== 'linux' ? undefined : async ({ volume, mountPoint }) => {
             const cli = await getCli();
             const observed = await cli.listVolumes();

@@ -619,12 +619,12 @@ export class VaultCli {
     };
   }
 
-  async unmountVolume({ mountPoint = this.mountPoint, all = false } = {}) {
+  async unmountVolume({ mountPoint = this.mountPoint, all = false, unattended = false } = {}) {
     if (this.platform === 'win32') {
       const letter = String(mountPoint ?? '').match(/^([a-z]):\\?$/i)?.[1]?.toUpperCase();
       if (!all && !letter) throw new Error('Use a Windows drive letter such as V: for the mount point.');
-      const result = await run(this.requireVeracrypt(), ['/q', '/u', ...(all ? [] : [letter])], { timeout: 120000, env: this.env, allowFailure: true });
-      const remaining = (await this.listVolumes()).mounted;
+      const result = await run(this.requireVeracrypt(), ['/q', ...(unattended ? ['/s'] : []), '/u', ...(all ? [] : [letter])], { timeout: 120000, env: this.env, allowFailure: true });
+      const remaining = (await this.listVolumes({ requireBackingPaths: unattended })).mounted;
       return { unmounted: result.code === 0 && (all ? remaining.length === 0 : !remaining.some(item => item.mount_point === `${letter}:`)),
         mount_point: all ? null : `${letter}:`, exit_code: result.code };
     }
@@ -642,9 +642,13 @@ export class VaultCli {
     };
   }
 
-  async listVolumes({ probeNative = false } = {}) {
+  async listVolumes({ probeNative = false, requireBackingPaths = false } = {}) {
     if (!this.veracryptCli && !(probeNative && this.platform === 'win32')) return { available: false, mounted: [], slots: [] };
     if (this.platform === 'win32') {
+      if (requireBackingPaths) {
+        const mounted = await readWindowsVeraCryptMounts(this.env);
+        return { available: true, mounted, slots: mounted.map(item => item.slot) };
+      }
       const verified = await readWindowsVeraCryptMounts(this.env).catch(() => null);
       if (verified) return { available: true, mounted: verified, slots: verified.map(item => item.slot) };
       const script = `Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class VAMPDrive { [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern uint QueryDosDevice(string name, StringBuilder target, int length); }';

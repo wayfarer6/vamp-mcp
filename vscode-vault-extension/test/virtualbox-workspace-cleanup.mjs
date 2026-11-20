@@ -3,11 +3,46 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { reconcileVirtualBoxDisks } from '../src/vm_volume.mjs';
+import { reconcileVirtualBoxDisks, releaseWindowsVirtualBoxMount } from '../src/vm_volume.mjs';
 import { withVmVolumeState } from '../src/vm_volume_state.mjs';
 
 const vm = '01234567-89ab-cdef-0123-456789abcdef';
 const imageId = '01234567-89ab-cdef-0123-456789abcdea';
+
+test('Windows host cleanup waits for its exact container and retries a busy drive', async () => {
+  const target = { volume: 'C:\\QA\\workspace.vc', mountPoint: 'X:\\' };
+  const guard = { assertDetached: async checked => assert.deepEqual(checked, { ...target, detachedVolume: target.volume }) };
+  let registered = 'Location: x:\\other.vhd';
+  let mounted = [{ mount_point: 'X:', volume: 'C:\\QA\\other.vc' }];
+  let busy = true;
+  let attempts = 0;
+  const cli = {
+    listVolumes: async options => {
+      assert.deepEqual(options, { requireBackingPaths: true });
+      return { available: true, mounted };
+    },
+    unmountVolume: async options => {
+      assert.deepEqual(options, { mountPoint: 'X:', unattended: true });
+      attempts++;
+      if (!busy) mounted = [];
+      return { unmounted: !busy };
+    },
+  };
+  const reconcile = () => releaseWindowsVirtualBoxMount(cli, guard, target, async args => {
+    assert.deepEqual(args, ['list', 'hdds']);
+    return { stdout: registered };
+  });
+  await assert.rejects(reconcile, /disk registered/);
+  registered = '';
+  await assert.rejects(reconcile, /does not match/);
+  assert.equal(attempts, 0);
+  mounted = [{ mount_point: 'X:', volume: target.volume }];
+  await assert.rejects(reconcile, /busy/);
+  busy = false;
+  await reconcile();
+  await reconcile();
+  assert.equal(attempts, 2);
+});
 
 test('VirtualBox cleanup waits for power off and retries a busy guest disk after restart', async t => {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'vamp-virtualbox-cleanup-'));

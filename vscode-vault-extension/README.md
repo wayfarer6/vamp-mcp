@@ -413,9 +413,9 @@ slot and detaches the VHD. A guest-only encrypted VHD needs no host dismount.
 On native Linux, a matching configured Podman workspace can release the host
 mount once other consumers are clear. On Windows, Vault reads backing paths
 for local file containers from the VeraCrypt 1.26 driver. With other driver
-versions it can fall back to showing drive letters. Windows host dismount
-remains pending after automatic VHD detach. Verify the exact volume and dismount it
-through the host's VeraCrypt workflow after the disk is detached.
+versions it can fall back to showing drive letters. Automatic Windows host
+dismount requires a verified backing path and a workspace drive with no
+registered VirtualBox disks. Busy or unverified mounts remain pending.
 
 For KVM, use `backend: "kvm"`, a secondary virtio target such as `vdb`,
 and `libvirt_uri` when using `qemu:///system`. The tools check and change

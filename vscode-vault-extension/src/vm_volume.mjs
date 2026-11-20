@@ -76,6 +76,30 @@ const executeVirtualBox = argv => run(process.env.VAULT_VBOXMANAGE || (process.p
     ? path.join(process.env.ProgramFiles || 'C:\\Program Files','Oracle/VirtualBox/VBoxManage.exe') : 'VBoxManage'),
     argv, { timeout: 30000 });
 
+export async function releaseWindowsVirtualBoxMount(cli, guard, { volume, mountPoint }, execute = executeVirtualBox) {
+  const drive = /^([a-z]:)\\?$/i.exec(mountPoint)?.[1].toUpperCase();
+  if (!drive || !/^[a-z]:\\/i.test(volume)) throw new Error('The Windows workspace is not a local file-backed drive.');
+  await guard.assertDetached({ volume, mountPoint, detachedVolume: volume });
+  const { stdout } = await execute(['list', 'hdds']);
+  if (stdout.split(/\r?\n/).some(line => {
+    const location = /^Location:[ \t]*(.+)$/i.exec(line)?.[1].trim().replace(/^\\\\\?\\/, '');
+    return location && path.win32.normalize(location).toUpperCase().startsWith(drive + '\\');
+  })) throw new Error('VirtualBox still has a disk registered on the workspace drive.');
+  const inspect = async () => {
+    const observed = await cli.listVolumes({ requireBackingPaths: true });
+    if (!observed.available) throw new Error('The host VeraCrypt mount state could not be verified.');
+    return observed.mounted.filter(item => item.mount_point.toUpperCase() === drive
+      || item.volume?.toUpperCase() === volume.toUpperCase());
+  };
+  const matches = await inspect();
+  if (!matches.length) return;
+  if (matches.length !== 1 || matches[0].volume !== volume || matches[0].mount_point.toUpperCase() !== drive) {
+    throw new Error('The mounted VeraCrypt container does not match the detached VM workspace.');
+  }
+  const result = await cli.unmountVolume({ mountPoint: drive, unattended: true });
+  if (!result.unmounted || (await inspect()).length) throw new Error('The VeraCrypt workspace is busy or still mounted.');
+}
+
 async function virtualBoxSlot(execute, { vm, controller, port }) {
   const fields = parseState((await execute(['showvminfo', vm, '--machinereadable'])).stdout);
   if (fields.get('UUID')?.toLowerCase() !== vm.toLowerCase()) throw new Error('VirtualBox reported a different VM.');
