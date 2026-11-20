@@ -57,6 +57,8 @@ sequenceDiagram
 
 테스트 화면을 초기화해 `outcome_text`가 실행 전에는 없고 실행 후에 한 번만 나타나도록 준비합니다. 성공 문구가 이미 보이면 게스트 입력 전에 검증을 중단합니다.
 
+특정 모달이 닫혔는지도 검사하려면 MCP 서버 시작 전에 `VAMP_REPAIR_MODAL_MODEL`에 신뢰하는 로컬 YOLO 가중치의 절대 경로를, `VAMP_REPAIR_MODAL_LABEL`에 그 모델의 정확한 모달 클래스 이름을 지정합니다. 검사기는 OCR 성공 문구와 같은 화면에서 해당 클래스를 찾습니다. 모달이 탐지되거나 모델에서 그 클래스를 확인할 수 없으면 검증이 실패합니다. 두 값이 비어 있으면 OCR과 파일 검사를 사용합니다.
+
 - `VAMP_REPAIR_ARTIFACT`에 게스트 안의 결과 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_GUEST_USER`에 테스트 계정을, `VAMP_REPAIR_GUEST_PASSWORD_FILE`에 그 계정의 호스트 비밀번호 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_ARTIFACT_BASELINE_SHA256`에는 초기 파일, `VAMP_REPAIR_ARTIFACT_SHA256`에는 완료 후 기대 파일의 SHA-256을 지정합니다.

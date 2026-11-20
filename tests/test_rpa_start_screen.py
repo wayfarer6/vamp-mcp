@@ -140,6 +140,30 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(driver.events, ['move', 'left'] if failure is None else [])
                 self.assertTrue(driver.closed)
 
+    async def test_scratch_outcome_rejects_a_visible_or_unverified_modal(self):
+        for result, failure in [
+            ({'verified_class': 'modal', 'targets': [{'label': 'modal'}]}, 'blocking modal is visible'),
+            ({'targets': []}, 'outcome screen could not be verified'),
+            ({'verified_class': 'modal', 'targets': []}, None),
+        ]:
+            with self.subTest(result=result):
+                driver = FixtureDriver()
+                ocr = [{'text': 'Export complete', 'confidence': 0.95}]
+
+                def detect(kind, request, **kwargs):
+                    self.assertEqual(kind, 'yolo')
+                    self.assertEqual(request['required_class'], 'modal')
+                    return result
+
+                with patch.dict('sys.modules', {'model_daemon': SimpleNamespace(request=detect)}), \
+                     patch('backends.library.replay.recognize_start_screen', return_value=ocr):
+                    options = {'outcome_text': 'Export complete', 'forbidden_modal': ('model.pt', 'modal')}
+                    if failure:
+                        with self.assertRaisesRegex(OutcomeScreenBlocked, failure):
+                            await replay(driver, [], [1920, 1080], **options)
+                    else:
+                        self.assertEqual(await replay(driver, [], [1920, 1080], **options), 0)
+
     async def check_capture_before_input(self, backend):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         png = b'fixture-png'

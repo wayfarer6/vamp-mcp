@@ -209,11 +209,22 @@ async def require_clear_elevation_screen(driver, resolution, completed):
         raise ElevationHandoff(completed, 'uac_prompt_detected')
 
 
-async def screen_match_count(driver, resolution, expected, *, verify_absence=False):
+async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
     with TemporaryDirectory(prefix='vamp-rpa-screen-') as folder:
         screenshot = Path(folder) / 'screen.png'
         await driver.capture(screenshot, resolution)
         lines = await asyncio.to_thread(recognize_start_screen, screenshot, expected)
+        if forbidden_modal:
+            from model_daemon import request
+            model, label = forbidden_modal
+            result = await asyncio.to_thread(request, 'yolo', {
+                'op': 'predict', 'image': str(screenshot), 'model': model,
+                'required_class': label, 'confidence': 0.35,
+            }, timeout=90)
+            if result.get('verified_class') != label or not isinstance(result.get('targets'), list):
+                raise ValueError('The local detector did not confirm the configured modal class.')
+            if any(target['label'] == label for target in result['targets']):
+                raise OutcomeScreenBlocked('The configured blocking modal is visible after scratch replay.')
     phrase = re.compile(r'(?<![\w-])' + re.escape(normalized_text(expected)) + r'(?![\w-])')
     readings = [(normalized_text(line['text']), float(line['confidence'])) for line in lines]
     if verify_absence and (
@@ -233,11 +244,13 @@ async def verify_start(driver, resolution, expected):
         raise StartScreenBlocked('Starting screen mismatch. Expected text must appear exactly once before replay.')
 
 
-async def verify_outcome_screen(driver, resolution, expected):
+async def verify_outcome_screen(driver, resolution, expected, forbidden_modal=None):
     try:
         if driver.geometry() != resolution:
             raise ValueError('Guest resolution changed during replay.')
-        matches = await screen_match_count(driver, resolution, expected)
+        matches = await screen_match_count(driver, resolution, expected, forbidden_modal=forbidden_modal)
+    except OutcomeScreenBlocked:
+        raise
     except Exception as exc:
         raise OutcomeScreenBlocked('The guest outcome screen could not be verified.') from exc
     if matches != 1:
@@ -245,7 +258,7 @@ async def verify_outcome_screen(driver, resolution, expected):
 
 
 async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
-                 require_new_outcome=False,pause_on_uac=False):
+                 require_new_outcome=False,forbidden_modal=None,pause_on_uac=False):
     completed=0
     try:
         actual = driver.geometry()
@@ -298,7 +311,7 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
             else:raise ValueError('Unsupported replay operation: '+op)
             await driver.drain();completed+=1;await asyncio.sleep(.01)
         if outcome_text is not None:
-            await verify_outcome_screen(driver, resolution, outcome_text)
+            await verify_outcome_screen(driver, resolution, outcome_text, forbidden_modal)
         if pause_on_uac:
             await require_clear_elevation_screen(driver, resolution, completed)
     except VaultDeliveryDenied as error:

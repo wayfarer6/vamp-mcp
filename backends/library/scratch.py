@@ -72,6 +72,18 @@ def scratch_artifact_settings(environment=None):
     return source, username, password, baseline, expected
 
 
+def scratch_modal_settings(environment=None):
+    environment = os.environ if environment is None else environment
+    model = environment.get('VAMP_REPAIR_MODAL_MODEL', '')
+    label = environment.get('VAMP_REPAIR_MODAL_LABEL', '').strip()
+    if not model and not label:
+        return None
+    path = Path(model)
+    if not path.is_absolute() or not path.is_file() or not 1 <= len(label) <= 100:
+        raise ValueError('Configure a trusted local modal detector and its exact forbidden class on the host.')
+    return str(path.resolve()), label
+
+
 def scratch_artifact_hash(vm, settings, *, execute=subprocess.run):
     source, username, password, _, _ = settings
     command = [executable(), 'guestcontrol', vm]

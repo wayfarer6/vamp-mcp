@@ -72,6 +72,9 @@ class ModelState:
                                               self.device if not requested or requested=='auto' else requested,self.cache)
                 prediction=model.predict(str(image),device=device,imgsz=1280,
                                           conf=float(data.get('confidence',.35)),verbose=False)[0]
+                required_class = data.get('required_class')
+                if required_class is not None and required_class not in prediction.names.values():
+                    raise ValueError('The detector does not provide the configured class.')
                 self.yolo_device = device
                 targets=[]
                 for index,box in enumerate(prediction.boxes):
@@ -83,6 +86,8 @@ class ModelState:
                     target=Path(data['annotated']);target.parent.mkdir(parents=True,exist_ok=True)
                     prediction.save(filename=str(target))
                 result={'device':device,'targets':targets,'model_speed_ms':prediction.speed}
+                if required_class is not None:
+                    result['verified_class'] = required_class
             self.requests+=1
             self.ready=True
         return {**result,'elapsed_ms':round((time.perf_counter()-started)*1000,2),

@@ -52,7 +52,9 @@ def test_revision(request):
     import asyncio
 
     from backends.library.replay import VBox, replay, substitute_inputs, vault_references
-    from backends.library.scratch import require_virtualbox_scratch, scratch_artifact_hash, scratch_artifact_settings
+    from backends.library.scratch import (
+        require_virtualbox_scratch, scratch_artifact_hash, scratch_artifact_settings, scratch_modal_settings,
+    )
 
     _, _, backend, width, height, raw, actions, names = validate_recording_request(request)
     if not actions or backend != 'virtualbox':
@@ -65,6 +67,7 @@ def test_revision(request):
         raise ValueError('Scratch replay accepts synthetic inputs without Vault references.')
     vm = require_virtualbox_scratch(request.get('scratch_vm'))
     artifact = scratch_artifact_settings() if request.get('commit_after_test') else None
+    modal = scratch_modal_settings()
     if artifact and scratch_artifact_hash(vm, artifact) != artifact[3]:
         raise ValueError('The scratch output does not match its reset baseline.')
     async def run():
@@ -72,6 +75,7 @@ def test_revision(request):
             VBox(vm), actions, [width, height],
             start_text=request.get('start_text') or None, outcome_text=outcome.strip(),
             require_new_outcome=artifact is not None,
+            forbidden_modal=modal,
         ), timeout=600)
     completed = asyncio.run(run())
     if artifact:
@@ -81,7 +85,8 @@ def test_revision(request):
     return {
         'status': 'scratch_verified' if artifact else 'scratch_screen_verified', 'actions_completed': completed,
         'source_sha256': hashlib.sha256(raw).hexdigest(),
-        'guest_verified': True, 'artifact_verified': bool(artifact), 'committed': False,
+        'guest_verified': True, 'artifact_verified': bool(artifact), 'modal_check_verified': modal is not None,
+        'committed': False,
     }
 
 
