@@ -59,6 +59,8 @@ sequenceDiagram
 
 `test-and-commit`은 OCR, YOLO 모달 검사와 결과 파일 검사를 모두 통과해야 커밋합니다. MCP 서버 시작 전에 `VAMP_REPAIR_MODAL_MODEL`에 신뢰하는 로컬 YOLO 가중치의 절대 경로를, `VAMP_REPAIR_MODAL_LABEL`에 그 모델의 정확한 모달 클래스 이름을 지정합니다. 검사기는 OCR 성공 문구와 같은 화면에서 해당 클래스를 찾습니다. 모달이 탐지되거나 클래스가 확인되지 않으면 검증이 실패합니다. 모달 모델 없이 화면만 확인하려면 커밋하지 않는 `test`를 사용합니다.
 
+MCP 시작 시 받는 기본 OmniParser 가중치는 아이콘 감지용입니다. 수정에 사용할 모달 모델은 적용할 앱의 실제 화면에서 검증하세요. 성공 문구가 같은 화면에 있더라도 모달을 검출하면 커밋이 차단돼야 합니다. 모달이 없는 화면에서도 일반 아이콘이나 버튼을 모달로 오인하지 않는지 확인하세요.
+
 - `VAMP_REPAIR_ARTIFACT`에 게스트 안의 결과 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_GUEST_USER`에 테스트 계정을, `VAMP_REPAIR_GUEST_PASSWORD_FILE`에 그 계정의 호스트 비밀번호 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_ARTIFACT_BASELINE_SHA256`에는 초기 파일, `VAMP_REPAIR_ARTIFACT_SHA256`에는 완료 후 기대 파일의 SHA-256을 지정합니다.
