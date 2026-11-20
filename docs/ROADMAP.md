@@ -166,6 +166,8 @@ One full scripted ERP run took **239.05 seconds** in Robot Framework 7.5.1. The 
 
 A repeat with CSV baseline verification took **248.54 seconds** in the same two-guest setup. The v1 CSV verification took 90.03 seconds, the reset and stale-replay check on v2 took 24.75 seconds, and the v2 CSV verification took 121.26 seconds. The two downloads matched by SHA-256 and the stale action completed zero inputs. The test case also includes startup and preflight. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/cdd925e)
 
+A fresh run against the standalone Podman container took **270.93 seconds** including preflight. This run waited for the exact filtered order before each click. The v1 CSV verified in 100.40 seconds, the layout change and stale replay stopped with zero inputs in 31.24 seconds, and the v2 CSV verified in 123.00 seconds. Both guest downloads matched by SHA-256. These are single-run timings. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/0cea8a8)
+
 | Comparable run | Median elapsed time | Provider vision tokens | Result after layout change |
 | --- | --- | --- | --- |
 | Screen-driven CUA | Pending | Pending | Pending |

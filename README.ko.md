@@ -46,6 +46,7 @@ VirtualBox 설치 녹화에 한국어와 영어 안내를 각각 넣은 QHD 영�
 - [VirtualBox에서 녹화하고 Python 스크립트를 VS Code RPA Library에 등록](docs/USER_GUIDE.md#2-vm에서-녹화한-스크립트를-목록에-넣기)
 - [Windows 메모장 예제 녹화](examples/notepad_recording.py)로 [VirtualBox, SPICE 또는 VNC 게스트용 독립 Robot Framework 패키지 만들기](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
 - [재생·수정 시연용 독립 데모 ERP](https://github.com/wayfarer6/vamp-demo-erp)
+- VirtualBox ERP 재생 검증 영상 ([한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/05-VirtualBox-ERP-Replay-QHD-ko.mp4) · [영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/05-VirtualBox-ERP-Replay-QHD-en.mp4))
 - [ERP 실행 결과와 비교 측정 방법](docs/ROADMAP.md#observed-erp-run)
 - [검토된 VirtualBox 시나리오를 실행하고 MCP 채팅에서 CSV 받기](docs/USER_GUIDE.md#채팅에서-erp-csv-받기) (현재 소스 빌드)
 - [Vault MCP 또는 VS Code에서 마운트된 VeraCrypt 컨테이너의 파일을 복호화된 사본으로 내보내기](vscode-vault-extension/README.md#export-a-file-from-a-mounted-container) (현재 소스 빌드)

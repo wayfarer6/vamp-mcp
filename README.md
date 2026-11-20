@@ -44,6 +44,7 @@ Watch the [Windows VirtualBox Notepad verification in English](https://github.co
 - [Record in VirtualBox and add the Python script to the VS Code RPA Library](docs/USER_GUIDE.md#2-make-a-vm-recording-appear-in-the-library)
 - [Generate a standalone Robot Framework package for a VirtualBox, SPICE, or VNC guest](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환) using the [Windows Notepad sample recording](examples/notepad_recording.py).
 - [Standalone Demo ERP for replay and repair](https://github.com/wayfarer6/vamp-demo-erp)
+- ERP replay verification in VirtualBox ([English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/05-VirtualBox-ERP-Replay-QHD-en.mp4) · [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/05-VirtualBox-ERP-Replay-QHD-ko.mp4))
 - [ERP run results and comparison method](docs/ROADMAP.md#observed-erp-run)
 - [Run a reviewed VirtualBox scenario and get its CSV in MCP chat](docs/USER_GUIDE.md#get-an-erp-csv-in-chat) (current source build)
 - [Export a decrypted copy of a file from a mounted VeraCrypt container with Vault MCP or VS Code](vscode-vault-extension/README.md#export-a-file-from-a-mounted-container) (current source build)
