@@ -100,10 +100,12 @@ Hyper-V는 [별도 폴더](../backends/hyperv/README.md)와 `$hyperv-rpa` 스킬
 
 This applies to `vm_create`, the local `kvm_vm_create` and configured SSH KVM tool, and **Open VM Manager → New Virtual Machine → Packer network options**. It does not configure the deployed VM's adapter. Leave the optional IPv4 blank to use the hypervisor default. A request's `bootstrap_host` takes precedence over the builder's `VAMP_PACKER_BOOTSTRAP_HOST` environment variable. Set the environment variable on the machine actually running Packer, not the client. Use a plain IPv4, never a URL or hostname.
 
+Hyper-V Debian golden-image builds require an internal switch and a static deployment profile. The Debian installer uses offline answer media. **Golden images** shows the current stage, including network preflight and the SSH check after reboot. [Hyper-V Debian profile and recovery](../backends/packer/debian-hyperv/README.md)
+
 | Builder | Default | Override |
 | --- | --- | --- |
 | VirtualBox | Existing NAT path | Unchanged; the bootstrap override is not used. |
-| Hyper-V | The single usable host IPv4 on the selected switch (default: `Default Switch`). | Choose an IPv4 already assigned to the selected switch. An isolated Private switch without a host adapter cannot serve these scripts. |
+| Hyper-V Windows | The single usable host IPv4 on the selected switch (default: `Default Switch`). | Choose an IPv4 already assigned to the selected switch. An isolated Private switch without a host adapter cannot serve these scripts. |
 | KVM/QEMU | `10.0.2.2` through QEMU user NAT; the host listener is bound to loopback. | Use a private IPv4 assigned to the builder and already reachable from the build guest. The deployed libvirt network's gateway does not determine this address. |
 
 Hyper-V and KVM run job-owned script and completion listeners. Use a trusted build network; the post-install transport uses HTTP, not TLS. Port `8421` must be free on the selected address. Debian's Packer preseed also uses a temporary HTTP port; the guest reports completion to a separate temporary callback port. VAMP does not change firewall rules or routes. If the preflight or job fails, check **Golden images** and its Packer/worker logs for the chosen address, then check the switch, firewall and guest route. A failed or empty bootstrap download is not executed, and no authenticated completion means no deployment.
