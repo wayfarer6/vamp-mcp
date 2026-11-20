@@ -8,6 +8,7 @@ const {pathToFileURL,fileURLToPath}=require('node:url');
 const path=require('node:path');
 test('thin MCP routes existing operations and a read-only plan without startup target access',async()=>{
  const calls=[];const adapter={};
+ const assertDetached=async()=>{};
  for(const method of ['connections','check','list','start','stop','logs','workspaceStatus','workspaceAttach'])adapter[method]=async(...args)=>{calls.push({method,args});return {ok:true};};
  class McpServer{constructor(meta,options){this.meta=meta;this.options=options;this.tools=new Map();}tool(name,description,schema,annotations,callback){this.tools.set(name,{schema,annotations,callback});}}
  const schema={regex(){return this;},int(){return this;},min(){return this;},max(){return this;},default(){return this;}};
@@ -21,7 +22,7 @@ test('thin MCP routes existing operations and a read-only plan without startup t
   './browser-viewer.mjs':{createBrowserViewer:()=>{throw Error('Viewer open during registration');}},
   './adapter.cjs':{default:{createPodmanAdapter:()=>adapter}},
   '../../vscode-vault-extension/src/bridge_client.mjs':{BridgeClient:{connect:()=>assert.fail('unexpected Vault bridge access')}},
-  '../../vscode-vault-extension/src/vm_volume_state.mjs':{withVmVolumeState:()=>assert.fail('unexpected VM state access')},
+  '../../vscode-vault-extension/src/vm_volume_state.mjs':{withVmVolumeState:work=>work({assertDetached})},
   './workspace.cjs':{default:require('./workspace.cjs')},
   './debian-host.cjs':{default:{createDebianHost:()=>{throw Error('Default builder constructed before use');}}}
  };
@@ -69,9 +70,11 @@ test('thin MCP routes existing operations and a read-only plan without startup t
  const detach=server.tools.get('podman_workspace_detach');
  assert.equal((await detach.callback({...workspace,id:'a'.repeat(64),confirmed:false})).isError,true);
  assert.equal(calls.at(-1).method,'workspaceAttach');
- adapter.workspaceDetach=async(...args)=>{calls.push({method:'workspaceDetach',args});return {status:'detached'};};
- assert.equal(JSON.parse((await detach.callback({...workspace,id:'a'.repeat(64)})).content[0].text).status,'detached');
- assert.deepEqual(calls.at(-1).args,[workspace.connection,'a'.repeat(64),workspace.binding]);
+ adapter.workspaceDetach=async(...args)=>{calls.push({method:'workspaceDetach',args});return {status:'detached',workspace_cleanup:'pending'};};
+ const detached=JSON.parse((await detach.callback({...workspace,id:'a'.repeat(64)})).content[0].text);
+ assert.equal(detached.status,'detached');
+ assert.equal(detached.workspace_cleanup,'pending');
+ assert.deepEqual(calls.at(-1).args,[workspace.connection,'a'.repeat(64),workspace.binding,assertDetached]);
  const request={connection:'qa',id:'a'.repeat(64),binding:'b'.repeat(64),confirmed:true,mode:'control'};
  const view=await server.tools.get('podman_view_container_screen').callback(request);
  assert.equal(view.structuredContent.url,shown);assert.equal(view.structuredContent.mode,'control');assert.equal(view.structuredContent.container_id,request.id);

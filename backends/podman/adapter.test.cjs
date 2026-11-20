@@ -312,4 +312,25 @@ test('local workspace uses checked binding, pinned image, single disposable cont
    assert.equal(target.mountPoint,config.mountPoint);assert.equal(target.volume,config.volumePath);
  }),{status:'unmounted',local_podman_writers_verified_absent:true});
  assert.equal(dismounted,true);
+ dismounted=false;
+ const assertDetached=async target=>{
+   assert.equal(target.volume,config.volumePath);
+   assert.equal(target.mountPoint,config.mountPoint);
+ };
+ const first=await adapter.workspaceStatus('local-linux',binding);
+ await adapter.workspaceAttach('local-linux',binding,first.approval_id);
+ conflict=true;
+ const deferred=await adapter.workspaceDetach('local-linux',id,binding,assertDetached);
+ assert.equal(deferred.status,'detached');
+ assert.equal(deferred.workspace_cleanup,'pending');
+ assert.equal(dismounted,false);
+ conflict=false;
+ await adapter.workspaceLock('local-linux',binding,assertDetached);
+ assert.equal(dismounted,true);
+ dismounted=false;
+ const second=await adapter.workspaceStatus('local-linux',binding);
+ await adapter.workspaceAttach('local-linux',binding,second.approval_id);
+ const cleaned=await adapter.workspaceDetach('local-linux',id,binding,assertDetached);
+ assert.equal(cleaned.workspace_cleanup,'unmounted');
+ assert.equal(dismounted,true);
 });

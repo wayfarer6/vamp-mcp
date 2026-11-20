@@ -117,7 +117,16 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
     const ctx=await context(snapshot);
     return ctx.source.readForAttachment(async m=>verifiedMount(value,m,ctx.config.imageId));
   }
-  async function detach(snapshot,id,{scan,command,inspect,present}){
+  async function unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached){
+    await assertDetached({mountPoint:mount.mountPoint,volume:ctx.config.volumePath});
+    await scan({...mount,directory:mount.mountPoint});
+    const fresh=await context(snapshot);
+    if(fresh.raw!==ctx.raw)throw Error('The workspace configuration changed during dismount.');
+    const observed=await revalidate();
+    if(!await ctx.source.dismount(observed))throw Error('VeraCrypt mount removal could not be verified.');
+    return {status:'unmounted',local_podman_writers_verified_absent:true};
+  }
+  async function detach(snapshot,id,{scan,command,inspect,present},assertDetached){
     return reserve(snapshot.uid,async()=>{
       const ctx=await context(snapshot);
       return ctx.source.readForAttachment(async (mount,revalidate)=>{
@@ -127,6 +136,14 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
         await revalidate();
         await command(['stop','--time','10','--',id]);
         if(await present(id))throw Error('Workspace container is still present; writer absence could not be verified');
+        if(assertDetached){
+          try{
+            const cleanup=await unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached);
+            return {status:'detached',id,local_podman_writers_verified_absent:true,workspace_cleanup:cleanup.status};
+          }catch(error){
+            return {status:'detached',id,workspace_cleanup:'pending',cleanup_reason:error.message};
+          }
+        }
         await scan(mount);
         await revalidate();
         return {status:'detached',id,local_podman_writers_verified_absent:true};
@@ -136,15 +153,8 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
   async function lockWorkspace(snapshot,scan,assertDetached){
     return reserve(snapshot.uid,async()=>{
       const ctx=await context(snapshot);
-      return ctx.source.readForAttachment(async (mount,revalidate)=>{
-        await assertDetached({mountPoint:mount.mountPoint,volume:ctx.config.volumePath});
-        await scan({...mount,directory:mount.mountPoint});
-        const fresh=await context(snapshot);
-        if(fresh.raw!==ctx.raw)throw Error('The workspace configuration changed during dismount.');
-        const observed=await revalidate();
-        if(!await ctx.source.dismount(observed))throw Error('VeraCrypt mount removal could not be verified.');
-        return {status:'unmounted',local_podman_writers_verified_absent:true};
-      });
+      return ctx.source.readForAttachment((mount,revalidate)=>
+        unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached));
     });
   }
   return {status,unlock,lockWorkspace,attach,detach,verify,supported};

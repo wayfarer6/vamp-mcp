@@ -247,9 +247,9 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     const snapshot=await workspaceSnapshot(connection,binding);
     return workspace.attach(snapshot,approvalId,workspaceOperations(snapshot));
   }
-  async function workspaceDetach(connection,id,binding){
+  async function workspaceDetach(connection,id,binding,assertDetached){
     const snapshot=await workspaceSnapshot(connection,binding);
-    return workspace.detach(snapshot,id,workspaceOperations(snapshot));
+    return workspace.detach(snapshot,id,workspaceOperations(snapshot),assertDetached);
   }
   async function workspaceLock(connection,binding,assertDetached){
     const snapshot=await workspaceSnapshot(connection,binding);
