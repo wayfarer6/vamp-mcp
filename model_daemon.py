@@ -45,6 +45,11 @@ def file_lock(path, blocking=True):
 def runtime_dir():
     digest=hashlib.sha256(str(ROOT).encode()).hexdigest()[:10]
     owner = hashlib.sha256(str(Path.home()).encode()).hexdigest()[:12] if WINDOWS else os.getuid()
+    if WINDOWS:
+        import ctypes
+        # An unelevated worker cannot read private files created by an elevated client.
+        if ctypes.windll.shell32.IsUserAnAdmin():
+            owner += '-elevated'
     directory=Path(tempfile.gettempdir())/f'spice-rpa-models-{owner}-{digest}'
     directory.mkdir(mode=0o700,exist_ok=True)
     if directory.is_symlink() or (hasattr(directory, 'is_junction') and directory.is_junction()):
