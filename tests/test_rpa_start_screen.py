@@ -55,7 +55,9 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_uac_handoff_is_visible_in_virtualbox_run_history(self):
         driver = FixtureDriver()
-        metadata = {'id': 'fixture-rpa', 'backend': 'virtualbox', 'resolution': [1920, 1080]}
+        commit = 'a' * 40
+        metadata = {'id': 'fixture-rpa', 'backend': 'virtualbox', 'resolution': [1920, 1080],
+                    'replay_commit': commit}
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
              patch('backends.library.replay.load', return_value=(metadata, actions)), \
@@ -66,6 +68,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['status'], 'operator_handoff')
         self.assertEqual(result['phase'], 'before_action')
         self.assertEqual(result['program_identity'], 'unverified')
+        self.assertEqual(result['replay_commit'], commit)
         self.assertEqual(driver.events, [])
         self.assertEqual(record['vm'], 'fixture-vm')
         self.assertEqual(record['evidence_status'], 'event_only')
@@ -76,7 +79,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(json.loads(event['payload_json']), {
             'rpa_id': 'fixture-rpa', 'reason': 'uac_prompt_detected', 'actions_completed': 0,
             'policy': 'operator_confirmation_required', 'phase': 'before_action',
-            'program_identity': 'unverified',
+            'program_identity': 'unverified', 'replay_commit': commit,
         })
 
     async def test_virtualbox_uac_after_final_action_precedes_outcome_ocr(self):

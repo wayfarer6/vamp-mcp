@@ -44,25 +44,41 @@ def vault_references(actions):
 
 def load(request):
     identifier=str(uuid.UUID(request['id']));folder=Path(request['registry']).resolve()/identifier
-    metadata=json.loads((folder/'rpa.json').read_text(encoding='utf8'))
-    if metadata.get('id')!=identifier or metadata.get('format')!='vamp-saved-rpa':raise ValueError('Unknown saved RPA')
     if not(folder/'.git').is_dir():raise ValueError('Version history is missing. Edit and save this RPA in the library first')
+    revision = subprocess.run(['git', '-C', str(folder), 'rev-parse', '--verify', 'HEAD'],
+                              capture_output=True, text=True, timeout=15)
+    replay_commit = revision.stdout.strip()
+    if revision.returncode or not re.fullmatch(r'[0-9a-f]{40}', replay_commit):
+        raise ValueError('Could not identify the reviewed RPA revision')
     reviewed_files = {'source.py', 'actions.json', 'rpa.json'}
-    tracked = subprocess.run(['git', '-C', str(folder), 'ls-tree', '--name-only', 'HEAD', '--', *sorted(reviewed_files)],
+    tracked = subprocess.run(['git', '-C', str(folder), 'ls-tree', '--name-only', replay_commit, '--', *sorted(reviewed_files)],
                              capture_output=True, text=True, timeout=15)
     if tracked.returncode or set(tracked.stdout.splitlines()) != reviewed_files:
         raise ValueError('All replay inputs must be committed before replay')
-    committed=subprocess.run(['git','-C',str(folder),'diff','--quiet','HEAD','--',*sorted(reviewed_files)],capture_output=True,timeout=15)
+    committed=subprocess.run(['git','-C',str(folder),'diff','--quiet',replay_commit,'--',*sorted(reviewed_files)],capture_output=True,timeout=15)
     if committed.returncode:raise ValueError('RPA has uncommitted changes. Save and review a new revision before replay')
+    def committed_bytes(name):
+        result = subprocess.run(['git', '-C', str(folder), 'show', f'{replay_commit}:{name}'],
+                                capture_output=True, timeout=15)
+        if result.returncode:
+            raise ValueError('Could not read the reviewed RPA revision')
+        return result.stdout
+
+    metadata=json.loads(committed_bytes('rpa.json'))
+    if metadata.get('id')!=identifier or metadata.get('format')!='vamp-saved-rpa':raise ValueError('Unknown saved RPA')
     if metadata.get('reviewed') is not True or (request.get('dry_run') is not True and request.get('confirmed') is not True):
         raise ValueError('Review this RPA in the library and explicitly confirm execution first')
-    if hashlib.sha256((folder/'source.py').read_bytes()).hexdigest()!=metadata['source_sha256']:raise ValueError('RPA source changed; recreate and review it before running')
-    raw=(folder/'actions.json').read_bytes()
+    source = (folder/'source.py').read_bytes()
+    # The catalog hashes recorder bytes before Git's Windows CRLF conversion.
+    if (hashlib.sha256(source).hexdigest() != metadata['source_sha256']
+            or source.replace(b'\r\n', b'\n') != committed_bytes('source.py').replace(b'\r\n', b'\n')):
+        raise ValueError('RPA source changed; recreate and review it before running')
+    raw=committed_bytes('actions.json')
     if hashlib.sha256(raw).hexdigest()!=metadata['actions_sha256']:raise ValueError('RPA actions changed; recreate and review it before running')
     actions=json.loads(raw)
     substitute_inputs(actions, metadata['inputs'], request.get('inputs',{}))
     uuid.UUID(request['vm_id'])
-    return metadata,actions
+    return {**metadata, 'replay_commit': replay_commit},actions
 
 
 def substitute_inputs(actions, names, values):
@@ -352,10 +368,12 @@ async def run(request, dialogue=False):
             observed_at=datetime.now(timezone.utc).isoformat()
             result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
                     'actions_completed':error.completed,'phase':error.phase,
-                    'program_identity':'unverified','at':observed_at,'message':str(error)}
+                    'program_identity':'unverified','replay_commit':metadata['replay_commit'],
+                    'at':observed_at,'message':str(error)}
             try:
                 result['run_id']=record_elevation_handoff(request['vm_id'],metadata['id'],error.reason,
-                                                          error.completed,observed_at,error.phase)
+                                                          error.completed,observed_at,error.phase,
+                                                          metadata['replay_commit'])
             except (OSError, sqlite3.Error):
                 result['history_status']='unavailable'
             return result

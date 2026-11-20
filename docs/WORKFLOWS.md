@@ -51,7 +51,7 @@ sequenceDiagram
 
 초기 설정을 마친 Windows VirtualBox 게스트는 1920×1080에서 기록과 재생을 진행합니다. `rpa_run_saved`에 `pause_on_uac: true`를 지정하면 각 기록 동작 직전과 마지막 동작 직후에 호스트 OCR로 화면을 확인합니다. UAC가 감지되거나 화면을 읽을 수 없으면 `operator_handoff`와 완료된 동작 수를 반환합니다. 대화 상자가 화면 검사 이후에 나타날 수 있으므로 UAC를 요청한 동작 다음에는 앱 상태를 확인할 여유를 두세요. 사용자가 게스트 콘솔의 프롬프트와 앱 상태를 확인한 뒤 다음 실행을 결정합니다.
 
-응답과 실행 이력에는 중단 시점(`before_starting_screen`, `before_action`, `after_last_action`)과 `program_identity: unverified`가 기록됩니다. 시작 화면 검사와 마지막 동작의 결과 검사에 앞서 UAC를 확인합니다. 시작 화면 검사가 끝난 뒤에도 첫 입력 직전에 다시 확인합니다.
+응답과 실행 이력에는 중단 시점(`before_starting_screen`, `before_action`, `after_last_action`), 재생에 사용한 Git 커밋, `program_identity: unverified`가 기록됩니다. 시작 화면 검사와 마지막 동작의 결과 검사에 앞서 UAC를 확인합니다. 시작 화면 검사가 끝난 뒤에도 첫 입력 직전에 다시 확인합니다.
 
 별도 VirtualBox 테스트 게스트가 준비돼 있다면, 호스트에서 `VAMP_REPAIR_SCRATCH_VM`에 해당 VM의 UUID를 설정한 뒤 MCP 서버를 시작합니다. 네트워크, 공유 폴더, 클립보드, 드래그 앤 드롭, 원격 화면, USB, 오디오 입출력, 직렬·병렬 포트가 꺼진 상태에서 VM을 실행합니다. `rpa_revision`의 `test`에는 수정본과 예상 커밋, `scratch_vm`, 화면에서 확인할 `outcome_text`, 필요한 합성 `test_inputs`, 그리고 `confirmed: true`를 제공합니다. 이 단계는 화면만 검증하며 현재 저장된 RPA에는 변경을 적용하지 않습니다.
 

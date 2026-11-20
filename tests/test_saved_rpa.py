@@ -155,6 +155,7 @@ class SavedRPATests(unittest.TestCase):
         self.assertEqual(saved['definition']['name'],'Search invoice');self.assertFalse(saved['definition']['source_executed']);self.assertEqual(saved['definition']['action_count'],2)
         request={'registry':str(self.root/'catalog'),'id':saved['definition']['id'],'vm_id':'12345678-1234-1234-1234-123456789abc','inputs':{'query':'November'},'confirmed':True}
         metadata,actions=replay.load(request);self.assertEqual(actions[0]['text'],'November')
+        self.assertEqual(metadata['replay_commit'], saved['commit'])
         request['confirmed']=False
         with self.assertRaisesRegex(ValueError,'confirm'):replay.load(request)
         request['confirmed']=True;(Path(saved['folder'])/'source.py').write_text('changed')
