@@ -119,6 +119,8 @@ VAMP MCP prepares its default OmniParser YOLO icon weights in the background at 
 
 VirtualBox fetches post-install resources over its build NAT. Hyper-V Windows uses the selected switch's host IPv4, while Hyper-V Debian reads offline answer media and uses a static network profile after installation. QEMU's default build NAT reaches the host at `10.0.2.2`, independently of the deployed libvirt network. [VM MCP setup and troubleshooting](docs/VM_MCP.md)
 
+For a Debian golden image on Hyper-V, prepare a dedicated internal switch with WinNAT and reserve a static guest address before starting the build. If an older image build stalled at Default Switch DHCP or network preseed, start a fresh build with the offline answer ISO. Keep the golden export separate from the live VM disk. [Debian Hyper-V setup and recovery](backends/packer/debian-hyperv/README.md)
+
 ---
 
 ## 🚀 Quick Start

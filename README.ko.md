@@ -121,6 +121,8 @@ VAMP MCP는 시작할 때 기본 OmniParser YOLO 아이콘 가중치를 백그�
 
 VirtualBox는 빌드 NAT에서 사후 설정 파일을 받습니다. Hyper-V의 Windows 게스트는 선택한 가상 스위치의 호스트 IPv4를 사용하고, Debian 게스트는 오프라인 응답 미디어로 설치한 뒤 고정 네트워크 프로필을 사용합니다. QEMU 기본 빌드 NAT의 호스트 주소는 `10.0.2.2`이며, 배포된 libvirt VM의 네트워크와는 별개입니다. [VM MCP 설정 및 오류 진단](docs/VM_MCP.md)
 
+Hyper-V에서 Debian 골든 이미지를 만들기 전에 WinNAT를 구성한 전용 내부 스위치를 준비하고 게스트에 사용할 고정 IP를 예약하세요. 이전 빌드가 Default Switch의 DHCP 또는 네트워크 preseed 단계에서 멈췄다면 오프라인 응답 ISO를 사용해 새로 빌드하세요. 골든 이미지 내보내기 폴더와 실행용 VM 디스크는 별도로 보관하세요. [Debian Hyper-V 설정 및 복구](backends/packer/debian-hyperv/README.md)
+
 ---
 
 ## 🚀 빠른 시작
