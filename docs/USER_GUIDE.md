@@ -97,7 +97,7 @@ The AI describes the existing recording. It does not silently rewrite or execute
 
 Install Git on the host. Each saved skill folder has its own Git repository. Creating or updating a skill commits its source, parsed actions and metadata and increments its version. **Export ZIP** includes only the latest committed revision, without `.git` history or uncommitted edits.
 
-For an authorized repair, use `rpa_revision` with `read-source`, then `validate` with the expected commit ID. With a configured VirtualBox scratch guest, use `test-and-commit` to commit only after the expected screen text appears and the output file passes verification. Revision conflicts and tracked uncommitted changes stop the repair. After a successful commit, inspect the revision and approve it in **Edit Details** before replaying the workflow. [Scratch guest setup and verification](WORKFLOWS.md#ai가-먼저-볼-정보)
+For an authorized repair, use `rpa_revision` with `read-source`, then `validate` with the expected commit ID. With a configured VirtualBox scratch guest, use `test-and-commit` to commit only after local OCR finds the expected text, a configured YOLO model confirms the blocking modal is absent, and the output file passes verification. Revision conflicts and tracked uncommitted changes stop the repair. After a successful commit, inspect the revision and approve it in **Edit Details** before replaying the workflow. [Scratch guest setup and verification](WORKFLOWS.md#ai가-먼저-볼-정보)
 
 ## 6. Let an agent reuse skills before another CUA loop
 
@@ -304,7 +304,7 @@ VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Wi
 
 VM Manager의 **Prepare Environment** 오른쪽 새로고침은 실제 가상환경을 활성화하고 Python 경로와 필수 패키지 4개를 확인합니다. 성공하면 초록색 원 안에 체크가 표시됩니다. **Delete**로 전용 환경을 지운 뒤 다시 생성할 수 있습니다. 삭제 전에 해당 MCP 프로세스를 중지하세요. VM 디스크·RPA·Vault 파일은 유지됩니다.
 
-호스트에 Git이 필요합니다. 저장 RPA마다 독립 Git 저장소가 생성되고 생성·수정 시 버전과 커밋이 기록됩니다. **Export ZIP**은 최신 커밋의 파일만 포함하며 Git 이력과 미커밋 수정은 제외합니다. 승인된 수정은 `rpa_revision`의 `read-source`와 `validate`로 확인하세요. 별도 VirtualBox 테스트 게스트가 준비돼 있으면 `test-and-commit`으로 화면의 성공 문구와 결과 파일을 확인한 뒤 커밋합니다. 커밋 충돌이나 추적 중인 미커밋 변경이 있으면 중단합니다. 커밋 후에는 **Edit Details**에서 재검토하고 승인한 뒤 실행하세요. [테스트 게스트 설정과 검증](WORKFLOWS.md#ai가-먼저-볼-정보)
+호스트에 Git이 필요합니다. 저장 RPA마다 독립 Git 저장소가 생성되고 생성·수정 시 버전과 커밋이 기록됩니다. **Export ZIP**은 최신 커밋의 파일만 포함하며 Git 이력과 미커밋 수정은 제외합니다. 승인된 수정은 `rpa_revision`의 `read-source`와 `validate`로 확인하세요. 별도 VirtualBox 테스트 게스트가 준비돼 있으면 `test-and-commit`으로 OCR 성공 문구, YOLO 차단 모달 부재, 결과 파일을 모두 확인한 뒤 커밋합니다. 커밋 충돌이나 추적 중인 미커밋 변경이 있으면 중단합니다. 커밋 후에는 **Edit Details**에서 재검토하고 승인한 뒤 실행하세요. [테스트 게스트 설정과 검증](WORKFLOWS.md#ai가-먼저-볼-정보)
 
 Vault는 별도 금고 아이콘으로 구분됩니다.
 

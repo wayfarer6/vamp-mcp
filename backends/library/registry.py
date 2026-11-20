@@ -110,9 +110,10 @@ def test_revision(request):
     substitute_inputs(actions, names, request.get('test_inputs', {}))
     if vault_references(actions):
         raise ValueError('Scratch replay accepts synthetic inputs without Vault references.')
+    promote = bool(request.get('commit_after_test'))
+    modal = scratch_modal_settings(required=promote)
+    artifact = scratch_artifact_settings() if promote else None
     vm = require_virtualbox_scratch(request.get('scratch_vm'))
-    artifact = scratch_artifact_settings() if request.get('commit_after_test') else None
-    modal = scratch_modal_settings()
     if artifact:
         with scratch_stage('baseline_artifact'):
             if scratch_artifact_hash(vm, artifact) != artifact[3]:
@@ -200,8 +201,9 @@ def test_and_commit(root, request):
         raise ValueError('RPA changed since it was read. Read the latest revision before repairing.')
     candidate={**request,'commit_after_test':True,'reviewed':False}
     result=test_revision(candidate)
-    if result['status']!='scratch_verified':
-        raise ValueError('Screen and artifact verification are required before promotion.')
+    if result['status'] != 'scratch_verified' or not all(
+            result.get(key) is True for key in ('guest_verified', 'modal_check_verified', 'artifact_verified')):
+        raise ValueError('Screen, modal and artifact verification are required before promotion.')
     with TemporaryDirectory(prefix='vamp-repair-stage-') as temporary:
         staging=Path(temporary)
         clone=staging/identifier

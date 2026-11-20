@@ -72,11 +72,11 @@ def scratch_artifact_settings(environment=None):
     return source, username, password, baseline, expected
 
 
-def scratch_modal_settings(environment=None):
+def scratch_modal_settings(environment=None, *, required=False):
     environment = os.environ if environment is None else environment
     model = environment.get('VAMP_REPAIR_MODAL_MODEL', '')
     label = environment.get('VAMP_REPAIR_MODAL_LABEL', '').strip()
-    if not model and not label:
+    if not required and not model and not label:
         return None
     path = Path(model)
     if not path.is_absolute() or not path.is_file() or not 1 <= len(label) <= 100:

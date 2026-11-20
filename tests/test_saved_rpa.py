@@ -92,8 +92,16 @@ class SavedRPATests(unittest.TestCase):
         self.source.write_text("import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
         baseline, expected = 'a' * 64, 'b' * 64
         artifact = ('/tmp/fixture.csv', 'fixture', self.root / 'fixture-password', baseline, expected)
+        modal = (str(self.root / 'modal.pt'), 'blocking_dialog')
+        with patch.dict(os.environ, {'VAMP_REPAIR_MODAL_MODEL': '', 'VAMP_REPAIR_MODAL_LABEL': ''}), \
+             patch('backends.library.scratch.require_virtualbox_scratch') as scratch:
+            with self.assertRaisesRegex(ValueError, 'modal detector'):
+                registry.test_and_commit(root, request)
+            scratch.assert_not_called()
+            self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
         with patch('backends.library.scratch.require_virtualbox_scratch', return_value=vm), \
              patch('backends.library.scratch.scratch_artifact_settings', return_value=artifact), \
+             patch('backends.library.scratch.scratch_modal_settings', return_value=modal) as modal_settings, \
              patch('backends.library.scratch.scratch_artifact_hash') as artifact_hash, \
              patch('backends.library.replay.VBox'), \
              patch('backends.library.replay.replay', new_callable=AsyncMock) as run:
@@ -102,6 +110,8 @@ class SavedRPATests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'already present'):
                 registry.test_and_commit(root, request)
             self.assertTrue(run.await_args.kwargs['require_new_outcome'])
+            self.assertEqual(run.await_args.kwargs['forbidden_modal'], modal)
+            modal_settings.assert_called_once_with(required=True)
             artifact_hash.assert_called_once_with(vm, artifact)
             self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
 
@@ -135,6 +145,7 @@ class SavedRPATests(unittest.TestCase):
             artifact_hash.side_effect = [baseline, expected]
             result = registry.test_and_commit(root, request)
         self.assertEqual(result['status'], 'verified_commit_needs_review')
+        self.assertTrue(result['modal_check_verified'])
         self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), result['commit'])
         self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD^'), original['commit'])
         self.assertEqual((folder / 'source.py').read_bytes(), self.source.read_bytes())
