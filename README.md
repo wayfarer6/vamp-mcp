@@ -39,6 +39,7 @@ VirtualBox setup demos are available as QHD MP4s.
 - [Record in VirtualBox and add the Python script to the VS Code RPA Library](docs/USER_GUIDE.md#2-make-a-vm-recording-appear-in-the-library)
 - [Generate a standalone Robot Framework package for a SPICE or VNC guest](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
 - [Standalone Demo ERP for replay and repair](https://github.com/wayfarer6/vamp-demo-erp)
+- [ERP run results and comparison method](docs/ROADMAP.md#observed-erp-run)
 
 ## 💡 Why VAMP?
 

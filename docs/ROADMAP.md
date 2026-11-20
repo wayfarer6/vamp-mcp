@@ -113,3 +113,13 @@ Use the same synthetic ERP order, browser, guest resolution and reset procedure 
 6. Compare screen-driven CUA, a fixed recorded workflow, and VAMP replay. Report median elapsed time over equal runs, vision tokens from the provider's usage report, and success or safe stop after the UI change. Record repair runs separately from routine replays.
 
 Report the versions, sample size, timing boundaries and raw outcomes alongside any comparison. Record unavailable usage telemetry as unavailable.
+
+### Observed ERP run
+
+One full scripted ERP run took **239.05 seconds** in Robot Framework 7.5.1. The measurement starts at the Robot test case, after the ERP and guest browser are ready. It includes both layouts, local OCR, two CSV checks, and the stale-replay check. Both CSVs matched and the stale v1 action completed zero inputs against v2. The setup used a Windows VirtualBox browser guest at 1920×1080 and rootless Podman in a Debian VirtualBox guest. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/de856ab)
+
+| Comparable run | Median elapsed time | Provider vision tokens | Result after layout change |
+| --- | --- | --- | --- |
+| Screen-driven CUA | Pending | Pending | Pending |
+| Fixed recorded workflow | Pending | Pending | Pending |
+| VAMP saved replay | Pending | Pending | Pending |

@@ -41,6 +41,7 @@ VirtualBox 설치 데모를 QHD MP4로 볼 수 있습니다.
 - [VirtualBox에서 녹화하고 Python 스크립트를 VS Code RPA Library에 등록](docs/USER_GUIDE.md#2-vm에서-녹화한-스크립트를-목록에-넣기)
 - [SPICE 또는 VNC 게스트용 독립 Robot Framework 패키지 만들기](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
 - [재생·수정 시연용 독립 데모 ERP](https://github.com/wayfarer6/vamp-demo-erp)
+- [ERP 실행 결과와 비교 측정 방법](docs/ROADMAP.md#observed-erp-run)
 
 ## 💡 왜 VAMP인가요?
 
