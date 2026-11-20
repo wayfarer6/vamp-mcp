@@ -135,9 +135,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
              patch('backends.library.replay.asyncio.sleep'), \
              patch('backends.library.replay.inspect_elevation_screen',
                    side_effect=[False, SimpleNamespace(program_name='Fixture Setup', kind='consent'),
-                                False, False, False, False]), \
-             patch('backends.library.replay.datetime') as clock, \
-             patch('backends.library.replay.verify_start', side_effect=[StartScreenBlocked('not ready'), None]) as verify:
+                                StartScreenBlocked('not ready'), False, False, False]) as inspect, \
+             patch('backends.library.replay.datetime') as clock:
             observed = datetime(2026, 11, 20, 10, tzinfo=timezone.utc)
             resumed = datetime(2026, 11, 20, 10, 0, 3, tzinfo=timezone.utc)
             clock.now.side_effect = [observed, resumed]
@@ -149,7 +148,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             handoff, = detail(wait_id)['events']
         self.assertEqual(result['actions_completed'], 2)
         self.assertEqual(driver.events, ['move', 'left', 'move', 'left'])
-        self.assertEqual(verify.await_count, 2)
+        self.assertEqual([call.args[1] for call in inspect.call_args_list],
+                         [None, None, 'Installed', 'Installed', None, None])
         event, = record['events']
         self.assertEqual(event['kind'], 'elevation_resumed')
         self.assertEqual(event['created_at'], resumed.isoformat())
@@ -166,6 +166,29 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(handoff_payload['program_name_ocr'], 'Fixture Setup')
         self.assertEqual(handoff_payload['prompt_kind'], 'consent')
         self.assertEqual(handoff_payload['policy'], 'operator_confirmation_required')
+
+    def test_resume_text_uses_one_language_and_only_a_clear_frame(self):
+        from backends.library.replay import inspect_elevation_screen
+
+        english = dict(text='Installed', confidence=0.95, language='en')
+        korean = dict(text='Installed', confidence=0.95, language='ko')
+        uac = dict(text='User Account Control', confidence=0.95, language='en')
+        cases = [
+            ([english, korean], None),
+            ([english, english, korean], StartScreenBlocked),
+            ([english, korean, uac], 'unknown'),
+        ]
+        for lines, expected in cases:
+            with self.subTest(expected=expected):
+                daemon = SimpleNamespace(request=lambda *args, **kwargs: {'lines': lines})
+                with patch.dict('sys.modules', {'model_daemon': daemon}):
+                    if expected is StartScreenBlocked:
+                        with self.assertRaises(StartScreenBlocked):
+                            inspect_elevation_screen('fixture.png', 'Installed')
+                    elif expected:
+                        self.assertEqual(inspect_elevation_screen('fixture.png', 'Installed').kind, expected)
+                    else:
+                        self.assertIsNone(inspect_elevation_screen('fixture.png', 'Installed'))
 
     async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
         driver = FixtureDriver()

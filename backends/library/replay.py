@@ -176,16 +176,20 @@ def normalized_text(text):
     return ' '.join(unicodedata.normalize('NFKC', text).casefold().split())
 
 
-def recognize_start_screen(path, expected):
-    language = 'en'
+def start_screen_language(expected):
     if re.search(r'[\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]', expected):
-        language = 'ko'
-    elif re.search(r'[\u3040-\u30ff]', expected):
-        language = 'ja'
-    elif re.search(r'[\u3400-\u9fff]', expected):
-        language = 'zh'
+        return 'ko'
+    if re.search(r'[\u3040-\u30ff]', expected):
+        return 'ja'
+    if re.search(r'[\u3400-\u9fff]', expected):
+        return 'zh'
+    return 'en'
+
+
+def recognize_start_screen(path, expected):
     from model_daemon import request
-    return request('ocr', {'op': 'predict', 'image': str(path), 'languages': [language]}, timeout=180)['lines']
+    return request('ocr', {'op': 'predict', 'image': str(path),
+                           'languages': [start_screen_language(expected)]}, timeout=180)['lines']
 
 
 class StartScreenBlocked(ValueError):
@@ -238,11 +242,16 @@ def elevation_program_name(lines):
     return names.pop() if len(names) == 1 else None
 
 
-def inspect_elevation_screen(path):
+def inspect_elevation_screen(path, resume_text=None):
     from model_daemon import request
+    language = start_screen_language(resume_text) if resume_text is not None else None
+    languages = ['en', 'ko']
+    if language and language not in languages:
+        languages.append(language)
     lines = request('ocr', {'op': 'predict', 'image': str(path),
-                            'languages': ['en', 'ko']}, timeout=45)['lines']
-    readings = [(normalized_text(line['text']), float(line['confidence'])) for line in lines]
+                            'languages': languages}, timeout=45)['lines']
+    elevation_lines = [line for line in lines if line.get('language', 'en') in ('en', 'ko')]
+    readings = [(normalized_text(line['text']), float(line['confidence'])) for line in elevation_lines]
     headings = ('user account control', '사용자 계정 컨트롤')
     prompt_scores = [confidence for text, confidence in readings if any(heading in text for heading in headings)]
     if any(confidence >= 0.8 for confidence in prompt_scores):
@@ -253,20 +262,26 @@ def inspect_elevation_screen(path):
                          for text in visible)
         consent = any('do you want to allow' in text or '변경할 수 있도록 허용' in text for text in visible)
         kind = 'credential' if credential else 'consent' if consent else 'unknown'
-        return ElevationPrompt(elevation_program_name(lines), kind)
+        return ElevationPrompt(elevation_program_name(elevation_lines), kind)
     if prompt_scores or not any(text and confidence >= 0.8 for text, confidence in readings):
         raise ValueError('The guest frame did not provide a confident elevation check.')
+    if language is not None:
+        outcome_lines = [line for line in lines if line.get('language') == language]
+        if text_occurrences(outcome_lines, resume_text) != 1:
+            raise StartScreenBlocked('The resume text must appear exactly once after the UAC prompt clears.')
     return None
 
 
-async def require_clear_elevation_screen(driver, resolution, completed, phase):
+async def require_clear_elevation_screen(driver, resolution, completed, phase, resume_text=None):
     try:
         if driver.geometry() != resolution:
             raise ValueError('Guest resolution changed.')
         with TemporaryDirectory(prefix='vamp-elevation-') as folder:
             screenshot = Path(folder) / 'screen.png'
             await driver.capture(screenshot, resolution)
-            detected = await asyncio.to_thread(inspect_elevation_screen, screenshot)
+            detected = await asyncio.to_thread(inspect_elevation_screen, screenshot, resume_text)
+    except StartScreenBlocked:
+        raise
     except Exception as error:
         raise ElevationHandoff(completed, 'screen_unverified', phase) from error
     if detected:
@@ -292,8 +307,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
             while True:
                 await asyncio.sleep(2)
                 try:
-                    await require_clear_elevation_screen(driver, resolution, completed, phase)
-                    await verify_start(driver, resolution, resume_text)
+                    await require_clear_elevation_screen(driver, resolution, completed, phase, resume_text)
                     await require_clear_elevation_screen(driver, resolution, completed, phase)
                 except (ElevationHandoff, StartScreenBlocked):
                     continue
@@ -321,6 +335,10 @@ async def screen_match_count(driver, resolution, expected, *, verify_absence=Fal
                 raise ValueError('The local detector did not confirm the configured modal class.')
             if any(target['label'] == label for target in result['targets']):
                 raise OutcomeScreenBlocked('The configured blocking modal is visible after scratch replay.')
+    return text_occurrences(lines, expected, verify_absence=verify_absence)
+
+
+def text_occurrences(lines, expected, *, verify_absence=False):
     phrase = re.compile(r'(?<![\w-])' + re.escape(normalized_text(expected)) + r'(?![\w-])')
     readings = [(normalized_text(line['text']), float(line['confidence'])) for line in lines]
     if verify_absence and (
