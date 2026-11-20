@@ -77,6 +77,21 @@ PY
     "$python" "$demo/scenario.py" --url "$host_url" layout v2 | tee "$reports/08-layout.json"
     confirm_stage 'Refresh Orders in the target guest and verify that the v2 fixture is visible.'
     bash "$repo/scripts/demo_e2e_showcase.sh" verified-replay "$saved_request" "$demo" "$csv_v2" "$reports/08-v2" --confirm
+    "$python" - "$csv_v1" "$csv_v2" <<'PY' | tee "$reports/08-csv-comparison.json"
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+def sha256(name):
+    with Path(name).open('rb') as stream:
+        return hashlib.file_digest(stream, 'sha256').hexdigest()
+
+v1, v2 = (sha256(name) for name in sys.argv[1:])
+print(json.dumps({'v1_sha256': v1, 'v2_sha256': v2, 'match': v1 == v2}, indent=2))
+if v1 != v2:
+    raise SystemExit('The verified v1 and v2 CSV files differ in bytes.')
+PY
     exit
 fi
 

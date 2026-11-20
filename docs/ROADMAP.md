@@ -188,12 +188,12 @@ Use a new report directory and two unused CSV paths in existing shared download 
 
 The launcher checks that the v1 and stale-layout replays use the source SHA-256 from packaging. The final v2 replay must use the source verified in scratch. A mismatch stops playback before any guest input.
 
-For the chat delivery step, have the guest save the synthetic ERP CSV in its mounted `VAMPFiles` share. After the user approves sharing that file in chat, call `vm_file_get` with a fresh local destination and `attach_to_chat: true`. A CSV of at most 256 KiB is returned as a user-facing MCP resource after its SHA-256 is rechecked. The host copy is still saved if the file cannot be attached. Verify that the selected chat client lets the user open or save the file as part of the filmed run.
+Save each synthetic ERP CSV to its designated shared download path. After verifying the order contents in both runs, the launcher compares the files byte for byte using SHA-256 and writes both hashes to `08-csv-comparison.json`. Different hashes fail the showcase.
 
 | Stage | Action | Evidence to retain |
 | --- | --- | --- |
 | 1. Start infrastructure | Boot the disposable VirtualBox guest and launch the standalone ERP fixture. Open its Orders page in the guest. | Guest UUID, 1920×1080 desktop, ERP checkout revision, and initial order state. |
-| 2. Author the recording | In the side-by-side AI chat, ask to find pending orders, mark them shipped, and export a CSV. Review the generated PyAutoGUI source and confirm it uses guest coordinates. | Prompt, reviewed source, and provider usage report when available. |
+| 2. Author the recording | Ask the AI in Codex to find pending orders, mark them shipped, and export a CSV. Review the generated PyAutoGUI source and confirm it uses guest coordinates. | Prompt, reviewed source, and provider usage report when available. |
 | 3. Package | Run `package` on the reviewed source and inspect the generated `run.robot`. | `conversion-result.json`, generated Robot suite, and dry-run report. |
 | 4. Replay v1 | Register and review the recording in RPA Library. Run `verified-replay` against a fresh v1 fixture and an unused shared CSV path. | `saved-replay.json`, `csv-verification.json`, and the visible shipped orders. |
 | 5. Switch layouts | Reset the ERP, switch to v2, then use `saved-replay <request.json> <new report directory> --confirm-expect-blocked` on the authorized guest. The replay is live, so use the disposable test guest. | `starting_screen_blocked` and zero completed actions. The launcher accepts only that pair for this stage. |
