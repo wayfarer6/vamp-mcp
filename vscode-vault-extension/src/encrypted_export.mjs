@@ -49,9 +49,10 @@ async function assertAbsent(file) {
   throw new Error('A file already exists at the export destination. Choose another folder.');
 }
 
-async function openLocal(source) {
+async function openLocal(source, expected) {
   const before = await lstat(source, { bigint: true });
   assertRegularFile(before);
+  if (expected && !matchingFile(expected, before)) throw new Error('The export source changed before it could be read.');
   const file = await open(source, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
   try {
     const opened = await file.stat({ bigint: true });
@@ -90,7 +91,7 @@ function measureCopy(kind) {
       callback(null, chunk);
     },
     flush(callback) {
-      if (bytes === 0 || (kind === 'kdbx' && bytes < header.length)) {
+      if (kind !== 'mounted-file' && (bytes === 0 || (kind === 'kdbx' && bytes < header.length))) {
         callback(new Error('The encrypted export source is empty or incomplete.'));
         return;
       }
@@ -101,15 +102,19 @@ function measureCopy(kind) {
 }
 
 /** Export the configured encrypted file. A remote reader must reject completion on any transfer error. */
-export async function exportEncryptedFile({ kind, sourcePath, destinationFolder, expectedDestinationPath, confirmed = false, openSource, signal }) {
+export async function exportEncryptedFile(options) {
+  if (!['kdbx', 'volume'].includes(options.kind)) throw new Error('Choose the KeePass database or VeraCrypt volume.');
+  return copyVaultFile(options);
+}
+
+async function copyVaultFile({ kind, sourcePath, destinationFolder, expectedDestinationPath, confirmed = false, openSource, verifySource, signal }) {
   signal?.throwIfAborted();
-  if (!['kdbx', 'volume'].includes(kind)) throw new Error('Choose the KeePass database or VeraCrypt volume.');
   if (!validPath(sourcePath) || (!openSource && !path.isAbsolute(sourcePath))) throw new Error('Configure the encrypted source file first.');
   if (!validPath(destinationFolder) || !path.isAbsolute(destinationFolder)) throw new Error('Choose an existing absolute local destination folder.');
   const folder = await realpath(destinationFolder);
   const folderInfo = await lstat(folder, { bigint: true });
   if (!folderInfo.isDirectory()) throw new Error('The local export destination must be a folder.');
-  const name = (openSource ? path.posix : path).basename(sourcePath);
+  const name = (openSource && kind !== 'mounted-file' ? path.posix : path).basename(sourcePath);
   if (!name || /[. ]$|[<>:"/\\|?*]|^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(name)) {
     throw new Error('The configured encrypted file name cannot be used at the export destination.');
   }
@@ -132,6 +137,7 @@ export async function exportEncryptedFile({ kind, sourcePath, destinationFolder,
     transfer = pipeline(source.stream, measured.stream, output, { signal });
     await Promise.all([transfer, completion]);
     await source.verify?.();
+    await verifySource?.();
     signal?.throwIfAborted();
     const currentFolder = await lstat(folder, { bigint: true });
     if (!currentFolder.isDirectory() || currentFolder.dev !== folderInfo.dev || currentFolder.ino !== folderInfo.ino) {
@@ -154,4 +160,67 @@ export async function exportEncryptedFile({ kind, sourcePath, destinationFolder,
     await unlink(copy).catch(error => { if (error.code !== 'ENOENT') throw error; });
     await rmdir(staging);
   }
+}
+
+function inside(root, file) {
+  const relative = path.relative(root, file);
+  return relative !== '' && relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative);
+}
+
+export async function mountedExportRoot(cli, volumePath) {
+  if (!validPath(volumePath) || !path.isAbsolute(volumePath)) throw new Error('Configure the local VeraCrypt container first.');
+  const backing = await realpath(volumePath);
+  const { mounted } = await cli.listVolumes({ probeNative: true, requireBackingPaths: true });
+  const matches = [];
+  for (const item of mounted) {
+    if (!item.volume || !item.mount_point) continue;
+    const candidate = await realpath(item.volume).catch(() => null);
+    if (candidate && path.relative(backing, candidate) === '') matches.push(item);
+  }
+  if (matches.length !== 1) throw new Error('Mount the configured VeraCrypt container on the local host first.');
+  const { mount_point, device } = matches[0];
+  const root = await realpath(path.resolve(/^[a-z]:$/i.test(mount_point) ? mount_point + '\\' : mount_point));
+  const info = await lstat(root, { bigint: true });
+  if (!info.isDirectory()) throw new Error('The verified VeraCrypt mount is unavailable.');
+  return { root, device, info };
+}
+
+export async function exportMountedFile({ cli, volumePath, relativePath, expectedMount, expectedPreview, ...options }) {
+  const parts = validPath(relativePath) ? relativePath.split(/[\\/]/) : [];
+  if (!parts.length || parts.some(part => !part || part === '.' || part === '..' || /[:*?<>|"\\/]|[. ]$/.test(part))) {
+    throw new Error('Select a file relative to the root of the mounted container.');
+  }
+  const mount = await mountedExportRoot(cli, volumePath);
+  if (expectedMount && !sameMount(mount, expectedMount)) throw new Error('The VeraCrypt mount changed while selecting the file.');
+  const sourcePath = path.join(mount.root, ...parts);
+  const resolved = await realpath(sourcePath);
+  const info = await lstat(sourcePath, { bigint: true });
+  if (!inside(mount.root, resolved) || path.relative(sourcePath, resolved) !== '' ||
+      !info.isFile() || info.dev !== mount.info.dev || info.nlink !== 1n) {
+    throw new Error('Select a regular file inside the verified VeraCrypt mount.');
+  }
+  const fingerprint = [sourcePath, mount.device, mount.info.dev, mount.info.ino, info.dev, info.ino,
+    info.size, info.mtimeNs, info.ctimeNs].join('\0');
+  const sourceRevision = createHash('sha256').update(fingerprint).digest('hex');
+  if (options.confirmed && expectedPreview?.source_revision !== sourceRevision) {
+    throw new Error('The mounted source changed after confirmation.');
+  }
+  const verifySource = async () => {
+    const current = await mountedExportRoot(cli, volumePath);
+    if (!sameMount(current, mount) ||
+        path.relative(sourcePath, await realpath(sourcePath)) !== '' ||
+        !matchingFile(info, await lstat(sourcePath, { bigint: true }))) {
+      throw new Error('The VeraCrypt mount or its file changed during export.');
+    }
+  };
+  const result = await copyVaultFile({ ...options, kind: 'mounted-file', sourcePath,
+    expectedDestinationPath: expectedPreview?.destination_path, verifySource,
+    openSource: async () => { await verifySource(); return openLocal(sourcePath, info); },
+  });
+  return { ...result, encrypted: false, source_revision: sourceRevision };
+}
+
+function sameMount(a, b) {
+  return path.relative(a.root, b.root) === '' && a.device === b.device &&
+    a.info.dev === b.info.dev && a.info.ino === b.info.ino;
 }

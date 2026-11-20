@@ -234,8 +234,10 @@ async function handle(request, context, state, output,replay=false,signal) {
       return { password, source: 'vscode_input_box' };
     }
     case 'approve': {
-      if (request.params?.action === 'vault_export_encrypted') {
-        const choice = await vscode.window.showInformationMessage('Export encrypted Vault file?',
+      const action = request.params?.action;
+      if (action === 'vault_export_encrypted' || action === 'vault_export_mounted_file') {
+        const title = action === 'vault_export_mounted_file' ? 'Export a decrypted copy?' : 'Export encrypted Vault file?';
+        const choice = await vscode.window.showInformationMessage(title,
           { modal: true, detail: request.params.detail }, 'Export');
         return { approved: choice === 'Export', remember: false };
       }
@@ -1494,6 +1496,48 @@ function activate(context) {
     } catch (error) {
       vscode.window.showErrorMessage(`VAMP Vault: the file manager could not show ${db} (${error.message}). The path is above; copy it by hand if needed.`);
       output.appendLine(`revealFileInOS failed for ${db}: ${error.message}`);
+    }
+  }));
+
+  context.subscriptions.push(vscode.commands.registerCommand('vampVault.exportMountedFile', async () => {
+    try {
+      const [{ exportMountedFile, mountedExportRoot }, { VaultCli }, report] = await Promise.all([
+        loadModule(context, 'dist/runtime/src/encrypted_export.mjs'),
+        loadModule(context, 'dist/runtime/src/vault_cli.mjs'),
+        cliReport(),
+      ]);
+      const volume = volumePath();
+      const cli = new VaultCli({ veracryptCli: report.veracrypt.path });
+      const mount = await mountedExportRoot(cli, volume);
+      const [source] = await vscode.window.showOpenDialog({
+        title: 'Choose a file in the mounted VeraCrypt container', defaultUri: vscode.Uri.file(mount.root),
+        canSelectFiles: true, canSelectFolders: false, canSelectMany: false,
+      }) ?? [];
+      if (!source) return;
+      if (source.scheme !== 'file') throw Error('Select a local file in the mounted container.');
+      const [folder] = await vscode.window.showOpenDialog({
+        title: 'Choose local export folder', canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
+      }) ?? [];
+      if (!folder) return;
+      if (folder.scheme !== 'file') throw Error('Select a folder on this computer.');
+      const request = { cli, volumePath: volume, relativePath: path.relative(mount.root, source.fsPath),
+        destinationFolder: folder.fsPath, expectedMount: mount };
+      const preview = await exportMountedFile(request);
+      const approval = await vscode.window.showInformationMessage('Export a decrypted copy?', {
+        modal: true, detail: `Source: ${preview.source_path}\nDestination: ${preview.destination_path}\nThe copy is saved without VeraCrypt encryption.`,
+      }, 'Export');
+      if (approval !== 'Export') return;
+      const result = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification,
+        title: 'Exporting mounted VeraCrypt file', cancellable: true }, async (_progress, cancellation) => {
+        const controller = new AbortController();
+        const subscription = cancellation.onCancellationRequested?.(() => controller.abort());
+        if (cancellation.isCancellationRequested) controller.abort();
+        try { return await exportMountedFile({ ...request, expectedPreview: preview, confirmed: true, signal: controller.signal }); }
+        finally { subscription?.dispose(); }
+      });
+      vscode.window.showInformationMessage(`Decrypted copy saved to ${result.destination_path}.`);
+    } catch (error) {
+      if (error.name !== 'AbortError') vscode.window.showErrorMessage(`VAMP Vault: export failed (${error.message}).`);
     }
   }));
 

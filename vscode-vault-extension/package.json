@@ -138,6 +138,10 @@
         "icon": "$(folder-opened)"
       },
       {
+        "command": "vampVault.exportMountedFile",
+        "title": "VAMP Vault: Export File from Mounted VeraCrypt Container..."
+      },
+      {
         "command": "vampVault.exportKdbx",
         "title": "VAMP Vault: Export Encrypted File...",
         "icon": "$(cloud-download)"

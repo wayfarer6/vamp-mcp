@@ -8,9 +8,45 @@ import { Readable } from 'node:stream';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { exportEncryptedFile } from '../src/encrypted_export.mjs';
+import { exportEncryptedFile, exportMountedFile } from '../src/encrypted_export.mjs';
 
 const database = Buffer.concat([Buffer.from('03d9a29a67fb4bb5', 'hex'), Buffer.from('test ciphertext')]);
+
+test('mounted-file export binds approval to the source and rejects traversal and remounts', async t => {
+  const { sourcePath: volumePath, destinationFolder } = await fixture(t);
+  const root = path.join(path.dirname(volumePath), 'mount');
+  const source = path.join(root, '문서.txt');
+  await mkdir(root);
+  await writeFile(source, 'synthetic export');
+  let device = 'fixture-device';
+  let probesBeforeRemount = Infinity;
+  const cli = { listVolumes: async () => {
+    if (--probesBeforeRemount === 0) device = 'different-device';
+    return { mounted: [{ volume: volumePath, mount_point: root, device }] };
+  } };
+  const options = { cli, volumePath, destinationFolder, relativePath: path.basename(source) };
+  await assert.rejects(exportMountedFile({ ...options, relativePath: '../outside.txt' }), /relative to the root/);
+  const preview = await exportMountedFile(options);
+  assert.equal(preview.status, 'approval_required');
+  assert.equal(preview.encrypted, false);
+  assert.deepEqual(await readdir(destinationFolder), []);
+  const confirm = expectedPreview => exportMountedFile({ ...options, confirmed: true, expectedPreview });
+  device = 'different-device';
+  await assert.rejects(confirm(preview), /changed after confirmation/);
+  device = 'fixture-device';
+  await writeFile(source, 'replacement content');
+  await assert.rejects(confirm(preview), /changed after confirmation/);
+  const reviewed = await exportMountedFile(options);
+  probesBeforeRemount = 3;
+  await assert.rejects(confirm(reviewed), /changed during export/);
+  assert.deepEqual(await readdir(destinationFolder), []);
+  device = 'fixture-device';
+  const result = await confirm(reviewed);
+  assert.equal(result.status, 'exported');
+  assert.equal(result.sha256, createHash('sha256').update('replacement content').digest('hex'));
+  assert.equal(await readFile(result.destination_path, 'utf8'), 'replacement content');
+  await assert.rejects(confirm(reviewed), /already exists/);
+});
 
 async function fixture(t) {
   const directory = await mkdtemp(path.join(os.tmpdir(), 'vamp-vault-export-'));

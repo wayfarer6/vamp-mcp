@@ -214,7 +214,7 @@ const server = new Server(
 server.setRequestHandler(ListToolsRequestSchema, async () => {
   const tools = await loadTools();
   return {
-    tools: [...tools.filter(tool => !['vault_attach_container', exportTool.name].includes(tool.name)), exportTool].map(tool => ({
+    tools: [...tools.filter(tool => !['vault_attach_container', 'vault_export_mounted_file', exportTool.name].includes(tool.name)), exportTool].map(tool => ({
       name: tool.name,
       title: tool.title,
       description: tool.name === 'vault_deliver_credential'
@@ -256,6 +256,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request, {signal}) => {
       return textResult({status:'delivered',destination:args.destination});
     }
     if (tool === 'vault_attach_container') throw new Error('Use the Podman tools on the workspace host for a remote Vault.');
+    if (tool === 'vault_export_mounted_file') throw new Error('Mounted-file export is available only through the local Vault.');
     await refreshPolicy();
 
     if (tool === 'vault_delete_group' && args.confirm !== true) {

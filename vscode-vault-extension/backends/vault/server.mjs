@@ -28,7 +28,7 @@ import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
 import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeholders.mjs';
-import { exportEncryptedFile } from '../../src/encrypted_export.mjs';
+import { exportEncryptedFile, exportMountedFile } from '../../src/encrypted_export.mjs';
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
 import { hypervVolume, kvmVolume, reconcileVirtualBoxDisks, releaseWindowsVirtualBoxMount, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
@@ -1070,6 +1070,39 @@ tool('vault_unmount_volume', {
       return unmount();
     }) : await unmount();
     return text({ status: result.unmounted ? 'unmounted' : 'failed', ...result });
+  } catch (error) {
+    return failure(error);
+  }
+});
+
+tool('vault_export_mounted_file', {
+  title: 'Export a decrypted file from a mounted VeraCrypt container',
+  description: 'Copy one file from the configured, locally mounted VeraCrypt container to a local folder. Preview first, show the source and destination to the user, and confirm explicitly. Returns metadata only. The destination copy is decrypted.',
+  inputSchema: {
+    relative_path: z.string().min(1).max(4096),
+    destination_folder: z.string().min(1).max(4096),
+    source_revision: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    expected_destination_path: z.string().min(1).max(4096).optional(),
+    confirm: z.boolean().default(false),
+  },
+}, async (args, extra) => {
+  try {
+    if (settings.remoteHost) throw new Error('Mounted-file export is available only through the local Vault.');
+    const options = { cli: await getCli(), volumePath: settings.volume, relativePath: args.relative_path,
+      destinationFolder: args.destination_folder, signal: extra?.signal };
+    const preview = await exportMountedFile(options);
+    if (!args.confirm) return text(preview);
+    if (args.source_revision !== preview.source_revision || args.expected_destination_path !== preview.destination_path) {
+      throw new Error('Preview the current source and destination before confirming the decrypted export.');
+    }
+    if (settings.bridgeSocket) {
+      const bridge = await getBridge();
+      if (!bridge) throw new Error('Open VAMP Vault in VS Code to approve exporting the decrypted file.');
+      const approval = await bridge.approve({ action: 'vault_export_mounted_file', entry: preview.source_path,
+        detail: `Export a decrypted copy of ${preview.source_path} to ${preview.destination_path}?` });
+      if (!approval.approved) return text({ status: 'denied' });
+    }
+    return text(await exportMountedFile({ ...options, confirmed: true, expectedPreview: preview }));
   } catch (error) {
     return failure(error);
   }
