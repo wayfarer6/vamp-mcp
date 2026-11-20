@@ -66,14 +66,13 @@ By decoupling **execution logic** from **visual reasoning**, VAMP avoids expensi
 
 ## ⚖️ How VAMP Compares
 
-| Feature | Standard Multimodal CUA | Headless Browser / Docker | **VAMP Platform** |
-| :--- | :--- | :--- | :--- |
-| **Multimodal Vision Tokens** | High (captures full screen every action) | None (DOM/Text only) | **Avoided entirely** (Deterministic local RPA + concise text summaries) |
-| **Execution latency** | Includes model calls for screen-driven decisions | Includes scripted actions and waits | Includes guest input, waits and configured local checks |
-| **Application Support** | Limited to current host screen | Web only, Linux headless | **Full Windows 11 & Debian desktops** |
-| **Anti-Bot / DRM Bypass**| Easily flagged by OS hooks | Blocked immediately | **Hardware VM isolation (VT-x, USB pass-through)** |
-| **Credential Security** | Plaintext in prompt context | Environment variables | **KeePassXC / VeraCrypt vault via `stdin` (Zero leak)** |
-| **Control Plane** | Host OS keyboard/mouse hijack | DevTools Protocol | **Universal SSH (Linux + Windows PowerShell)** |
+| Metric | Screen-driven CUA | Fixed recorded RPA | VAMP saved RPA |
+| --- | --- | --- | --- |
+| Vision token cost | Provider usage depends on screenshot calls | No provider calls during fixed replay | Local replay and verification use no provider vision tokens. AI-assisted repair is measured separately. |
+| Execution latency | Includes screen-driven model calls | Includes scripted inputs and waits | Includes guest inputs, waits, and configured local checks |
+| After a layout change | Can inspect the new screen before acting | Requires explicit starting-screen and outcome checks to detect a mismatch | Can stop before input on a configured starting-screen mismatch and hand off for targeted repair |
+
+The measured VirtualBox ERP scenario took **239.05 seconds** for one Robot Framework test case covering both layouts, local OCR, two CSV checks, and a stale replay that stopped before input. The matched three-way benchmark is pending. [Measurement scope and comparison procedure](docs/ROADMAP.md#observed-erp-run)
 
 ---
 
