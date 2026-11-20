@@ -106,6 +106,8 @@ Unlock and mount the intended VeraCrypt volume yourself using an approved local 
 
 Create one JSON file owned by the same Linux user, with permissions **0600**, outside the container's work directory. Configure its absolute path through the VS Code **user/global** setting `vamp.podman.workspaceConfigPath`, not a repository/workspace setting, or through `VAMP_WORKSPACE_CONFIG` in a standalone MCP server's startup environment. No path or mount configuration is accepted from an MCP tool call or webview message.
 
+The native Linux workspace flow uses `/usr/bin/flock` from util-linux and a private lock file under `/run/user/<uid>`. The kernel releases the lock when the server exits. Keep the lock file in place. If an older version left a `vamp-workspace-attach.lock` directory, confirm that the old server has stopped and review the Podman inventory before removing the empty legacy directory.
+
 The file has exactly these fields; use real, verified local paths rather than copying placeholders:
 
 | Field | Required value |

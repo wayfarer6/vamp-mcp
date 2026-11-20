@@ -1,6 +1,7 @@
 'use strict';
 const fs=require('node:fs/promises');
 const {constants}=require('node:fs');
+const {spawn}=require('node:child_process');
 const os=require('node:os');
 const path=require('node:path');
 const {createHash,createHmac,randomBytes}=require('node:crypto');
@@ -34,9 +35,27 @@ async function runtimeDirectory(uid){
 }
 async function locked(uid,fn){
   const parent=await runtimeDirectory(uid);
-  const lock=path.join(parent,'vamp-workspace-attach.lock');
-  try{await fs.mkdir(lock,{mode:0o700});}catch{throw Error('Another workspace attach is active or a previous reservation must be reviewed');}
-  try{return await fn();}finally{await fs.rmdir(lock).catch(()=>{});}
+  const legacy=path.join(parent,'vamp-workspace-attach.lock');
+  const lock=await fs.open(path.join(parent,'vamp-workspace-attach.flock'),
+    constants.O_CREAT|constants.O_RDWR|constants.O_NOFOLLOW|constants.O_NONBLOCK,0o600);
+  try{
+    const info=await lock.stat();
+    if(!info.isFile()||info.uid!==uid||info.nlink!==1||(info.mode&0o777)!==0o600)
+      throw Error('The workspace lock must be a private owner-only file.');
+    await new Promise((resolve,reject)=>{
+      // flock operates on the inherited open file description. Keeping the
+      // parent descriptor open holds the lock until close or process exit.
+      const child=spawn('/usr/bin/flock',['--exclusive','--nonblock','3'],
+        {stdio:['ignore','ignore','ignore',lock.fd],env:{LANG:'C',LC_ALL:'C'}});
+      child.once('error',reject);
+      child.once('exit',code=>code===0?resolve():reject(Error('Another workspace operation holds the lock, or flock could not acquire it.')));
+    });
+    const oldReservation=await fs.lstat(legacy).catch(error=>{
+      if(error.code!=='ENOENT')throw error;
+    });
+    if(oldReservation)throw Error('A legacy workspace reservation exists. Confirm that the old server has stopped and review the reservation before cleanup.');
+    return await fn();
+  }finally{await lock.close();}
 }
 async function cleanupState(uid, action, value){
   const folder=await runtimeDirectory(uid);
