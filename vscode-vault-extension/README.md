@@ -406,6 +406,16 @@ Supply the powered-off VM UUID, SATA controller, secondary port, volume and
 mount paths, and VHD filename. Confirm the exact target before attaching.
 Use `vault_detach_vm` with the same arguments while the VM is powered off
 before dismounting the VeraCrypt volume.
+
+The local Vault MCP also checks managed VirtualBox attachments periodically.
+After observing the VM run and then power off, it verifies the recorded
+slot and detaches the VHD. A guest-only encrypted VHD needs no host dismount.
+On native Linux, a matching configured Podman workspace can release the host
+mount once other consumers are clear. Windows lists VeraCrypt drive
+mappings without the backing container path, so the automatic check reports
+host cleanup as pending on Windows. Verify the exact volume and dismount it
+through the host's VeraCrypt workflow after the disk is detached.
+
 For KVM, use `backend: "kvm"`, a secondary virtio target such as `vdb`,
 and `libvirt_uri` when using `qemu:///system`. The tools check and change
 the inactive libvirt configuration. The QEMU process needs filesystem
