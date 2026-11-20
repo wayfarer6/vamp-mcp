@@ -2,7 +2,9 @@
 
 사용자나 CUA가 수행한 GUI 작업을 지원하는 Python 기록으로 남기고, 검토한 기록을 RPA로 바꾸는 단계입니다. 다음 실행에서는 AI가 클릭 순서를 다시 해석하는 대신 작업 ID와 입력값으로 패키지를 호출하도록 만드는 것이 목적입니다. [전체 사용 흐름](WORKFLOWS.md)
 
-현재 변환기는 지원하는 PyAutoGUI Python 구문을 정적으로 읽어 SPICE용 Robot/Python 패키지를 만듭니다. 임의의 CUA 로그나 동영상은 자동 변환하지 않습니다. VirtualBox 재생은 해당 백엔드의 입력 코드에 맞게 따로 연결해야 합니다. 아래 CLI는 AI 없이도 실행할 수 있으며 명령은 저장소 루트의 호스트 터미널에서 실행합니다.
+현재 변환기는 지원하는 PyAutoGUI Python 구문을 정적으로 읽어 SPICE 또는 VNC 게스트에 연결하는 Robot/Python 패키지를 만듭니다. CLI 명령은 저장소 루트의 호스트 터미널에서 실행합니다.
+
+VirtualBox 기본 설정으로 녹화한 작업을 다시 실행하려면 VS Code에서 **RPA Library → Create → Recorded script**로 Python 파일을 등록하고 대상 백엔드로 VirtualBox를 선택하세요. 내용을 검토해 저장한 뒤 `rpa_run_saved`에 승인한 VM UUID를 전달합니다. [VirtualBox 녹화와 등록 절차](USER_GUIDE.md#2-vm에서-녹화한-스크립트를-목록에-넣기)
 
 ```mermaid
 flowchart LR
