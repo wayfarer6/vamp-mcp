@@ -1,14 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -lt 3 || $# -gt 4 || $1 != replay || (${4:-} != '' && ${4:-} != --dryrun) ]]; then
+repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+python=${VAMP_DEMO_PYTHON:-python}
+
+usage() {
     echo "Usage: $0 replay <vamp-demo-erp checkout> <new report directory> [--dryrun]" >&2
+    echo "       $0 package <guest recording.py> <package ID> <new report directory>" >&2
     exit 2
+}
+
+if [[ ${1:-} == package ]]; then
+    [[ $# -eq 4 ]] || usage
+    [[ -f $2 ]] || { echo "The guest recording file is missing." >&2; exit 2; }
+    mkdir -- "$4"
+    reports=$(cd -- "$4" && pwd -P)
+    "$python" "$repo/recording_converter.py" "$2" --id "$3" --guest-os windows11 \
+        --coordinate-space guest --width 1920 --height 1080 | tee "$reports/conversion-result.json"
+    "$python" "$repo/scripts/run_rpa.py" "$3" --dryrun --output "$reports"
+    exit
 fi
 
-repo=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)
+if [[ $# -lt 3 || $# -gt 4 || $1 != replay || (${4:-} != '' && ${4:-} != --dryrun) ]]; then
+    usage
+fi
 demo=$(cd -- "$2" && pwd -P)
-python=${VAMP_DEMO_PYTHON:-python}
 suite="$demo/virtualbox_demo.robot"
 if [[ ! -f "$suite" ]]; then
     echo "The ERP checkout does not contain virtualbox_demo.robot." >&2
