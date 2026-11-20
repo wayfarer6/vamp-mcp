@@ -87,7 +87,7 @@ $env:VBOXMANAGE_PATH = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
 
 The smoke script never creates or shuts down a VM. Without `--vm`, only inventory, setup information and SQLite history are checked. With `--vm`, it also checks information, native screen size and real screenshot capture. These checks do not prove keyboard, mouse or application success; those require scenario-specific assertions and a running installed guest. See [validation results](VALIDATION.md) for actual outcomes.
 
-Nested virtualization is a lab arrangement, not a requirement for normal users. A normal Windows host runs VirtualBox directly. macOS hardware validation is separate.
+Nested virtualization is a lab arrangement, not a requirement for normal users. A normal Windows host runs VirtualBox directly.
 
 ## Host setup on all three systems
 
@@ -97,7 +97,6 @@ Every host script needs Python 3.11 or newer and accepts later releases without 
 | --- | --- | --- |
 | Linux | `scripts/remote_host_setup.sh [--backend kvm\|virtualbox] [--repo PATH]` | Also prepares a host reached over SSH; `--dry-run` prints the plan. |
 | Windows | `scripts/windows/setup-host.ps1 [-Python PATH]` | Rejects the Microsoft Store alias; accepts 3.11 through 3.15+. |
-| macOS | `scripts/macos/setup-host.sh [--python PATH] [--skip-npm]` | Finds python.org, Homebrew or `python3`; VirtualBox is optional for remote use. |
 
 Windows guests reuse any installed Python 3.11+ (`setup-win.cmd`, `guest_setup/recorder/setup.ps1`, `setup-user.py`) and install one only when none qualifies. The recorder payload is committed as `guest_setup/recorder/recorder.zip`; the guest scripts fall back to `https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/guest_setup/recorder/recorder.zip` when the bundle is not beside them.
 

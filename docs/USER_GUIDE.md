@@ -114,7 +114,7 @@ Reviewed workflows from other VAMP users are listed at [VAMP Script Hub](https:/
 
 MCP instructions and the bundled project `rpa-reuse` skill require: **search existing skills → reuse a compatible reviewed RPA → inspect its compact result → use targeted CUA/OCR/multimodal only when needed**. If nothing matches or execution/verification fails, fall back to normal GUI control. Compatibility and authorization take priority over token savings.
 
-VirtualBox mouse replay needs matching `vboxapi` bindings. Windows **Prepare Environment** installs them. On Linux/macOS, set **VAMP: Mouse Python Executable** when the SDK is in another Python. KVM replay requires `asyncvnc` in the host environment and an active localhost VNC display.
+VirtualBox mouse replay needs matching `vboxapi` bindings. Windows **Prepare Environment** installs them. On Linux, set **VAMP: Mouse Python Executable** when the SDK is in another Python. KVM replay requires `asyncvnc` in the host environment and an active localhost VNC display.
 
 ### Get an ERP CSV in chat
 
@@ -267,7 +267,7 @@ AI는 설명과 검색 메타데이터를 작성합니다. 녹화 동작을 몰�
 
 MCP와 `rpa-reuse` 스킬에는 **RPA 먼저 검색 → 적합한 검토 완료 스킬 재사용 → 짧은 결과 확인 → 필요할 때만 CUA/OCR/멀티모달** 순서가 들어 있습니다. 적합한 RPA가 없거나 실행·결과 확인이 실패하면 필요한 화면 조작으로 돌아갑니다. 무조건 RPA를 고르는 지침은 아닙니다.
 
-VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Windows는 **Prepare Environment**에서 준비합니다. Linux/macOS에서 SDK가 별도 Python에 있으면 `VAMP: Mouse Python Executable`을 지정합니다. KVM 재생은 호스트 Python 환경의 `asyncvnc`와 localhost VNC가 필요합니다.
+VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Windows는 **Prepare Environment**에서 준비합니다. Linux에서 SDK가 별도 Python에 있으면 `VAMP: Mouse Python Executable`을 지정합니다. KVM 재생은 호스트 Python 환경의 `asyncvnc`와 localhost VNC가 필요합니다.
 
 ### 채팅에서 ERP CSV 받기
 
@@ -326,9 +326,8 @@ Vault는 별도 금고 아이콘으로 구분됩니다.
 
 ### 호스트 PaddleOCR 준비
 
-저장 RPA의 시작 화면 확인은 Windows·macOS·Linux 호스트에서 PaddleOCR을 실행합니다.
-Windows x64, Apple Silicon Mac 또는 Intel Mac에서 해당 아키텍처의 Python
-3.12로 전용 환경을 만들고 저장소의 `requirements-ocr.txt`를 설치합니다.
+저장 RPA의 시작 화면 확인은 Windows와 Linux 호스트에서 PaddleOCR을 실행합니다.
+Python 3.12로 전용 환경을 만들고 저장소의 `requirements-ocr.txt`를 설치합니다.
 
 ```powershell
 py -3.12 -m venv "$env:USERPROFILE/.vamp/ocr-python"
@@ -351,12 +350,10 @@ MCP는 시작할 때 기본 OmniParser YOLO 아이콘 가중치가 없으면 백
 보관하고 다음 시작부터 재사용합니다. 모델 예열과 다운로드는 MCP 연결을 기다리게 하지
 않습니다. YOLO 실행 환경을 다른 위치에 설치했다면 `VAMP_YOLO_PYTHON`을 지정하세요.
 사용자 모델은 `VAMP_YOLO_MODEL`로 지정하고, 자동 준비를 끄려면
-`VAMP_PRELOAD_MODELS=0`을 설정합니다. `VAMP_YOLO_DEVICE=cuda`는 CUDA를 요구하며,
-Apple Silicon의 YOLO는 호환 Torch로 `mps`를 사용할 수 있습니다.
+`VAMP_PRELOAD_MODELS=0`을 설정합니다. `VAMP_YOLO_DEVICE=cuda`는 CUDA를 요구합니다.
 
 기본 장치 우선순위는 모델별 런타임이 지원하는 **NPU → GPU → CPU**입니다.
 PaddleOCR은 PaddlePaddle NPU 백엔드가 등록한 장치를 먼저 사용하고, 그다음
 CUDA를 지원하는 PaddlePaddle 빌드의 GPU를 사용합니다. CUDA가 필수인 호스트는 공식 GPU 빌드를 별도 OCR
 환경에 설치하고 `VAMP_OCR_DEVICE=gpu:0`을 설정합니다. 이 설정에서 지정한
-장치를 사용할 수 없으면 시작에 실패합니다. macOS용 PaddlePaddle 휠에서는
-PaddleOCR이 CPU에서 실행됩니다.
+장치를 사용할 수 없으면 시작에 실패합니다.

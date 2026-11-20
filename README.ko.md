@@ -25,6 +25,8 @@
 
 ## How to use
 
+**지원 호스트:** Windows와 Linux입니다. macOS는 지원 대상에서 제외합니다.
+
 **Windows에서 VAMP 및 VAMP Vault MCP 서버를 실행하려면 관리자 권한이 필요합니다.** `vamp-mcp` CLI는 호스트 UAC 승인을 받아 서버를 별도 관리자 프로세스로 시작할 수 있습니다. 서버 명령을 직접 실행할 때는 관리자 터미널을 사용하세요. VS Code 확장이 제공하는 MCP 서버를 쓰려면 VS Code를 **관리자 권한으로 실행**하세요. Windows가 관리자 권한을 부여하지 않은 경우 서버를 직접 실행하면 시작 단계에서 종료됩니다.
 
 기여하려면 [기여 가이드](CONTRIBUTING.md)와 [AI 에이전트 기여 지침](AGENTS.md)을 참고하세요.

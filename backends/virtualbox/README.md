@@ -4,7 +4,7 @@ This backend exposes VirtualBox screenshots, keyboard/mouse input, VM lifecycle 
 
 ## Host setup
 
-Install VirtualBox 7.x, Node.js 22+ and Python 3.11+ on the host. VirtualBox supports Windows, Linux and macOS; the current unattended amd64 installer profiles require an x64 host. Hyper-V is Windows-only, KVM is Linux-only, and Apple Hypervisor is not implemented.
+Install VirtualBox 7.x, Node.js 22+ and Python 3.11+ on the host. VAMP supports VirtualBox on Windows and Linux. Current unattended amd64 installer profiles require an x64 host. Hyper-V is Windows-only and KVM is Linux-only.
 
 ```bash
 python3 -m venv .venv-virtualbox
@@ -39,7 +39,7 @@ Replace the absolute path below. Run Node directly so npm output cannot contamin
 {"mcpServers":{"virtualbox-rpa":{"command":"node","args":["/absolute/path/vamp-mcp/backends/virtualbox/server.mjs"],"env":{"VBOXMANAGE_DEBUG":"false"}}}}
 ```
 
-Use client tool discovery for current schemas. Direct screenshot tools return MCP image content; the Python CLI saves images instead of dumping base64 into JSON. Model workers remain separate from lightweight clients. Review [validation records](../../docs/VALIDATION.md) for tested scope; Hyper-V guest execution and physical macOS hosts remain unverified.
+Use client tool discovery for current schemas. Direct screenshot tools return MCP image content; the Python CLI saves images instead of dumping base64 into JSON. Model workers remain separate from lightweight clients. Review [validation records](../../docs/VALIDATION.md) for tested scope; Hyper-V guest execution remains unverified.
 
 ## Create from an ISO
 

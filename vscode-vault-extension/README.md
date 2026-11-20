@@ -13,7 +13,7 @@ VAMP Vault stores credentials in KeePassXC and manages encrypted VeraCrypt works
 ## Get started
 
 1. Install the **VAMP** extension first; VAMP Vault declares it as an extension dependency.
-2. Run **VAMP Vault: Set Up KeePassXC & VeraCrypt CLI**. It reuses a KeePassXC or VeraCrypt you already have. Otherwise it installs KeePassXC on Windows through winget (`KeePassXCTeam.KeePassXC`, the full signed application) and asks you to approve the Windows User Account Control (UAC) prompt; on Linux and macOS it downloads the official build for your OS and CPU into the extension's storage, verifying the publisher's SHA-256 before use.
+2. Run **VAMP Vault: Set Up KeePassXC & VeraCrypt CLI**. It reuses a KeePassXC or VeraCrypt you already have. Otherwise it installs KeePassXC on Windows through winget (`KeePassXCTeam.KeePassXC`, the full signed application) and asks you to approve the Windows User Account Control (UAC) prompt; on Linux it downloads the official build for your OS and CPU into the extension's storage, verifying the publisher's SHA-256 before use.
 3. Run **VAMP Vault: Create Vault** and type a master password. It is kept in VS Code secret storage, not in a settings file or an environment variable.
 4. Open MCP server management, start **VAMP Vault**, and let the agent call it.
 
@@ -149,7 +149,6 @@ The setup command and `vault_status` report which of these applied.
 | --- | --- | --- |
 | Linux x64/arm64 | PATH, `/usr/bin`, `/snap/bin`, Flatpak, else the official AppImage extracted into extension storage with a launcher that sets `LD_LIBRARY_PATH` | PATH or the official AppImage (needs GTK 3, which desktop distributions ship); mounting also needs FUSE and permission to mount as your user |
 | Windows x64/ARM64 | PATH, `Program Files\KeePassXC`, else winget installs the full signed application (`winget install --id KeePassXCTeam.KeePassXC -e`), which brings `keepassxc-cli.exe` and the browser proxy. Approve the UAC prompt Windows shows for that installer | Install manually (`winget install --id IDRIX.VeraCrypt -e`): the CLI talks to a kernel driver that only the signed installer registers, and that needs administrator rights |
-| macOS x64/arm64 | PATH, `/Applications/KeePassXC.app`, Homebrew, else `brew install keepassxc` | `brew install --cask veracrypt` plus macFUSE; the `.dmg` is an app bundle, not a portable binary |
 
 Every download is checked against the SHA-256 the publisher lists (the `.DIGEST` asset for KeePassXC, `sha256sum.txt` for VeraCrypt). A mismatch deletes the file and reports `checksum_mismatch`; nothing is executed.
 
@@ -243,7 +242,7 @@ guest passkey setup follow-up below.
 ## Limitations
 
 - Windows VeraCrypt uses its native password dialog for mounting; the Unix `--stdin` switches are not sent to the Windows executable. Creating a new Windows encrypted volume opens the native creation wizard and returns `interactive_setup_required` until the user completes it. Windows volume enumeration checks the actual VeraCrypt device mappings. KeePassXC database operations remain available through MCP.
-- Mounting needs the VeraCrypt driver on Windows and macOS, and FUSE plus mount permission on Linux. A container or a locked-down host will report `failed` with the reason rather than silently succeed.
+- Mounting needs the VeraCrypt driver on Windows, and FUSE plus mount permission on Linux. A container or a locked-down host will report `failed` with the reason rather than silently succeed.
 - `keepassxc-cli` has no solver for hidden-volume protection, passkey writes, or entry attributes beyond the standard set; those are done in the KeePassXC application.
 - One master password per database is remembered at a time by the dialog flow; several databases work, each with its own stored password.
 - The extension runs on the local desktop host and does not work in vscode.dev.
