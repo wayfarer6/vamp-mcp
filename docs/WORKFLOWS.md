@@ -53,6 +53,8 @@ sequenceDiagram
 
 응답과 실행 이력에는 중단 시점(`before_starting_screen`, `before_action`, `after_last_action`), 재생에 사용한 Git 커밋, `program_identity: unverified`가 기록됩니다. 시작 화면 검사와 마지막 동작의 결과 검사에 앞서 UAC를 확인합니다. 시작 화면 검사가 끝난 뒤에도 첫 입력 직전에 다시 확인합니다.
 
+운영자가 게스트 콘솔에서 승인한 뒤 같은 실행을 이어가려면 `pause_on_uac: true`와 함께 `uac_wait_seconds`(1~120초), `uac_resume_text`를 지정합니다. 재개 문구에는 승인한 앱에서만 나타나는 고유한 문구를 사용하세요. VAMP는 프롬프트가 사라지고 그 문구가 한 번 확인된 뒤 다음 동작부터 이어갑니다. 키가 눌린 상태에서 중단되거나 제한 시간 안에 화면을 확인하지 못하면 운영자에게 제어를 넘깁니다. 재개 기록은 `elevation_resume_run_ids`에서 확인할 수 있습니다.
+
 별도 VirtualBox 테스트 게스트가 준비돼 있다면, 호스트에서 `VAMP_REPAIR_SCRATCH_VM`에 해당 VM의 UUID를 설정한 뒤 MCP 서버를 시작합니다. 네트워크, 공유 폴더, 클립보드, 드래그 앤 드롭, 원격 화면, USB, 오디오 입출력, 직렬·병렬 포트가 꺼진 상태에서 VM을 실행합니다. `rpa_revision`의 `test`에는 수정본과 예상 커밋, `scratch_vm`, 화면에서 확인할 `outcome_text`, 필요한 합성 `test_inputs`, 그리고 `confirmed: true`를 제공합니다. 이 단계는 화면만 검증하며 현재 저장된 RPA에는 변경을 적용하지 않습니다.
 
 결과 파일까지 검증해 반영하려면 같은 입력으로 `test-and-commit`을 사용합니다. Guest Additions가 설치된 테스트 게스트에 초기 결과 파일을 두고, 호스트에서 다음 값을 설정합니다.

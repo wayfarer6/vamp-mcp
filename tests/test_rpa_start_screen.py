@@ -5,7 +5,7 @@ from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backends.library.replay import ElevationHandoff, OutcomeScreenBlocked, VNC, VBox, replay, run
+from backends.library.replay import ElevationHandoff, OutcomeScreenBlocked, StartScreenBlocked, VNC, VBox, replay, run
 from backends.virtualbox.history import detail
 
 
@@ -13,6 +13,7 @@ class FixtureDriver:
     def __init__(self):
         self.events = []
         self.closed = False
+        self.held = set()
 
     def geometry(self):
         return [1920, 1080]
@@ -108,6 +109,39 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(verify.await_count, len(screens) - 1)
                 self.assertEqual(driver.events, [])
                 self.assertTrue(driver.closed)
+
+    async def test_virtualbox_waits_for_post_uac_screen_then_runs_only_remaining_actions(self):
+        driver = FixtureDriver()
+        metadata = {'id': 'fixture-rpa', 'backend': 'virtualbox', 'resolution': [1920, 1080],
+                    'replay_commit': 'a' * 40, 'expected_result': 'Ready'}
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}] * 2
+        with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
+             patch('backends.library.replay.load', return_value=(metadata, actions)), \
+             patch('backends.library.replay.VBox', return_value=driver), \
+             patch('backends.library.replay.asyncio.sleep'), \
+             patch('backends.library.replay.inspect_elevation_screen', side_effect=[False, True, False, False, False, False]), \
+             patch('backends.library.replay.verify_start', side_effect=[StartScreenBlocked('not ready'), None]) as verify:
+            result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True, 'uac_wait_seconds': 10,
+                                'uac_resume_text': 'Installed'})
+            run_id, = result['elevation_resume_run_ids']
+            record = detail(run_id)
+        self.assertEqual(result['actions_completed'], 2)
+        self.assertEqual(driver.events, ['move', 'left', 'move', 'left'])
+        self.assertEqual(verify.await_count, 2)
+        event, = record['events']
+        self.assertEqual(event['kind'], 'elevation_resumed')
+        self.assertEqual(json.loads(event['payload_json'])['actions_completed'], 1)
+
+    async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
+        driver = FixtureDriver()
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        with patch('backends.library.replay.inspect_elevation_screen', return_value=True):
+            with self.assertRaises(ElevationHandoff) as blocked:
+                await replay(driver, actions, [1920, 1080], pause_on_uac=True,
+                             uac_wait_seconds=0.02, uac_resume_text='Installed')
+        self.assertEqual(blocked.exception.reason, 'uac_resume_not_verified')
+        self.assertEqual(driver.events, [])
+        self.assertTrue(driver.closed)
 
     async def test_uncertain_uac_ocr_stops_before_guest_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]

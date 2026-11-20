@@ -231,6 +231,30 @@ async def require_clear_elevation_screen(driver, resolution, completed, phase):
         raise ElevationHandoff(completed, 'uac_prompt_detected', phase)
 
 
+async def check_elevation_boundary(driver, resolution, completed, phase, wait_seconds, resume_text, on_resume):
+    try:
+        await require_clear_elevation_screen(driver, resolution, completed, phase)
+        return
+    except ElevationHandoff as blocked:
+        if blocked.reason != 'uac_prompt_detected' or not wait_seconds or driver.held:
+            raise
+    try:
+        async with asyncio.timeout(wait_seconds):
+            while True:
+                await asyncio.sleep(2)
+                try:
+                    await require_clear_elevation_screen(driver, resolution, completed, phase)
+                    await verify_start(driver, resolution, resume_text)
+                    await require_clear_elevation_screen(driver, resolution, completed, phase)
+                except (ElevationHandoff, StartScreenBlocked):
+                    continue
+                break
+    except TimeoutError as error:
+        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase) from error
+    if on_resume is not None:
+        on_resume(completed, phase)
+
+
 async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
     with TemporaryDirectory(prefix='vamp-rpa-screen-') as folder:
         screenshot = Path(folder) / 'screen.png'
@@ -281,14 +305,18 @@ async def verify_outcome_screen(driver, resolution, expected, forbidden_modal=No
 
 
 async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
-                 require_new_outcome=False,forbidden_modal=None,pause_on_uac=False):
+                 require_new_outcome=False,forbidden_modal=None,pause_on_uac=False,
+                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None):
     completed=0
+    async def check_uac(phase):
+        await check_elevation_boundary(driver, resolution, completed, phase, uac_wait_seconds,
+                                       uac_resume_text, on_uac_resume)
     try:
         actual = driver.geometry()
         if actual != resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {actual}; recalibrate rather than guessing')
         if start_text is not None:
             if pause_on_uac:
-                await require_clear_elevation_screen(driver, resolution, completed, 'before_starting_screen')
+                await check_uac('before_starting_screen')
             await verify_start(driver, resolution, start_text)
             if driver.geometry() != resolution:
                 raise ValueError('Guest resolution changed during starting-screen verification. Replay stopped.')
@@ -304,7 +332,7 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                                            expected_occurrences=0, observed_occurrences=existing)
         for a in actions:
             if pause_on_uac:
-                await require_clear_elevation_screen(driver, resolution, completed, 'before_action')
+                await check_uac('before_action')
             op=a['op']
             if op=='wait':await asyncio.sleep(a['seconds'])
             elif op=='key_down':driver.down(a['key'])
@@ -337,7 +365,7 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
             else:raise ValueError('Unsupported replay operation: '+op)
             await driver.drain();completed+=1;await asyncio.sleep(.01)
         if pause_on_uac:
-            await require_clear_elevation_screen(driver, resolution, completed, 'after_last_action')
+            await check_uac('after_last_action')
         if outcome_text is not None:
             await verify_outcome_screen(driver, resolution, outcome_text, forbidden_modal)
     except VaultDeliveryDenied as error:
@@ -348,6 +376,24 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
 
 async def run(request, dialogue=False):
     metadata,actions=load(request)
+    wait_seconds = request.get('uac_wait_seconds', 0)
+    resume_text = request.get('uac_resume_text')
+    if (type(wait_seconds) is not int or not 0 <= wait_seconds <= 120
+            or (wait_seconds and (request.get('pause_on_uac') is not True or metadata['backend'] != 'virtualbox'
+                                  or not isinstance(resume_text, str) or not 1 <= len(resume_text.strip()) <= 240))
+            or (resume_text is not None and not wait_seconds)):
+        raise ValueError('UAC resume requires VirtualBox, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
+    resume_events = []
+    def record_resume(completed, phase):
+        from backends.virtualbox.history import record_event_run
+        payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'],
+                   'actions_completed': completed, 'phase': phase,
+                   'policy': 'operator_wait_screen_verified', 'program_identity': 'unverified'}
+        try:
+            resume_events.append(record_event_run(request['vm_id'], 'resumed', 'elevation_resumed',
+                                                   payload, datetime.now(timezone.utc).isoformat()))
+        except (OSError, sqlite3.Error):
+            resume_events.append(None)
     start_text = metadata.get('start_text')
     if start_text is not None and (not isinstance(start_text, str) or not 1 <= len(start_text.strip()) <= 240):
         raise ValueError('Invalid reviewed starting-screen text')
@@ -364,7 +410,8 @@ async def run(request, dialogue=False):
     if metadata['backend']=='virtualbox':
         try:
             completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text,
-                                   pause_on_uac=request.get('pause_on_uac') is True)
+                                   pause_on_uac=request.get('pause_on_uac') is True, uac_wait_seconds=wait_seconds,
+                                   uac_resume_text=resume_text, on_uac_resume=record_resume)
         except ElevationHandoff as error:
             from backends.virtualbox.history import record_elevation_handoff
             observed_at=datetime.now(timezone.utc).isoformat()
@@ -395,7 +442,12 @@ async def run(request, dialogue=False):
         async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
             completed=await replay(VNC(client),actions,metadata['resolution'],vault_steps,start_text=start_text)
     else:raise ValueError('This backend has no recorded desktop replay adapter')
-    return {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
+    result = {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
+    if resume_events:
+        result['elevation_resume_run_ids'] = [run_id for run_id in resume_events if run_id is not None]
+        if None in resume_events:
+            result['history_status'] = 'unavailable'
+    return result
 
 if __name__=='__main__':
     dialogue=sys.argv[1:]==['--vault-dialogue']
