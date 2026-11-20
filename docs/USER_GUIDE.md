@@ -116,6 +116,14 @@ MCP instructions and the bundled project `rpa-reuse` skill require: **search exi
 
 VirtualBox mouse replay needs matching `vboxapi` bindings. Windows **Prepare Environment** installs them. On Linux/macOS, set **VAMP: Mouse Python Executable** when the SDK is in another Python. KVM replay requires `asyncvnc` in the host environment and an active localhost VNC display.
 
+### Get an ERP CSV in chat
+
+1. Select the disposable VirtualBox guest, then use `vm_exchange_prepare` to configure its `VAMPFiles` share. Check that Guest Additions mounted it in the guest.
+2. Ask the agent to find the reviewed ERP RPA, show the target guest and expected result, and wait for approval. After approving, ask it to save the new `orders.csv` in the mounted share and verify the order status.
+3. Ask the agent to copy the CSV to a fresh local destination with `vm_file_get` and `attach_to_chat: true`. Approve the file you want delivered to the chat client.
+
+VAMP returns an MCP attachment for an approved CSV up to 256 KiB, with the host path and SHA-256 in the tool receipt. On a client without a file action, open the local path from the receipt. The end-to-end VS Code chat video is tracked in [#19](https://github.com/wayfarer6/vamp-mcp/issues/19).
+
 ## 7. Browse credentials and choose agent approval levels
 
 1. Open **Browse Credentials**, or run **VAMP Vault: Browse Credentials**.
@@ -260,6 +268,14 @@ AI는 설명과 검색 메타데이터를 작성합니다. 녹화 동작을 몰�
 MCP와 `rpa-reuse` 스킬에는 **RPA 먼저 검색 → 적합한 검토 완료 스킬 재사용 → 짧은 결과 확인 → 필요할 때만 CUA/OCR/멀티모달** 순서가 들어 있습니다. 적합한 RPA가 없거나 실행·결과 확인이 실패하면 필요한 화면 조작으로 돌아갑니다. 무조건 RPA를 고르는 지침은 아닙니다.
 
 VirtualBox 마우스 재생은 일치하는 `vboxapi` SDK가 필요합니다. Windows는 **Prepare Environment**에서 준비합니다. Linux/macOS에서 SDK가 별도 Python에 있으면 `VAMP: Mouse Python Executable`을 지정합니다. KVM 재생은 호스트 Python 환경의 `asyncvnc`와 localhost VNC가 필요합니다.
+
+### 채팅에서 ERP CSV 받기
+
+1. 일회용 VirtualBox 게스트를 선택하고 `vm_exchange_prepare`로 `VAMPFiles` 공유 폴더를 구성합니다. Guest Additions가 게스트에서 폴더를 마운트했는지 확인합니다.
+2. AI에 검토된 ERP RPA를 찾고 대상 게스트와 예상 결과를 보여준 뒤 승인을 기다리라고 요청합니다. 승인한 뒤 새 `orders.csv`를 공유 폴더에 저장하고 주문 상태를 확인하도록 요청합니다.
+3. `vm_file_get`에 `attach_to_chat: true`를 지정해 CSV를 새로운 로컬 경로로 복사하도록 요청합니다. 채팅 클라이언트에 전달할 파일을 확인하고 승인합니다.
+
+VAMP는 승인된 256 KiB 이하 CSV를 MCP 첨부 파일로 반환하고, 복사 결과에 호스트 경로와 SHA-256을 표시합니다. 채팅에서 파일 열기 기능을 제공하지 않는 클라이언트에서는 복사 결과의 로컬 경로로 열 수 있습니다. VS Code 채팅 전체 시연 영상은 [#19](https://github.com/wayfarer6/vamp-mcp/issues/19)에서 추적합니다.
 
 ## 7. 크리덴셜 찾아보기
 
