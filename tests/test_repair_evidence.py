@@ -16,7 +16,7 @@ class RepairEvidenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             run=Path(directory)
             (run/'summary.json').write_text(json.dumps({'rpa_id':'naver_login','status':'error',
-                'error_summary':'Field was not found'}))
+                'error_summary':'필드를 찾지 못했습니다'},ensure_ascii=False), encoding='utf-8')
             (run/'output.xml').write_text('''<robot><suite><test>
               <kw name="Outer" owner="Workflow"><kw name="Click" owner="Spice" lineno="12">
               <arg>PRIVATE_INPUT_DO_NOT_PRINT</arg><msg>PRIVATE_LOG_DO_NOT_PRINT</msg>
@@ -26,6 +26,7 @@ class RepairEvidenceTests(unittest.TestCase):
                 (run/f'{index}.ocr.json').write_text('[{"text":"PRIVATE_OCR_DO_NOT_PRINT"}]')
             result=collector.collect('naver_login',directory)
             self.assertEqual(result['summary']['status'],'error')
+            self.assertEqual(result['summary']['error_summary'],'필드를 찾지 못했습니다')
             self.assertEqual([item['keyword'] for item in result['failed_keywords']],['Click','Outer'])
             self.assertEqual(len(result['ocr_files']),8)
             self.assertNotIn('PRIVATE_',json.dumps(result))

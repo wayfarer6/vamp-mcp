@@ -22,7 +22,11 @@ def collect(package_id,run_directory=None):
         return {**result,'evidence_status':'run_directory_missing'}
     summary_path=directory/'summary.json'
     if summary_path.is_file():
-        summary=json.loads(summary_path.read_text())
+        try:
+            summary_text=summary_path.read_text(encoding='utf-8')
+        except UnicodeDecodeError:
+            summary_text=summary_path.read_text()
+        summary=json.loads(summary_text)
         reported=summary.get('rpa_id')
         if reported is not None and reported!=package_id:
             return {**result,'evidence_status':'rpa_id_mismatch','reported_rpa_id':str(reported)[:80]}

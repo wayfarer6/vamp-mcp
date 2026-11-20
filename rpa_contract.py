@@ -24,7 +24,7 @@ class RpaContract:
     @keyword
     def publish_result(self,result):
         summary={**result,'schema_version':1,'rpa_id':self.rpa_id}
-        self._path().write_text(json.dumps(summary,ensure_ascii=False,indent=2))
+        self._path().write_text(json.dumps(summary,ensure_ascii=False,indent=2), encoding='utf-8')
         logger.info(json.dumps(summary,ensure_ascii=False))
         logger.console(json.dumps(summary,ensure_ascii=False))
         return summary
@@ -32,7 +32,7 @@ class RpaContract:
     @keyword
     def publish_failure_if_missing(self,message):
         if self._path().exists():
-            summary=json.loads(self._path().read_text())
+            summary=json.loads(self._path().read_text(encoding='utf-8'))
             summary['execution_status']='failed'
             summary.setdefault('error_summary',str(message)[:300])
             return self.publish_result(summary)

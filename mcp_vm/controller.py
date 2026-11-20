@@ -117,7 +117,7 @@ class VMController:
                     'report_path':str(output/'report.html')}
         (output/'process.log').write_text(result.stdout+'\n'+result.stderr)
         summary_path=output/'summary.json'
-        summary=json.loads(summary_path.read_text()) if summary_path.is_file() else {
+        summary=json.loads(summary_path.read_text(encoding='utf-8')) if summary_path.is_file() else {
             'status':'error','error_summary':'RPA did not write a summary; inspect the local process/Robot log'}
         if result.returncode:
             summary={**summary,'status':'failed','execution_status':'failed'}

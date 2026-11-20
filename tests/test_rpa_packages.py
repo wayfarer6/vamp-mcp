@@ -33,20 +33,20 @@ class ContractTests(unittest.TestCase):
     def execute_suite(self,directory,body):
         suite=Path(directory)/'test.robot'
         suite.write_text(f'''*** Settings ***
-Library    {ROOT}/rpa_contract.py    WITH NAME    Contract
+Library    {ROOT.as_posix()}/rpa_contract.py    WITH NAME    Contract
 Suite Setup    Contract.Begin Result    example
 Task Teardown    Contract.Publish Failure If Missing    ${{TEST MESSAGE}}
 *** Tasks ***
 Example
 {body}
-''')
+''', encoding='utf-8')
         # Use a conditional teardown so passing tasks do not acquire failure metadata.
-        suite.write_text(suite.read_text().replace(
+        suite.write_text(suite.read_text(encoding='utf-8').replace(
             'Task Teardown    Contract.Publish Failure If Missing    ${TEST MESSAGE}',
-            "Task Teardown    Run Keyword If    '${TEST STATUS}' == 'FAIL'    Contract.Publish Failure If Missing    ${TEST MESSAGE}"))
+            "Task Teardown    Run Keyword If    '${TEST STATUS}' == 'FAIL'    Contract.Publish Failure If Missing    ${TEST MESSAGE}"), encoding='utf-8')
         with contextlib.redirect_stdout(io.StringIO()):
             code=run(str(suite),outputdir=directory,console='none')
-        return code,json.loads((Path(directory)/'summary.json').read_text())
+        return code,json.loads((Path(directory)/'summary.json').read_text(encoding='utf-8'))
 
     def test_success_contract(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -59,11 +59,11 @@ Example
 
     def test_failure_before_result_is_machine_readable(self):
         with tempfile.TemporaryDirectory() as directory:
-            code,result=self.execute_suite(directory,'    Fail    expected failure')
+            code,result=self.execute_suite(directory,'    Fail    검증 실패')
             self.assertEqual(code,1)
             self.assertEqual(result['status'],'error')
             self.assertEqual(result['execution_status'],'failed')
-            self.assertIn('expected failure',result['error_summary'])
+            self.assertIn('검증 실패',result['error_summary'])
 
     def test_failed_verification_preserves_actual_outcome(self):
         with tempfile.TemporaryDirectory() as directory:
