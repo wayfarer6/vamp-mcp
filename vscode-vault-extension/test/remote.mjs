@@ -420,9 +420,13 @@ if (!keepassCli) {
     const list = await proxy.listTools();
     const names = list.tools.map(tool => tool.name).sort();
     const manifest=JSON.parse(await readFile(path.join(remoteRuntime,'vault_tools.json'),'utf8'));
-    assert.deepEqual(names,manifest.tools.map(tool=>tool.name).filter(name=>name!=='vault_attach_container').sort());
+    const localOnly = new Set(['vault_attach_container', 'vault_export_mounted_file']);
+    assert.deepEqual(names,manifest.tools.map(tool=>tool.name).filter(name=>!localOnly.has(name)).sort());
     assert.ok(names.includes('vault_deliver_credential'));
     assert.ok(list.tools.every(tool => tool.inputSchema?.type === 'object'));
+    const mounted = await proxy.callTool({ name: 'vault_export_mounted_file', arguments: {} });
+    assert.equal(mounted.isError, true);
+    assert.match(payload(mounted).error, /only through the local Vault/);
   });
 
   await check('the proxy previews, declines, and approves a remote encrypted export to the local folder', async () => {
