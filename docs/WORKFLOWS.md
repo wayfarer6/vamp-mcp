@@ -51,6 +51,14 @@ sequenceDiagram
 
 별도 VirtualBox 테스트 게스트가 준비돼 있다면, 호스트에서 `VAMP_REPAIR_SCRATCH_VM`에 해당 VM의 UUID를 설정한 뒤 MCP 서버를 시작합니다. 네트워크 어댑터, 공유 폴더, 클립보드, 드래그 앤 드롭, 원격 화면 및 USB가 꺼진 상태에서 VM을 실행합니다. `rpa_revision`의 `test`에는 수정본과 예상 커밋, `scratch_vm`, 화면에서 확인할 `outcome_text`, 필요한 합성 `test_inputs`, 그리고 `confirmed: true`를 제공합니다. 이 단계는 화면만 검증하며 현재 저장된 RPA에는 변경을 적용하지 않습니다.
 
+결과 파일까지 검증해 반영하려면 같은 입력으로 `test-and-commit`을 사용합니다. Guest Additions가 설치된 테스트 게스트에 초기 결과 파일을 두고, 호스트에서 다음 값을 설정합니다.
+
+- `VAMP_REPAIR_ARTIFACT`에 게스트 안의 결과 파일 절대 경로를 지정합니다.
+- `VAMP_REPAIR_GUEST_USER`에 테스트 계정을, `VAMP_REPAIR_GUEST_PASSWORD_FILE`에 그 계정의 호스트 비밀번호 파일 절대 경로를 지정합니다.
+- `VAMP_REPAIR_ARTIFACT_BASELINE_SHA256`에는 초기 파일, `VAMP_REPAIR_ARTIFACT_SHA256`에는 완료 후 기대 파일의 SHA-256을 지정합니다.
+
+재생 전에 초기 파일을 검사하고 재생 후에는 화면과 기대 파일을 모두 검사합니다. 검사에 성공하면 별도 Git 작업 디렉터리에서 커밋을 만들고, 저장된 RPA의 예상 커밋과 작업 파일이 그대로일 때만 반영합니다. 결과 상태 `verified_commit_needs_review`는 실행 전에 사용자 검토가 필요함을 나타냅니다.
+
 저장된 RPA를 수정할 때는 `rpa_revision`의 `read-source`로 원본과 현재 커밋을 확인합니다. `validate`에 수정한 `source`와 `expected_commit`을 보내면 변환 가능한 동작인지, 기존 입력 계약이 유지되는지 검사합니다. 이 단계에서는 게스트를 실행하거나 저장소를 수정하지 않습니다. 검증을 통과한 뒤에도 별도의 게스트 결과 확인과 사용자 검토가 필요합니다.
 
 | 정보 | 용도 |

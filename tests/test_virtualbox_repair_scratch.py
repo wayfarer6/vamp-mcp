@@ -1,6 +1,9 @@
+import hashlib
+from pathlib import Path
+from types import SimpleNamespace
 import unittest
 
-from backends.library.scratch import require_virtualbox_scratch
+from backends.library.scratch import require_virtualbox_scratch, scratch_artifact_hash
 
 
 class VirtualBoxRepairScratchTest(unittest.TestCase):
@@ -42,3 +45,23 @@ class VirtualBoxRepairScratchTest(unittest.TestCase):
                 self.check(fields={**self.fields, name: value})
         with self.assertRaisesRegex(ValueError, 'nic8'):
             self.check(fields={name: value for name, value in self.fields.items() if name != 'nic8'})
+
+    def test_artifact_hash_checks_guest_file_type_and_copied_bytes(self):
+        report = b'Order ID,Status\nORD-1001,Shipped\n'
+        settings = ('/tmp/orders.csv', 'fixture', Path('password-file'), '', '')
+        operations = []
+
+        def execute(args, **kwargs):
+            operations.append(args[3])
+            if args[3] == 'stat':
+                return SimpleNamespace(returncode=0, stdout=f'  Size: {len(report)} Alloc: 4096 Type: file\n')
+            self.assertIn('--no-replace', args)
+            Path(args[-1]).write_bytes(report)
+            return SimpleNamespace(returncode=0, stdout='')
+
+        self.assertEqual(scratch_artifact_hash(self.VM, settings, execute=execute),
+                         hashlib.sha256(report).hexdigest())
+        self.assertEqual(operations, ['stat', 'copyfrom'])
+        with self.assertRaisesRegex(ValueError, 'regular file'):
+            scratch_artifact_hash(self.VM, settings, execute=lambda *a, **k:
+                                  SimpleNamespace(returncode=0, stdout='Size: 1 Alloc: 1 Type: symlink\n'))

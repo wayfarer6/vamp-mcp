@@ -1,6 +1,11 @@
 """Host-configured isolation checks for a VirtualBox repair guest."""
+import hashlib
 import os
+from pathlib import Path, PurePosixPath, PureWindowsPath
+import re
+import stat
 import subprocess
+from tempfile import TemporaryDirectory
 import uuid
 
 from backends.virtualbox.provision import executable, parse
@@ -43,3 +48,45 @@ def require_virtualbox_scratch(vm, *, read_config=show_vm, environment=None):
     if exposed:
         raise ValueError('The VirtualBox repair VM isolation check failed: ' + ', '.join(exposed))
     return requested
+
+
+def scratch_artifact_settings(environment=None):
+    environment = os.environ if environment is None else environment
+    source = environment.get('VAMP_REPAIR_ARTIFACT', '')
+    username = environment.get('VAMP_REPAIR_GUEST_USER', '')
+    password = Path(environment.get('VAMP_REPAIR_GUEST_PASSWORD_FILE', ''))
+    baseline = environment.get('VAMP_REPAIR_ARTIFACT_BASELINE_SHA256', '')
+    expected = environment.get('VAMP_REPAIR_ARTIFACT_SHA256', '')
+    absolute = PurePosixPath(source).is_absolute() or PureWindowsPath(source).is_absolute()
+    if (not absolute or source.startswith(('//', '\\\\')) or any(c in source for c in '*?[]\r\n\x00')
+            or not username or not password.is_absolute() or not password.is_file()
+            or not re.fullmatch(r'[a-f0-9]{64}', baseline)
+            or not re.fullmatch(r'[a-f0-9]{64}', expected) or baseline == expected):
+        raise ValueError('Configure the scratch output path, guest credentials and distinct baseline and expected SHA-256 values on the host.')
+    return source, username, password, baseline, expected
+
+
+def scratch_artifact_hash(vm, settings, *, execute=subprocess.run):
+    source, username, password, _, _ = settings
+    command = [executable(), 'guestcontrol', vm]
+    auth = [f'--username={username}', f'--passwordfile={password}']
+
+    def run(operation, *arguments):
+        result = execute([*command, operation, *auth, *arguments],
+                         capture_output=True, text=True, timeout=30)
+        if result.returncode:
+            raise ValueError('VirtualBox could not read the configured scratch output.')
+        return result.stdout
+
+    info = run('stat', source)
+    match = re.search(r'^[ \t]*Size:[ \t]*(\d+)[ \t]+Alloc:[ \t]*\d+[ \t]+Type:[ \t]*file[ \t]*\r?$', info, re.MULTILINE | re.IGNORECASE)
+    if not match or int(match[1]) > 1024 * 1024:
+        raise ValueError('The scratch output must be a regular file of at most 1 MiB.')
+    with TemporaryDirectory(prefix='vamp-repair-artifact-') as directory:
+        target = Path(directory) / 'output'
+        run('copyfrom', '--no-replace', source, str(target))
+        metadata = target.lstat()
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size != int(match[1]):
+            raise ValueError('The copied scratch output differs from the guest file reported by VirtualBox.')
+        with target.open('rb') as stream:
+            return hashlib.file_digest(stream, 'sha256').hexdigest()

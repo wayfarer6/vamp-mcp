@@ -54,6 +54,31 @@ class SavedRPATests(unittest.TestCase):
         self.assertEqual(result['status'], 'scratch_screen_verified')
         self.assertFalse(result['artifact_verified'])
         self.assertFalse(result['committed'])
+
+    def test_virtualbox_scratch_promotion_preserves_head_on_failure_and_advances_on_success(self):
+        root = self.root / 'catalog'
+        request = {**self.request, 'backend': 'virtualbox'}
+        original = registry.register(root, request)
+        folder = Path(original['folder'])
+        request.update(id=original['definition']['id'], expected_commit=original['commit'])
+        self.source.write_text("import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
+        validated = registry.validate_revision(request)
+
+        with patch.object(registry, 'test_revision', side_effect=ValueError('Scratch report differs.')):
+            with self.assertRaisesRegex(ValueError, 'report differs'):
+                registry.test_and_commit(root, request)
+        self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
+        self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
+
+        proof = {'status': 'scratch_verified', 'source_sha256': validated['source_sha256'],
+                 'guest_verified': True, 'artifact_verified': True}
+        with patch.object(registry, 'test_revision', return_value=proof):
+            result = registry.test_and_commit(root, request)
+        self.assertEqual(result['status'], 'verified_commit_needs_review')
+        self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), result['commit'])
+        self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD^'), original['commit'])
+        self.assertEqual((folder / 'source.py').read_bytes(), self.source.read_bytes())
+        self.assertFalse(json.loads((folder / 'rpa.json').read_text())['reviewed'])
     def test_registers_title_description_contract_without_executing_source(self):
         saved=registry.register(self.root/'catalog',self.request)
         self.assertEqual(saved['definition']['name'],'Search invoice');self.assertFalse(saved['definition']['source_executed']);self.assertEqual(saved['definition']['action_count'],2)

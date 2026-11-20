@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+from tempfile import TemporaryDirectory
 import uuid
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from recording_converter import parse_recording
@@ -51,7 +52,7 @@ def test_revision(request):
     import asyncio
 
     from backends.library.replay import VBox, replay, substitute_inputs, vault_references
-    from backends.library.scratch import require_virtualbox_scratch
+    from backends.library.scratch import require_virtualbox_scratch, scratch_artifact_hash, scratch_artifact_settings
 
     _, _, backend, width, height, raw, actions, names = validate_recording_request(request)
     if not actions or backend != 'virtualbox':
@@ -63,21 +64,31 @@ def test_revision(request):
     if vault_references(actions):
         raise ValueError('Scratch replay accepts synthetic inputs without Vault references.')
     vm = require_virtualbox_scratch(request.get('scratch_vm'))
+    artifact = scratch_artifact_settings() if request.get('commit_after_test') else None
+    if artifact and scratch_artifact_hash(vm, artifact) != artifact[3]:
+        raise ValueError('The scratch output does not match its reset baseline.')
     async def run():
         return await asyncio.wait_for(replay(
             VBox(vm), actions, [width, height],
             start_text=request.get('start_text') or None, outcome_text=outcome.strip(),
         ), timeout=600)
     completed = asyncio.run(run())
+    if artifact:
+        require_virtualbox_scratch(vm)
+        if scratch_artifact_hash(vm, artifact) != artifact[4]:
+            raise ValueError('The scratch output SHA-256 does not match the expected result.')
     return {
-        'status': 'scratch_screen_verified', 'actions_completed': completed,
+        'status': 'scratch_verified' if artifact else 'scratch_screen_verified', 'actions_completed': completed,
         'source_sha256': hashlib.sha256(raw).hexdigest(),
-        'guest_verified': True, 'artifact_verified': False, 'committed': False,
+        'guest_verified': True, 'artifact_verified': bool(artifact), 'committed': False,
     }
 
 
 def register(root,request):
     title,description,backend,width,height,raw,actions,names=validate_recording_request(request)
+    source_hash=hashlib.sha256(raw).hexdigest()
+    if request.get('verified_source_hash') and source_hash!=request['verified_source_hash']:
+        raise ValueError('The candidate source changed after scratch verification.')
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True,mode=0o700)
     git(root,'--version')
     identifier=str(uuid.UUID(request['id'])) if request.get('id') else str(uuid.uuid4())
@@ -107,7 +118,7 @@ def register(root,request):
           'tags':[str(t).strip()[:80] for t in request.get('tags',[])[:20] if str(t).strip()],
           'inputs':names,'backend':backend,'resolution':[width,height],'reviewed':request.get('reviewed') is True,
           'version':version,'entrypoints':[{'name':'run','file':'source.py'}],
-          'source_sha256':hashlib.sha256(raw).hexdigest(),'action_count':len(actions),'source_executed':False}
+          'source_sha256':source_hash,'action_count':len(actions),'source_executed':False}
         if start_text:
             definition['start_text'] = start_text
         encoded=(json.dumps(actions,ensure_ascii=False,indent=2)+'\n').encode();definition['actions_sha256']=hashlib.sha256(encoded).hexdigest()
@@ -124,12 +135,48 @@ def register(root,request):
         return {'status':'registered','definition':definition,'folder':str(folder),'commit':git(folder,'rev-parse','HEAD')}
     finally:lock.unlink(missing_ok=True)
 
+def test_and_commit(root, request):
+    if not request.get('expected_commit') or not request.get('id'):
+        raise ValueError('Scratch promotion requires an existing RPA and expected commit.')
+    identifier=str(uuid.UUID(request['id']))
+    folder=Path(root).resolve()/identifier
+    expected=request['expected_commit']
+    if not re.fullmatch(r'[a-f0-9]{40}',expected) or git(folder,'rev-parse','HEAD')!=expected:
+        raise ValueError('RPA changed since it was read. Read the latest revision before repairing.')
+    candidate={**request,'commit_after_test':True,'reviewed':False}
+    result=test_revision(candidate)
+    if result['status']!='scratch_verified':
+        raise ValueError('Screen and artifact verification are required before promotion.')
+    with TemporaryDirectory(prefix='vamp-repair-stage-') as temporary:
+        staging=Path(temporary)
+        clone=staging/identifier
+        git(staging,'clone','--quiet','--no-hardlinks','--',str(folder),str(clone))
+        git(clone,'checkout','--quiet','--detach',expected)
+        saved=register(staging,{**candidate,'verified_source_hash':result['source_sha256']})
+        lock=folder/'.rpa-save.lock'
+        try:
+            fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
+        except FileExistsError as error:
+            raise ValueError('Another update is saving this RPA. Retry after it finishes') from error
+        try:
+            os.close(fd)
+            if git(folder,'rev-parse','HEAD')!=expected or git(folder,'status','--porcelain','--untracked-files=no'):
+                raise ValueError('The saved RPA changed during verification. Preserve the current revision.')
+            git(folder,'fetch','--quiet','--no-tags','--',str(clone),saved['commit'])
+            git(folder,'merge','--quiet','--ff-only',saved['commit'])
+        finally:
+            lock.unlink(missing_ok=True)
+    return {**result,'status':'verified_commit_needs_review',
+            'committed':True,'commit':saved['commit'],
+            'id':saved['definition']['id'],'version':saved['definition']['version']}
+
+
 if __name__=='__main__':
     try:
         request=json.load(sys.stdin)
         root=request.pop('registry')
         if request.pop('test_only',False):
-            result=test_revision(request)
+            result=test_and_commit(root,request) if request.get('commit_after_test') else test_revision(request)
         elif request.pop('validate_only',False):
             result=validate_revision(request)
         else:
