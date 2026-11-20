@@ -1387,6 +1387,8 @@ const main = async () => {
     await runCall();
     return;
   }
+  const { default: windowsAdmin } = await import('../../../backends/common/windows-admin.cjs');
+  await windowsAdmin.requireAdministrator();
   await server.connect(new StdioServerTransport());
   if (!settings.remoteHost && ['linux', 'win32', 'darwin'].includes(process.platform)) {
     let reconciling = false;
@@ -1427,4 +1429,5 @@ const main = async () => {
   console.error(`VAMP Vault stdio server ready${settings.remoteHost ? ` (remote host ${settings.remoteHost})` : ''}`);
 };
 
-await main();
+try { await main(); }
+catch (error) { console.error(error.message); process.exitCode = 1; }

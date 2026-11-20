@@ -118,5 +118,8 @@ export function createPodmanServer(options={}){
   return registerPodmanTools(server,options);
 }
 if(path.basename(path.dirname(process.argv[1]||''))==='podman'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
+  const {default:windowsAdmin}=await import('../common/windows-admin.cjs');
+  try { await windowsAdmin.requireAdministrator(); }
+  catch (error) { console.error(error.message); process.exit(1); }
   await createPodmanServer().connect(new StdioServerTransport());
 }

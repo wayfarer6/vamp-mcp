@@ -20,7 +20,7 @@ function isAdministrator({ platform = process.platform, execute = execFile } = {
     }));
 }
 
-const administratorRequired = 'VAMP local VM MCP requires Windows administrator privileges. Run VS Code or the MCP host as administrator.';
+const administratorRequired = 'VAMP MCP requires Windows administrator privileges. Run the MCP server or its host as administrator.';
 
 async function requireAdministrator(options) {
   if (!await isAdministrator(options)) throw new Error(administratorRequired);

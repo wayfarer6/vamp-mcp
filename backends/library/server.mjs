@@ -76,6 +76,9 @@ server.tool('rpa_revision','Inspect or validate an RPA repair. test checks the o
 return server;
 }
 if(path.basename(path.dirname(process.argv[1]||''))==='library'&&process.argv[1]&&import.meta.url===pathToFileURL(path.resolve(process.argv[1])).href){
+const {default:windowsAdmin}=await import('../common/windows-admin.cjs');
+try { await windowsAdmin.requireAdministrator(); }
+catch (error) { console.error(error.message); process.exit(1); }
 const server=new McpServer({name:'VAMP library',version:'0.3.0'},{instructions:libraryInstructions});
 registerLibraryTools(server);
 // Warm the local OCR/YOLO workers so the first verification does not pay the

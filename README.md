@@ -23,7 +23,7 @@
 
 ## How to use
 
-**Windows host requirement for local VirtualBox.** VAMP MCP requires Windows administrator privileges. For the VS Code extension, start VS Code with **Run as administrator**. For Codex CLI or another standalone MCP client, start the client from an administrator terminal so the MCP server inherits elevation. Approve the host UAC prompt and restart any client that was already open. An unelevated VS Code window does not publish the VAMP MCP definition, and the standalone server exits at startup.
+**Windows MCP requirement.** VAMP and VAMP Vault MCP servers require Windows administrator privileges. The `vamp-mcp` CLI can request UAC to start the server in a separate elevated process while the MCP client stays open. For a direct server command, start it from an administrator terminal. To use the MCP servers provided by the VS Code extensions, start VS Code with **Run as administrator**. Direct server startup exits when Windows has not granted administrator privileges.
 
 Contributions are welcome. See the [contribution guide](CONTRIBUTING.md) and [AI contributor instructions](AGENTS.md).
 

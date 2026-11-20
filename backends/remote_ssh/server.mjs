@@ -235,6 +235,8 @@ async function main() {
       return 1;
     }
   }
+  const { default: windowsAdmin } = await import('../common/windows-admin.cjs');
+  await windowsAdmin.requireAdministrator();
   // Warm this host's OCR/YOLO workers before the first tool call; the workers
   // are detached, so stdio and the MCP handshake are never delayed. A host that
   // runs this server without the VAMP repository simply logs the skip.

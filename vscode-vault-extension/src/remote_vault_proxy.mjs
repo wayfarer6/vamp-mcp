@@ -50,6 +50,9 @@ function parseArgs(argv) {
   return out;
 }
 
+const { default: windowsAdmin } = await import('../../backends/common/windows-admin.cjs');
+try { await windowsAdmin.requireAdministrator(); }
+catch (error) { console.error(error.message); process.exit(1); }
 const config = normalizeRemoteVaultConfig({ ...parseArgs(process.argv.slice(2)), enabled: true });
 const vaultId = remoteVaultId(config);
 const label = remoteVaultLabel(config);

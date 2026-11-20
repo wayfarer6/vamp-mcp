@@ -159,4 +159,9 @@ async def vm_file_get(vm_name: str, guest_path: str, local_path: str,
     return await invoke(controller.exchange,backend,vm_name,'get',local_path,guest_path,overwrite,prompt_credentials)
 
 
-if __name__=='__main__':mcp.run(transport='stdio')
+if __name__=='__main__':
+    if sys.platform == 'win32':
+        import ctypes
+        if not ctypes.windll.shell32.IsUserAnAdmin():
+            sys.exit('VAMP MCP requires Windows administrator privileges. Run the MCP server or its host as administrator.')
+    mcp.run(transport='stdio')
