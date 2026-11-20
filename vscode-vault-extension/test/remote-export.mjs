@@ -127,3 +127,31 @@ test('SSH stdout outside the encrypted file framing is rejected', async () => {
     }
   } finally { await rm(folder, { recursive: true, force: true }); }
 });
+
+test('host key failures keep their SSH diagnosis when stdout closes first', async t => {
+  const folder = await mkdtemp(path.join(os.tmpdir(), 'vault-ssh-export-'));
+  t.after(() => rm(folder, { recursive: true, force: true }));
+  for (const [stderr, expected] of [
+    ['Host key verification failed.', /host key is not trusted yet/i],
+    ['REMOTE HOST IDENTIFICATION HAS CHANGED\nHost key verification failed.', /host key changed/i],
+  ]) {
+    const client = new RemoteVaultClient({ host: 'vm.test' }, {
+      spawnImpl() {
+        const ssh = new EventEmitter();
+        ssh.stdout = new PassThrough();
+        ssh.stderr = new PassThrough();
+        ssh.kill = () => {};
+        setImmediate(() => {
+          ssh.stdout.end();
+          setImmediate(() => {
+            ssh.stderr.end(stderr);
+            ssh.emit('close', 255);
+          });
+        });
+        return ssh;
+      },
+    });
+    await assert.rejects(client.exportEncrypted({ kind: 'volume', destinationFolder: folder, confirmed: true }), expected);
+    assert.deepEqual(await readdir(folder), []);
+  }
+});

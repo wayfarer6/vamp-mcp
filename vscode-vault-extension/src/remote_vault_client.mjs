@@ -235,11 +235,11 @@ export function parseRemoteOutput(stdout) {
 function friendly(error, config, stderr) {
   const text = String(stderr ?? '').trim();
   if (error?.code === 'ENOENT') return 'The ssh command was not found on this computer. Install an OpenSSH client.';
-  if (/Host key verification failed/i.test(text)) return 'The remote host key is not trusted yet. Connect once from a terminal, or remove the stale entry from known_hosts.';
+  if (/REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(text)) return 'The remote host key changed. Check the host before trusting it again.';
+  if (/Host key verification failed/i.test(text)) return 'The remote host key is not trusted yet. Verify its fingerprint before adding it to known_hosts.';
   if (/Permission denied \(publickey/i.test(text)) return `SSH authentication failed for ${remoteVaultTarget(config)}. Check the private key and the authorized_keys file on that host.`;
   if (/Connection refused/i.test(text)) return `Nothing is listening on ${remoteVaultTarget(config)}:${config.port}. Check the SSH server and the port.`;
   if (/Could not resolve hostname/i.test(text)) return `The host name ${config.host} could not be resolved.`;
-  if (/Host key verification failed|REMOTE HOST IDENTIFICATION HAS CHANGED/i.test(text)) return 'The remote host key changed. Check the host before trusting it again.';
   if (/timed out|Connection timed out/i.test(text)) return `Connecting to ${remoteVaultTarget(config)} timed out. Check the network or VPN route.`;
   const tail = text.split(/\r?\n/).filter(Boolean).slice(-3).join(' ');
   return tail || error?.message || 'The SSH command failed.';
@@ -277,7 +277,7 @@ const READ_ENCRYPTED_FILE = `
   copy().catch(error => { console.error(error.message); process.exitCode = 1; });
 `;
 
-function encryptedTransferStream() {
+function encryptedTransferStream(exit) {
   let header = Buffer.alloc(0);
   let remaining;
   return new Transform({
@@ -300,7 +300,10 @@ function encryptedTransferStream() {
       callback(null, chunk);
     },
     flush(callback) {
-      callback(remaining === 0n ? undefined : new Error('The encrypted SSH transfer is incomplete.'));
+      if (remaining === 0n) return callback();
+      // SSH may close stdout before it reports a rejected host key or a
+      // failed transfer. Preserve that error when no complete file arrived.
+      exit.then(() => callback(new Error('The encrypted SSH transfer is incomplete.')), callback);
     },
   });
 }
@@ -354,7 +357,7 @@ export class RemoteVaultClient {
         else reject(signal?.reason ?? new RemoteVaultError(friendly({ code }, this.config, stderr), { code }));
       });
     });
-    const stream = encryptedTransferStream();
+    const stream = encryptedTransferStream(exit);
     const completion = Promise.all([exit, pipeline(child.stdout, stream)]);
     completion.catch(() => {});
     return { stream, completion, abort };
