@@ -68,7 +68,7 @@ function registerLibrary(context,{runtime,output}){
     const request={registry,source_path:source.file,title:message.title,description:message.description,when_to_use:message.when_to_use,expected_result:message.expected_result,start_text:message.start_text,tags:message.tags,inputs:message.inputs,backend:message.backend,width:message.width,height:message.height,reviewed:message.reviewed===true};
     if(edited?.kind==='saved'&&edited.path.startsWith(registry+path.sep))request.id=edited.manifest.id;
     const result=await new Promise((resolve,reject)=>{
-      const child=execFile(python,[path.join(runtime,'backends/library/registry.py')],{windowsHide:true,timeout:30000,maxBuffer:1024*1024},(error,stdout,stderr)=>{let value;try{value=JSON.parse(stdout);}catch{}if(error||value?.status==='error')reject(Error(value?.message||stderr||error?.message||'Registration failed'));else resolve(value);});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(request));
+      const child=execFile(python,[path.join(runtime,'backends/library/registry.py')],{env:{...process.env,PYTHONIOENCODING:'utf-8'},windowsHide:true,timeout:30000,maxBuffer:1024*1024},(error,stdout,stderr)=>{let value;try{value=JSON.parse(stdout);}catch{}if(error||value?.status==='error')reject(Error(value?.message||stderr||error?.message||'Registration failed'));else resolve(value);});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(request));
     });
     await refresh();const created=[...items.values()].find(i=>i.path===result.folder);
     post({type:'created',id:created?.id,message:'RPA saved. Its title, description, tags and input contract are searchable through VAMP RPA Library MCP.'});return;
