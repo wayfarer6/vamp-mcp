@@ -54,7 +54,9 @@ SPICE/KVM MCP 브랜치에서도 `vm_recorder_media`로 같은 ISO를 만들 수
 
 1. VM 바탕화면의 `RPA-Recorder` 폴더에서 Windows `Start-Recorder.cmd`, Debian `start-recorder.sh`를 실행합니다.
 2. VAMP UI에서 Start recording → 작업 → Stop → Save Python. `recordings/naver_login.py` 같은 Python 파일로 저장합니다. 비밀번호/인증정보는 녹화하지 않습니다.
-3. Python 파일을 호스트로 가져온 뒤 [변환 안내](RECORDING_CONVERSION.md)에 따라 `scripts/convert_recording.py`를 실행합니다. 게스트 안에서 녹화했으므로 host viewport 변환이 필요하지 않습니다.
-4. 변환된 Robot/Python RPA의 시작 절차는 Windows Win+R / GNOME Alt+F2로 정리하고, 화면 해상도/배율 및 OCR 성공 판정을 검증합니다.
+3. Python 파일을 호스트로 복사합니다. VirtualBox Guest Additions와 `VAMPRecords` 공유 폴더가 게스트에 연결돼 있다면 해당 폴더에 바로 저장할 수 있습니다.
+4. VS Code에서 **RPA Library → Create → Recorded script**로 파일을 추가합니다. **VirtualBox**를 선택하고 녹화 당시 해상도인 1920×1080을 입력합니다. 기록과 예상 결과를 검토한 뒤 **Save RPA**로 저장합니다. [RPA Library에서 등록하고 재생하는 방법](USER_GUIDE.md#2-vm에서-녹화한-스크립트를-목록에-넣기)
 
-현재 변환 런타임은 SPICE 실행용입니다. **VirtualBox용 동일 녹화 재생 변환은 아직 연결하지 않았습니다.** VirtualBox Robot 패키지는 `backends/virtualbox/rpas` 아래 따로 작성하며 키보드/화면 도구를 호출할 수 있습니다. 상류 GUI 자체의 Play 기능과 AST 기반 호스트 변환기는 별개입니다. 기존 Windows·Debian VM의 저장·공유 검증은 [검증 기록](VALIDATION.md)에 있습니다. 새 OS 무인 설치부터 레코더 준비까지의 전체 완료는 아직 검증하지 않았습니다.
+독립 Robot Framework 패키지가 필요하면 호스트에서 `recording_converter.py`를 실행합니다. 게스트에서 녹화한 파일에는 `--coordinate-space guest`를 사용합니다. 패키지를 검토한 뒤 재생할 VirtualBox VM UUID와 예상 결과 문구를 지정합니다. Windows 메모장 예제는 1920×1080 VirtualBox 게스트에서 5개 동작을 재생하고 호스트 OCR로 상태 표시줄을 확인했습니다. [변환과 실행 예제](RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
+
+Windows·Debian 게스트의 저장·공유 결과는 [검증 기록](VALIDATION.md)에 있습니다. 새 OS 무인 설치부터 녹화, VSIX 등록과 재생까지 이어지는 화면 검증은 [#19](https://github.com/wayfarer6/vamp-mcp/issues/19)에서 추적합니다.
