@@ -118,18 +118,26 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_scratch_promotion_requires_new_outcome_text(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
-        for before, accepted in [('Export complete', False), ('Ready', True)]:
+        ready = {'text': 'Ready', 'confidence': 0.95}
+        complete = {'text': 'Export complete', 'confidence': 0.95}
+        for before, failure in (
+            ([complete], 'already present'),
+            ([], 'baseline could not be verified'),
+            ([{'text': 'Ready', 'confidence': 0.45}], 'baseline could not be verified'),
+            ([ready, {'text': 'Export complete', 'confidence': 0.55}], 'baseline could not be verified'),
+            ([ready], None),
+        ):
             with self.subTest(before=before):
                 driver = FixtureDriver()
-                readings = [[{'text': text, 'confidence': 0.95}] for text in (before, 'Export complete')]
+                readings = [before, [complete]]
                 with patch('backends.library.replay.recognize_start_screen', side_effect=readings):
                     options = {'outcome_text': 'Export complete', 'require_new_outcome': True}
-                    if accepted:
+                    if failure is None:
                         self.assertEqual(await replay(driver, actions, [1920, 1080], **options), 1)
                     else:
-                        with self.assertRaisesRegex(OutcomeScreenBlocked, 'already present'):
+                        with self.assertRaisesRegex(OutcomeScreenBlocked, failure):
                             await replay(driver, actions, [1920, 1080], **options)
-                self.assertEqual(driver.events, ['move', 'left'] if accepted else [])
+                self.assertEqual(driver.events, ['move', 'left'] if failure is None else [])
                 self.assertTrue(driver.closed)
 
     async def check_capture_before_input(self, backend):

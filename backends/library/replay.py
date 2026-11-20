@@ -209,14 +209,19 @@ async def require_clear_elevation_screen(driver, resolution, completed):
         raise ElevationHandoff(completed, 'uac_prompt_detected')
 
 
-async def screen_match_count(driver, resolution, expected):
+async def screen_match_count(driver, resolution, expected, *, verify_absence=False):
     with TemporaryDirectory(prefix='vamp-rpa-screen-') as folder:
         screenshot = Path(folder) / 'screen.png'
         await driver.capture(screenshot, resolution)
         lines = await asyncio.to_thread(recognize_start_screen, screenshot, expected)
     phrase = re.compile(r'(?<![\w-])' + re.escape(normalized_text(expected)) + r'(?![\w-])')
-    return sum(len(phrase.findall(normalized_text(line['text'])))
-               for line in lines if float(line['confidence']) >= 0.8)
+    readings = [(normalized_text(line['text']), float(line['confidence'])) for line in lines]
+    if verify_absence and (
+        not any(text and confidence >= 0.8 for text, confidence in readings)
+        or any(confidence < 0.8 and phrase.search(text) for text, confidence in readings)
+    ):
+        raise ValueError('The expected text could not be ruled out from the OCR readings.')
+    return sum(len(phrase.findall(text)) for text, confidence in readings if confidence >= 0.8)
 
 
 async def verify_start(driver, resolution, expected):
@@ -251,7 +256,7 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                 raise ValueError('Guest resolution changed during starting-screen verification. Replay stopped.')
         if require_new_outcome:
             try:
-                existing = await screen_match_count(driver, resolution, outcome_text)
+                existing = await screen_match_count(driver, resolution, outcome_text, verify_absence=True)
                 if driver.geometry() != resolution:
                     raise ValueError('Guest resolution changed during baseline verification.')
             except Exception as exc:
