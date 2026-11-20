@@ -88,6 +88,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
       selection:{topology:'linux-local',volumePath:config.volumePath,mountPoint:config.mountPoint,directory:config.directory,workloadId:config.workloadId}})};
   }
   const proof=(snapshot,ctx,m)=>createHmac('sha256',secret).update(JSON.stringify([snapshot.binding,ctx.raw,m.mountId,m.scopeId])).digest('hex');
+  const configKey=(snapshot,ctx)=>createHash('sha256').update(JSON.stringify([snapshot.binding,ctx.raw])).digest('hex');
   const mountKey=(snapshot,ctx,m)=>createHash('sha256').update(JSON.stringify([snapshot.binding,ctx.raw,m.mountId,m.scopeId])).digest('hex');
   async function status(snapshot,scan){
     const ctx=await context(snapshot);
@@ -142,7 +143,8 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
           await scan(m,id);
           const fresh=await context(snapshot);
           if(fresh.raw!==ctx.raw)throw Error('Workspace approval configuration changed');
-          await state(snapshot.uid,'save',{id,mount:mountKey(snapshot,ctx,m)});
+          await state(snapshot.uid,'save',{id,mount:mountKey(snapshot,ctx,m),
+            config:configKey(snapshot,ctx),devicePath:m.devicePath});
           await command(['start','--',id]);
           const started=await inspect(id);
           if(started.State?.Running!==true||!verifiedMount(started,m,ctx.config.imageId))throw Error('Workspace container start not verified');
@@ -212,6 +214,10 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
       if(!ID.test(saved.id)||!ID.test(saved.mount))throw Error('Invalid Podman workspace cleanup record.');
       if(await present(saved.id))return {status:'waiting_for_shutdown'};
       const ctx=await context(snapshot);
+      if(saved.devicePath&&saved.config===configKey(snapshot,ctx)&&await ctx.source.confirmUnmounted(saved.devicePath)){
+        await state(snapshot.uid,'clear');
+        return {status:'unmounted'};
+      }
       return ctx.source.readForAttachment(async (mount,revalidate)=>{
         if(saved.mount!==mountKey(snapshot,ctx,mount))throw Error('The current mount differs from the recorded workspace.');
         const result=await unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached);

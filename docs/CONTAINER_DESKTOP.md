@@ -138,6 +138,8 @@ Save and close applications, confirm the exact managed container, and call `podm
 
 If the container exits outside VAMP, the local MCP server checks the saved attachment about every 15 seconds. A restarted server can resume from that record within the Linux user session. Use `podman_workspace_cleanup_status` to see the last check. `waiting_for_shutdown` means the container is still present. `pending` means an active consumer or an unverified state is blocking cleanup. Resolve the reported condition and let the server retry, or explicitly confirm `podman_workspace_lock` to retry from MCP. Inspect the container inventory before considering a manual dismount.
 
+If the server exits just after a dismount, the next check can finish cleanup once it verifies that the original VeraCrypt device and mount are both gone and the workspace configuration still matches.
+
 **Existing VAMP Vault unmount operations are not guarded by this workspace flow.** It does not intercept Vault or manual dismounts, unlock secrets, or change credential handling. Use only explicitly approved dummy volumes and non-secret files for integration tests; no real secrets or personal work documents.
 
 ## MCP and UI boundary

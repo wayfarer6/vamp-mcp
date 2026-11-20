@@ -251,20 +251,25 @@ test('human and RPA control use distinct fixed mode flags; default stays view-on
 
 test('local workspace uses checked binding, pinned image, single disposable container and verified scope',async()=>{
  const imageId='b'.repeat(64),other='d'.repeat(64);
- const m={mountId:'mount',scopeId:'scope',directory:'/mnt/volume/task',mountPoint:'/mnt/volume'};
+ const m={mountId:'mount',scopeId:'scope',directory:'/mnt/volume/task',mountPoint:'/mnt/volume',
+  devicePath:'/dev/mapper/veracrypt1'};
  const config={imageId,workloadId:'fixture',volumePath:'/private/fixture.hc',mountPoint:'/mnt/volume',
   veracryptPath:'/usr/bin/veracrypt',credentialEntry:'VeraCrypt/Fixture'};
- let created=false,running=false,conflict=false,dismounted=false,cleanup=null;
+ let created=false,running=false,conflict=false,dismounted=false,cleanup=null,mountGone=false,raw='fixture';
  const calls=[];
  const adapter=createPodmanAdapter({platform:'linux',desktopImageIds:imageId,
   userIdentity:()=>({uid:1000,euid:1000,home:'/home/test'}),workspaceConfigPath:'/private/config',
-  workspaceDependencies:{release:()=> '6.8.0',read:async()=>({config,raw:'fixture'}),reserve:async(_uid,fn)=>fn(),
+  workspaceDependencies:{release:()=> '6.8.0',read:async()=>({config,raw}),reserve:async(_uid,fn)=>fn(),
     state:async(_uid,action,value)=>{
       if(action==='save')cleanup=value;
       else if(action==='clear')cleanup=null;
       else return cleanup;
     },
-    sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>m),inspect:async()=>({state:'verified_mounted_scope'}),
+    sourceFactory:()=>({readForAttachment:fn=>{
+      if(mountGone)throw Error('Mounted workspace verification failed');
+      return fn(m,async()=>m);
+    },inspect:async()=>({state:'verified_mounted_scope'}),
+      confirmUnmounted:async device=>{assert.equal(device,m.devicePath);return mountGone;},
       dismount:async observed=>{assert.equal(observed,m);dismounted=true;return true;}})},
   execute:async(_exe,argv,options)=>{
     assert.equal(argv[0],'--remote=false');assert.equal(options.shell,false);
@@ -350,5 +355,16 @@ test('local workspace uses checked binding, pinned image, single disposable cont
  assert.equal(cleanup.id,id);
  conflict=false;
  assert.equal((await adapter.reconcileWorkspace(assertDetached)).status,'unmounted');
+ assert.equal(cleanup,null);
+ const fourth=await adapter.workspaceStatus('local-linux',binding);
+ await adapter.workspaceAttach('local-linux',binding,fourth.approval_id);
+ created=false;
+ running=false;
+ mountGone=true;
+ raw='changed fixture';
+ await assert.rejects(adapter.reconcileWorkspace(assertDetached),/verification failed/);
+ assert.equal(cleanup.id,id);
+ raw='fixture';
+ assert.deepEqual(await adapter.reconcileWorkspace(assertDetached),{status:'unmounted'});
  assert.equal(cleanup,null);
 });

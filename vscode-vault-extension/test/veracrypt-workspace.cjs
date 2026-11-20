@@ -6,11 +6,11 @@ function fixture({platform='linux',change,output='1: /volumes/data.hc /dev/mappe
  let mountText='21 1 253:0 / /media/veracrypt1 rw,relatime - ext4 /dev/mapper/veracrypt1 rw\n';
  const calls=[];const files=new Map();
  const stat=(kind='dir',extra={})=>({mode:kind==='dir'?0o40700:0o100600,dev:64768,ino:1,uid:1000,nlink:1,isDirectory:()=>kind==='dir',isFile:()=>kind==='file',isSymbolicLink:()=>kind==='link',isBlockDevice:()=>kind==='block',...extra});
- for(const p of ['/usr','/usr/bin','/media','/media/veracrypt1','/media/veracrypt1/work'])files.set(p,stat());
+ for(const p of ['/usr','/usr/bin','/media','/media/veracrypt1','/media/veracrypt1/work','/dev','/dev/mapper'])files.set(p,stat());
  files.set('/usr/bin/veracrypt',stat('file',{mode:0o100755}));files.set('/dev/mapper/veracrypt1',stat('block',{rdev:64768}));
  files.set('/media/veracrypt1/work/report.txt',stat('file',{ino:2}));
  const children=new Map([['/media/veracrypt1/work',['report.txt']]]);
- const fs={lstat:async p=>{if(!files.has(p))throw Error('fixture missing');return files.get(p);},stat:async p=>{if(!files.has(p))throw Error('fixture missing');return files.get(p);},realpath:async p=>p,readFile:async p=>{assert.equal(p,'/proc/self/mountinfo');return mountText;},readdir:async p=>children.get(p)||[]};
+ const fs={lstat:async p=>{if(!files.has(p))throw Object.assign(Error('fixture missing'),{code:'ENOENT'});return files.get(p);},stat:async p=>{if(!files.has(p))throw Error('fixture missing');return files.get(p);},realpath:async p=>p,readFile:async p=>{assert.equal(p,'/proc/self/mountinfo');return mountText;},readdir:async p=>children.get(p)||[]};
  const execute=async(exe,args,opts)=>{calls.push({exe,args,opts});return {stdout:output};};
  const env={files,children,fs,stat,setMount:s=>mountText=s};if(change)change(env);
  const source=createMountedWorkspaceSource({selection,veracryptPath:'/usr/bin/veracrypt',protectedPaths,platform,fs,execute,uid:1000,now:()=>1234});
@@ -19,6 +19,16 @@ function fixture({platform='linux',change,output='1: /volumes/data.hc /dev/mappe
 test('mocked adapter uses only fixed read-only list and mount metadata',async()=>{
  const {source,calls}=fixture();const out=await source.inspect();assert.equal(out.state,'verified_mounted_scope');assert.equal(out.arbitrarySecretAbsenceVerified,false);assert.ok(!JSON.stringify(out).includes('/media'));
  assert.equal(calls[0].exe,'/usr/bin/veracrypt');assert.deepEqual(calls[0].args,['--text','--non-interactive','--list']);assert.equal(calls[0].opts.shell,false);assert.deepEqual(Object.keys(calls[0].opts.env).sort(),['LANG','LC_ALL','PATH']);
+});
+test('recovery confirms absence of both the saved mapper and the mount',async()=>{
+ const f=fixture(),device='/dev/mapper/veracrypt1';
+ assert.equal(await f.source.confirmUnmounted(device),false);
+ f.files.delete(device);
+ assert.equal(await f.source.confirmUnmounted(device),false);
+ f.setMount('1 0 8:1 / / rw - ext4 /dev/sda1 rw\n');
+ assert.equal(await f.source.confirmUnmounted(device),true);
+ await assert.rejects(f.source.confirmUnmounted('/dev/sda1'));
+ assert.deepEqual(f.calls,[]);
 });
 test('unsupported platform and topology do not invoke CLI',async()=>{
  const f=fixture({platform:'win32'});assert.equal((await f.source.inspect()).state,'unavailable');assert.equal(f.calls.length,0);

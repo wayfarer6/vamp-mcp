@@ -8,6 +8,7 @@ const {promisify}=require('node:util');
 const path=require('node:path').posix;
 const {createHash}=require('node:crypto');
 const BAD_NAME=/(?:\.(?:kdbx?|keyx?|pem|p12|pfx|crt|cer)|^id_(?:rsa|dsa|ecdsa|ed25519)(?:\.pub)?|^\.env(?:\..*)?|^credentials(?:\..*)?|^master[-_]?key(?:\..*)?)$/i;
+const MAPPER=/^\/dev\/mapper\/veracrypt[1-9][0-9]*$/;
 const digest=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const inside=(child,parent)=>child===parent||child.startsWith(parent+'/');
 function canonical(p){return typeof p==='string'&&p.startsWith('/')&&p!=='/'&&!/[\x00-\x20\x7f\\,:]/.test(p)&&path.normalize(p)===p&&!p.endsWith('/');}
@@ -52,7 +53,7 @@ function createMountedWorkspaceSource({selection,veracryptPath,protectedPaths,pl
    const m=/^\s*([1-9][0-9]*):\s+(\S+)\s+(\S+)\s+(\S+)\s*$/.exec(line);if(!m)fail();return {slot:m[1],volume:m[2],device:m[3],mount:m[4]};
   });
   const matches=rows.filter(r=>r.volume===chosen.volumePath&&r.mount===chosen.mountPoint);
-  if(matches.length!==1||!/^\/dev\/mapper\/veracrypt[1-9][0-9]*$/.test(matches[0].device))fail();
+  if(matches.length!==1||!MAPPER.test(matches[0].device))fail();
   const mounts=mountRows(await fs.readFile('/proc/self/mountinfo','utf8'));
   const entries=mounts.filter(m=>m.mount===chosen.mountPoint);
   if(entries.length!==1)fail();const mount=entries[0];
@@ -84,7 +85,7 @@ function createMountedWorkspaceSource({selection,veracryptPath,protectedPaths,pl
   const mountId=digest([mount.id,mount.device,mount.root,mount.source,chosen.mountPoint]);
   const scopeId=digest([mountId,chosen.directory,String(final.ino)]);
   return Object.freeze({topology:'linux-local',workloadId:chosen.workloadId,observedAt:now(),mountId,scopeId,
-   directory:chosen.directory,mountPoint:chosen.mountPoint,access:'rw',mounted:true,metadataPolicy:'passed',
+   directory:chosen.directory,mountPoint:chosen.mountPoint,devicePath:matches[0].device,access:'rw',mounted:true,metadataPolicy:'passed',
    arbitrarySecretAbsenceVerified:false,entriesChecked:count});
  }
  async function inspect(){try{const s=await observe();return {state:'verified_mounted_scope',mountId:s.mountId,scopeId:s.scopeId,observedAt:s.observedAt,metadataPolicy:s.metadataPolicy,arbitrarySecretAbsenceVerified:false};}
@@ -106,6 +107,14 @@ function createMountedWorkspaceSource({selection,veracryptPath,protectedPaths,pl
   const mounts=mountRows(await fs.readFile('/proc/self/mountinfo','utf8'));
   return !mounts.some(m=>m.mount===fresh.mountPoint||inside(m.mount,fresh.mountPoint));
  }
- return Object.freeze({inspect,readForAttachment,dismount});
+ async function confirmUnmounted(devicePath){
+  if(platform!=='linux'||!canonical(chosen?.mountPoint)||!MAPPER.test(devicePath))fail();
+  await plainDirectory('/dev/mapper');
+  try{await fs.lstat(devicePath);return false;}
+  catch(error){if(error.code!=='ENOENT')throw error;}
+  const mounts=mountRows(await fs.readFile('/proc/self/mountinfo','utf8'));
+  return !mounts.some(m=>m.source===devicePath||inside(m.mount,chosen.mountPoint));
+ }
+ return Object.freeze({inspect,readForAttachment,dismount,confirmUnmounted});
 }
 module.exports={createMountedWorkspaceSource};
