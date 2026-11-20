@@ -123,11 +123,11 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
           await scan(m,id);
           const fresh=await context(snapshot);
           if(fresh.raw!==ctx.raw)throw Error('Workspace approval configuration changed');
+          await state(snapshot.uid,'save',{id,mount:mountKey(snapshot,ctx,m)});
           await command(['start','--',id]);
           const started=await inspect(id);
           if(started.State?.Running!==true||!verifiedMount(started,m,ctx.config.imageId))throw Error('Workspace container start not verified');
           await revalidate();
-          await state(snapshot.uid,'save',{id,mount:mountKey(snapshot,ctx,m)});
           return {status:'attached',id,destination:DEST,access:'rw',network:'none',actual_read_write_verified:false};
         }catch{
           // Preserve evidence on uncertain failures; no automatic rm/stop of

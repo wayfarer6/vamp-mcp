@@ -6,13 +6,18 @@ const cid='c'.repeat(64),imageId='a'.repeat(64),binding='b'.repeat(64);
 function fixture({release,platform='linux',override,now}={}){
   const calls=[],m={mountId:'m',scopeId:'s',directory:'/mnt/work/approved'},config={imageId,workloadId:'fixture'};
   const configFixture={raw:'private-config',config};
-  let exists=false,running=false;
+  let exists=false,running=false,saved=null;
   const host={ReadonlyRootfs:true,Privileged:false,AutoRemove:true,NetworkMode:'none',CapAdd:[],CapDrop:['ALL'],
     SecurityOpt:['no-new-privileges'],UsernsMode:'keep-id',IpcMode:'private',PidMode:'private',UTSMode:'private'};
   const v={Id:cid,Image:imageId,HostConfig:host,Config:{User:'1000:1000',Labels:{[LABEL]:'m.s'}},
     Mounts:[{Destination:'/workspace',Type:'bind',Source:m.directory,RW:true,Propagation:'private'}]};
   const rt=workspaceRuntime({platform,release:release||(()=> '6.16.0'),allowedImages:()=>[imageId],configPath:'/private/conf',now,
-    read:async()=>configFixture,reserve:async(_uid,f)=>f(),sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>{calls.push(['revalidate']);})})});
+    read:async()=>configFixture,reserve:async(_uid,f)=>f(),sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>{calls.push(['revalidate']);})}),
+    state:async(_uid,action,value)=>{
+      if(action==='save')saved=value;
+      if(action==='clear')saved=null;
+      return saved;
+    }});
   const snapshot={binding,local:true,uid:1000};
   const scan=async(_m,skip)=>{calls.push(['scan',skip]);};
   const command=async argv=>{
@@ -20,7 +25,7 @@ function fixture({release,platform='linux',override,now}={}){
     switch(argv[0]){
       case 'image': return JSON.stringify([{Id:'sha256:'+imageId,Config:{User:'1000:1000',Entrypoint:['/usr/bin/tini','--','/usr/bin/python3','-I','-B','/opt/vamp-desktop/desktop.py']}}]);
       case 'create': exists=true;return cid;
-      case 'start': running=true;return cid;
+      case 'start': assert.equal(saved?.id,cid);running=true;return cid;
       case 'rm': exists=false;return cid;
       default: throw Error('Unexpected command');
     }
