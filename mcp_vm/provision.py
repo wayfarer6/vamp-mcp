@@ -28,6 +28,8 @@ def create(controller, name, image_path='', iso_path='', seed_iso_path='', memor
     if seed and not seed.is_file():
         raise ValueError('Seed ISO must be a file')
     automated_debian = bool(iso_path and guest_os == 'debian' and not preseed_path)
+    if iso_path and guest_os == 'debian' and not shutil.which('cpio'):
+        raise ValueError('Install cpio on the KVM host before starting the Debian preseed installer.')
     packaged_preseed = None
     if automated_debian:
         from rpa_package import ROOT
