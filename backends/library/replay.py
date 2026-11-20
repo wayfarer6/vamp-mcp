@@ -200,11 +200,12 @@ class OutcomeScreenBlocked(ValueError):
 
 
 class ElevationHandoff(ValueError):
-    def __init__(self, completed, reason, phase, program_name=None):
+    def __init__(self, completed, reason, phase, program_name=None, observed_at=None):
         self.completed = completed
         self.reason = reason
         self.phase = phase
         self.program_name = program_name
+        self.observed_at = observed_at or datetime.now(timezone.utc).isoformat()
         super().__init__('Check the guest desktop before continuing.')
 
 
@@ -271,6 +272,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
         if blocked.reason != 'uac_prompt_detected' or not wait_seconds or driver.held:
             raise
         program_name = blocked.program_name
+        observed_at = blocked.observed_at
     try:
         async with asyncio.timeout(wait_seconds):
             while True:
@@ -283,7 +285,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
                     continue
                 break
     except TimeoutError as error:
-        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase, program_name) from error
+        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase, program_name, observed_at) from error
     if on_resume is not None:
         on_resume(completed, phase, program_name)
 
@@ -449,7 +451,7 @@ async def run(request, dialogue=False):
                                    uac_resume_text=resume_text, on_uac_resume=record_resume)
         except ElevationHandoff as error:
             from backends.virtualbox.history import record_elevation_handoff
-            observed_at=datetime.now(timezone.utc).isoformat()
+            observed_at=error.observed_at
             result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
                     'actions_completed':error.completed,'phase':error.phase,
                     'program_identity':'unverified','replay_commit':metadata['replay_commit'],

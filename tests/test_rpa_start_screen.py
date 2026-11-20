@@ -1,6 +1,7 @@
 import unittest
 import json
 import os
+from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -145,11 +146,15 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
     async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
         driver = FixtureDriver()
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
-        with patch('backends.library.replay.inspect_elevation_screen', return_value=True):
+        prompt_time = datetime(2026, 11, 20, 10, tzinfo=timezone.utc)
+        with patch('backends.library.replay.inspect_elevation_screen', return_value=True), \
+             patch('backends.library.replay.datetime') as clock:
+            clock.now.side_effect = [prompt_time]
             with self.assertRaises(ElevationHandoff) as blocked:
                 await replay(driver, actions, [1920, 1080], pause_on_uac=True,
                              uac_wait_seconds=0.02, uac_resume_text='Installed')
         self.assertEqual(blocked.exception.reason, 'uac_resume_not_verified')
+        self.assertEqual(blocked.exception.observed_at, prompt_time.isoformat())
         self.assertEqual(driver.events, [])
         self.assertTrue(driver.closed)
 
