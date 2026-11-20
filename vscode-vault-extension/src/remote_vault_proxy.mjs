@@ -15,6 +15,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { BridgeClient, BridgeUnavailable } from './bridge_client.mjs';
+import { exportFromRemoteVault } from './encrypted_export.mjs';
 import {
   normalizeRemoteVaultConfig,
   RemoteVaultClient,
@@ -229,20 +230,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request, {signal}) => {
   const args = { ...(request.params?.arguments ?? {}) };
   try {
     if (tool === exportTool.name) {
-      const { kind, destination_folder: destinationFolder, confirm = false } = args;
-      if (Object.keys(args).some(key => !Object.hasOwn(exportTool.inputSchema.properties, key)) ||
-          !['kdbx', 'volume'].includes(kind) || typeof destinationFolder !== 'string' ||
-          destinationFolder.length === 0 || destinationFolder.length > 4096 || typeof confirm !== 'boolean') {
-        throw new Error('Choose an encrypted file and an existing absolute local destination folder.');
-      }
-      const selection = { kind, destinationFolder, signal };
-      const preview = await client.exportEncrypted(selection);
-      if (!confirm) return textResult(preview);
-      const detail = `Copy ${remoteVaultTarget(config)}:${preview.source_path} to ${preview.destination_path}.`;
-      const approval = await approve({ tool, entry: preview.destination_path, detail, always: true });
-      if (approval.unreachable) throw new Error('Open the remote Vault in VS Code to approve this export.');
-      if (!approval.approved) return textResult({ status: 'denied' });
-      return textResult(await client.exportEncrypted({ ...selection, confirmed: true, expectedDestinationPath: preview.destination_path }));
+      return textResult(await exportFromRemoteVault({
+        client, approve, tool: exportTool, args, signal, target: remoteVaultTarget(config),
+      }));
     }
     if (tool === 'vault_deliver_credential') {
       const selected = args.reference === undefined ? args : parseVaultPlaceholder(args.reference);

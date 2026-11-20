@@ -6,6 +6,7 @@ import path from 'node:path';
 import { PassThrough } from 'node:stream';
 import { test } from 'node:test';
 import { RemoteVaultClient } from '../src/remote_vault_client.mjs';
+import { exportFromRemoteVault } from '../src/encrypted_export.mjs';
 
 test('remote encrypted export previews locally and streams exact bytes through trusted SSH', async () => {
   const folder = await mkdtemp(path.join(os.tmpdir(), 'vault-ssh-export-'));
@@ -45,12 +46,39 @@ test('remote encrypted export previews locally and streams exact bytes through t
     await assert.rejects(client.exportEncrypted({ ...options, confirmed: true,
       expectedDestinationPath: path.join(folder, 'another.hc') }), /changed/i);
     assert.equal(spawned, 0);
-    const result = await client.exportEncrypted({ ...options, confirmed: true, expectedDestinationPath: preview.destination_path });
+    const tool = { name: 'vault_export_encrypted', inputSchema: {
+      properties: { kind: {}, destination_folder: {}, confirm: {} },
+    } };
+    const args = { kind: 'volume', destination_folder: folder };
+    let approved = false;
+    let approvals = 0;
+    const approve = async request => {
+      approvals++;
+      assert.equal(request.entry, preview.destination_path);
+      assert.equal(request.always, true);
+      assert.match(request.detail, /vault@vm\.test/);
+      return { approved };
+    };
+    const route = (overrides, signal) => exportFromRemoteVault({
+      client, approve, tool, args: { ...args, ...overrides }, signal, target: 'vault@vm.test',
+    });
+    assert.equal((await route({})).status, 'approval_required');
+    assert.equal(approvals, 0);
+    assert.equal((await route({ confirm: true })).status, 'denied');
+    assert.equal(spawned, 0);
+    await assert.rejects(route({ source_path: '/unexpected' }), /configured|encrypted file/);
+    approved = true;
+    const abort = new AbortController();
+    abort.abort();
+    await assert.rejects(route({ confirm: true }, abort.signal), { name: 'AbortError' });
+    assert.equal(spawned, 0);
+    const result = await route({ confirm: true });
     assert.equal(result.status, 'exported');
     assert.equal(result.bytes, fixture.length);
     assert.deepEqual(await readFile(result.destination_path), fixture);
     await assert.rejects(client.exportEncrypted({ ...options, confirmed: true }), /already exists/i);
     assert.equal(spawned, 1);
+    assert.equal(approvals, 2);
     assert.deepEqual(await readdir(folder), ['backup.hc']);
   } finally { await rm(folder, { recursive: true, force: true }); }
 });

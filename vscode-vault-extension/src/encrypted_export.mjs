@@ -8,6 +8,25 @@ import { pipeline } from 'node:stream/promises';
 const KDBX_MAGIC = Buffer.from('03d9a29a67fb4bb5', 'hex');
 const UNSUPPORTED_LINK = new Set(['ENOSYS', 'ENOTSUP', 'EOPNOTSUPP', 'EXDEV', 'EPERM']);
 
+export async function exportFromRemoteVault({ client, approve, tool, args, signal, target }) {
+  const { kind, destination_folder: destinationFolder, confirm = false } = args;
+  if (Object.keys(args).some(key => !Object.hasOwn(tool.inputSchema.properties, key)) ||
+      !['kdbx', 'volume'].includes(kind) || typeof destinationFolder !== 'string' ||
+      destinationFolder.length === 0 || destinationFolder.length > 4096 || typeof confirm !== 'boolean') {
+    throw new Error('Choose an encrypted file and an existing absolute local destination folder.');
+  }
+  signal?.throwIfAborted();
+  const selection = { kind, destinationFolder, signal };
+  const preview = await client.exportEncrypted(selection);
+  if (!confirm) return preview;
+  const detail = `Copy ${target}:${preview.source_path} to ${preview.destination_path}.`;
+  const approval = await approve({ tool: tool.name, entry: preview.destination_path, detail, always: true });
+  if (approval.unreachable) throw new Error('Open the remote Vault in VS Code to approve this export.');
+  if (!approval.approved) return { status: 'denied' };
+  signal?.throwIfAborted();
+  return client.exportEncrypted({ ...selection, confirmed: true, expectedDestinationPath: preview.destination_path });
+}
+
 function validPath(value) {
   return typeof value === 'string' && value.length > 0 && !/[\x00-\x1f\x7f]/.test(value);
 }
