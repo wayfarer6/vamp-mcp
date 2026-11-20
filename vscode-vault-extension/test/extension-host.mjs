@@ -447,6 +447,12 @@ if (!keepassCli) {
     const folder = path.join(workdir, 'exported');
     await mkdir(folder);
     const target = path.join(folder, path.basename(kdbx));
+    answers.quickPick.push(items => items.find(item => item.kind === 'kdbx' && !item.remote));
+    answers.open.push(undefined);
+    const messageCount = messages.length;
+    await commandHandlers.get('vampVault.exportKdbx')();
+    assert.equal(messages.length, messageCount);
+    await assert.rejects(readFile(target), { code: 'ENOENT' });
     const choose = () => {
       answers.quickPick.push(items => items.find(item => item.kind === 'kdbx' && !item.remote));
       answers.open.push(options => {
