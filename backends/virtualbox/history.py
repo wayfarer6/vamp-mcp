@@ -49,9 +49,10 @@ def record_event_run(vm, status, kind, payload, observed_at):
     return run_id
 
 
-def record_elevation_handoff(vm, rpa_id, reason, actions_completed, observed_at):
+def record_elevation_handoff(vm, rpa_id, reason, actions_completed, observed_at, phase):
     payload = {'rpa_id': rpa_id, 'reason': reason, 'actions_completed': actions_completed,
-               'policy': 'operator_confirmation_required'}
+               'policy': 'operator_confirmation_required', 'phase': phase,
+               'program_identity': 'unverified'}
     return record_event_run(vm, 'operator_handoff', 'elevation_handoff', payload, observed_at)
 
 def row(run_id):

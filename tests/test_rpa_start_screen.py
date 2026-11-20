@@ -64,6 +64,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True})
             record = detail(result['run_id'])
         self.assertEqual(result['status'], 'operator_handoff')
+        self.assertEqual(result['phase'], 'before_action')
+        self.assertEqual(result['program_identity'], 'unverified')
         self.assertEqual(driver.events, [])
         self.assertEqual(record['vm'], 'fixture-vm')
         self.assertEqual(record['evidence_status'], 'event_only')
@@ -73,8 +75,21 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(event['created_at'], result['at'])
         self.assertEqual(json.loads(event['payload_json']), {
             'rpa_id': 'fixture-rpa', 'reason': 'uac_prompt_detected', 'actions_completed': 0,
-            'policy': 'operator_confirmation_required',
+            'policy': 'operator_confirmation_required', 'phase': 'before_action',
+            'program_identity': 'unverified',
         })
+
+    async def test_virtualbox_uac_after_final_action_precedes_outcome_ocr(self):
+        driver = FixtureDriver()
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        with patch('backends.library.replay.inspect_elevation_screen', side_effect=[False, True]), \
+             patch('backends.library.replay.verify_outcome_screen') as verify:
+            with self.assertRaises(ElevationHandoff) as blocked:
+                await replay(driver, actions, [1920, 1080], pause_on_uac=True, outcome_text='Ready')
+        self.assertEqual(blocked.exception.phase, 'after_last_action')
+        self.assertEqual(blocked.exception.completed, 1)
+        self.assertTrue(driver.closed)
+        verify.assert_not_called()
 
     async def test_uncertain_uac_ocr_stops_before_guest_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]

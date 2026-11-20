@@ -178,9 +178,10 @@ class OutcomeScreenBlocked(ValueError):
 
 
 class ElevationHandoff(ValueError):
-    def __init__(self, completed, reason):
+    def __init__(self, completed, reason, phase):
         self.completed = completed
         self.reason = reason
+        self.phase = phase
         super().__init__('Check the guest desktop before continuing.')
 
 
@@ -198,7 +199,7 @@ def inspect_elevation_screen(path):
     return False
 
 
-async def require_clear_elevation_screen(driver, resolution, completed):
+async def require_clear_elevation_screen(driver, resolution, completed, phase):
     try:
         if driver.geometry() != resolution:
             raise ValueError('Guest resolution changed.')
@@ -207,9 +208,9 @@ async def require_clear_elevation_screen(driver, resolution, completed):
             await driver.capture(screenshot, resolution)
             detected = await asyncio.to_thread(inspect_elevation_screen, screenshot)
     except Exception as error:
-        raise ElevationHandoff(completed, 'screen_unverified') from error
+        raise ElevationHandoff(completed, 'screen_unverified', phase) from error
     if detected:
-        raise ElevationHandoff(completed, 'uac_prompt_detected')
+        raise ElevationHandoff(completed, 'uac_prompt_detected', phase)
 
 
 async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
@@ -283,7 +284,7 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                                            expected_occurrences=0, observed_occurrences=existing)
         for a in actions:
             if pause_on_uac:
-                await require_clear_elevation_screen(driver, resolution, completed)
+                await require_clear_elevation_screen(driver, resolution, completed, 'before_action')
             op=a['op']
             if op=='wait':await asyncio.sleep(a['seconds'])
             elif op=='key_down':driver.down(a['key'])
@@ -315,10 +316,10 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                 driver.scroll(a['clicks'])
             else:raise ValueError('Unsupported replay operation: '+op)
             await driver.drain();completed+=1;await asyncio.sleep(.01)
+        if pause_on_uac:
+            await require_clear_elevation_screen(driver, resolution, completed, 'after_last_action')
         if outcome_text is not None:
             await verify_outcome_screen(driver, resolution, outcome_text, forbidden_modal)
-        if pause_on_uac:
-            await require_clear_elevation_screen(driver, resolution, completed)
     except VaultDeliveryDenied as error:
         error.completed = completed
         raise
@@ -348,10 +349,11 @@ async def run(request, dialogue=False):
             from backends.virtualbox.history import record_elevation_handoff
             observed_at=datetime.now(timezone.utc).isoformat()
             result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
-                    'actions_completed':error.completed,'at':observed_at,'message':str(error)}
+                    'actions_completed':error.completed,'phase':error.phase,
+                    'program_identity':'unverified','at':observed_at,'message':str(error)}
             try:
                 result['run_id']=record_elevation_handoff(request['vm_id'],metadata['id'],error.reason,
-                                                          error.completed,observed_at)
+                                                          error.completed,observed_at,error.phase)
             except (OSError, sqlite3.Error):
                 result['history_status']='unavailable'
             return result
