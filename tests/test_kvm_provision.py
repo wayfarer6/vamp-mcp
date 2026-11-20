@@ -27,6 +27,13 @@ class ProvisionTests(unittest.TestCase):
             self.assertFalse((root / 'vms').exists())
             self.assertEqual(c.commands, [])
             with patch('mcp_vm.provision.shutil.which', return_value='/usr/bin/cpio'):
+                c.config['libvirt_uri']='qemu:///system'
+                with patch.object(c, 'virsh', side_effect=lambda *args: 'Active: no' if args[0]=='net-info' else ''):
+                    with self.assertRaisesRegex(ValueError, 'virsh net-start default'):
+                        create(c,'auto-debian',iso_path=str(source),memory_mb=2048,cpus=2,disk_gb=20,guest_os='debian')
+                self.assertFalse((root / 'vms').exists())
+                self.assertEqual(c.commands, [])
+                c.config['libvirt_uri']='qemu:///session'
                 result=create(c,'auto-debian',iso_path=str(source),memory_mb=2048,cpus=2,disk_gb=20,guest_os='debian')
             install=next(command for command in c.commands if command[0]=='virt-install')
             location=install[install.index('--location')+1]

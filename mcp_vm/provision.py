@@ -38,6 +38,14 @@ def create(controller, name, image_path='', iso_path='', seed_iso_path='', memor
         if not packaged_preseed.is_file():
             raise ValueError('Packaged Debian preseed file is missing')
         preseed_path = str(packaged_preseed)
+    uri = controller.config.get('libvirt_uri', 'qemu:///system')
+    if not uri.endswith('/session'):
+        try:
+            network = controller.virsh('net-info', 'default')
+        except RuntimeError as error:
+            raise ValueError('Configure the default libvirt network before creating a system KVM guest.') from error
+        if not re.search(r'^Active:[ \t]+yes[ \t]*$', network, re.MULTILINE):
+            raise ValueError('Start the default libvirt network with virsh net-start default before creating a system KVM guest.')
     directory = controller.jobs_root.parent / 'vms' / name
     directory.mkdir(parents=True, exist_ok=False)
     if automated_debian:
@@ -71,7 +79,6 @@ def create(controller, name, image_path='', iso_path='', seed_iso_path='', memor
     result = controller.command(args)
     if result.returncode:
         raise RuntimeError(result.stderr[:300])
-    uri = controller.config.get('libvirt_uri', 'qemu:///system')
     args = ['virt-install', '--connect', uri, '--name', name, '--virt-type', 'kvm',
             '--memory', str(memory_mb), '--vcpus', f'{cpus},sockets=1,cores={cpus},threads=1', '--cpu', 'host-passthrough',
             '--disk', f'path={disk},format=qcow2,bus={"sata" if guest_os == "windows11" else "virtio"}', '--osinfo', 'win11' if guest_os == 'windows11' else 'debian13',

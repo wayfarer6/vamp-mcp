@@ -17,7 +17,7 @@ Open the **VAMP bat icon** in VS Code’s activity bar. The sidebar contains **R
 | Platform | Host prerequisites | VM display in VS Code | Installation |
 | --- | --- | --- | --- |
 | VirtualBox | VirtualBox 7.x and Python 3.11+. Debian/Ubuntu may also need `python3-venv`. | View-only native PNG screenshots refreshed about once per second. | Supported ISOs install unattended. Unsupported detection/unattended media open a manual installer. |
-| KVM / QEMU | Linux, KVM/libvirt, `virsh`, `virt-install`, `qemu-img`, and permission to use `/dev/kvm`/libvirt. The Debian preseed installer also needs `cpio`. | View-only live localhost VNC stream. | VAMP creates the VM and attaches the ISO. For manual installation, complete the installer in the guest. |
+| KVM / QEMU | Linux, KVM/libvirt, `virsh`, `virt-install`, `qemu-img`, and permission to use `/dev/kvm`/libvirt. The Debian preseed installer also needs `cpio`. For `qemu:///system`, check that the `default` libvirt network is active. | View-only live localhost VNC stream. | VAMP creates the VM and attaches the ISO. For manual installation, complete the installer in the guest. |
 | Hyper-V | Windows with Hyper-V enabled and permission to manage Hyper-V. | **Embedded display unsupported.** Use Windows VMConnect. | VAMP creates a Generation 2 VM and attaches the ISO. Complete installation in VMConnect. |
 
 For KVM, **My desktops** uses `qemu:///session`; **System desktops** uses `qemu:///system`. Choose the connection where your existing VMs are registered. The system connection needs libvirt permissions.
@@ -185,7 +185,7 @@ VS Code 활동 표시줄의 **VAMP 박쥐 아이콘**을 누릅니다. **RPA Lib
 | 선택 | 호스트 준비 | 편집기 안의 VM 화면 | OS 설치 |
 | --- | --- | --- | --- |
 | VirtualBox | VirtualBox 7.x, Python 3.11+. Debian/Ubuntu는 `python3-venv`도 필요할 수 있습니다. | 실제 게스트 PNG를 약 1초 간격으로 갱신하는 보기 전용 화면 | 지원 ISO는 자동 설치. 감지/무인 설치 미지원 ISO는 수동 설치로 전환합니다. |
-| KVM / QEMU | Linux, KVM/libvirt, `virsh`, `virt-install`, `qemu-img`, `/dev/kvm` 접근 권한. Debian preseed 설치에는 `cpio`도 필요합니다. | localhost VNC 실시간 보기 전용 화면 | VM을 만들고 ISO를 연결합니다. 수동 설치 경로에서는 게스트의 설치 프로그램을 진행하세요. |
+| KVM / QEMU | Linux, KVM/libvirt, `virsh`, `virt-install`, `qemu-img`, `/dev/kvm` 접근 권한. Debian preseed 설치에는 `cpio`도 필요합니다. `qemu:///system`에서는 libvirt의 `default` 네트워크가 활성 상태인지 확인하세요. | localhost VNC 실시간 보기 전용 화면 | VM을 만들고 ISO를 연결합니다. 수동 설치 경로에서는 게스트의 설치 프로그램을 진행하세요. |
 | Hyper-V | Hyper-V가 켜진 Windows, Hyper-V 모듈·관리 권한 | **미지원**. Windows의 VMConnect를 사용합니다. | ISO를 연결한 Generation 2 VM을 시작합니다. OS 설치는 사용자가 진행합니다. |
 
 KVM의 **My desktops**는 `qemu:///session`, **System desktops**는 `qemu:///system`입니다. 기존 VM이 안 보이면 실제 VM이 등록된 연결을 고릅니다. 시스템 연결은 libvirt 권한이 필요합니다.
