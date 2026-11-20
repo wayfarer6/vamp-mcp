@@ -239,7 +239,8 @@ async def verify_outcome_screen(driver, resolution, expected):
         raise OutcomeScreenBlocked('Expected outcome text must appear exactly once after replay.')
 
 
-async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,pause_on_uac=False):
+async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
+                 require_new_outcome=False,pause_on_uac=False):
     completed=0
     try:
         actual = driver.geometry()
@@ -248,6 +249,15 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
             await verify_start(driver, resolution, start_text)
             if driver.geometry() != resolution:
                 raise ValueError('Guest resolution changed during starting-screen verification. Replay stopped.')
+        if require_new_outcome:
+            try:
+                existing = await screen_match_count(driver, resolution, outcome_text)
+                if driver.geometry() != resolution:
+                    raise ValueError('Guest resolution changed during baseline verification.')
+            except Exception as exc:
+                raise OutcomeScreenBlocked('The scratch outcome baseline could not be verified.') from exc
+            if existing:
+                raise OutcomeScreenBlocked('The expected outcome text is already present before scratch replay.')
         for a in actions:
             if pause_on_uac:
                 await require_clear_elevation_screen(driver, resolution, completed)

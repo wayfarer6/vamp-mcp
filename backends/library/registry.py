@@ -71,6 +71,7 @@ def test_revision(request):
         return await asyncio.wait_for(replay(
             VBox(vm), actions, [width, height],
             start_text=request.get('start_text') or None, outcome_text=outcome.strip(),
+            require_new_outcome=artifact is not None,
         ), timeout=600)
     completed = asyncio.run(run())
     if artifact:

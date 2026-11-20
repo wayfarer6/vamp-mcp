@@ -116,6 +116,22 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                             await replay(driver, actions, [1920, 1080], outcome_text='Export complete')
                 self.assertTrue(driver.closed)
 
+    async def test_scratch_promotion_requires_new_outcome_text(self):
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        for before, accepted in [('Export complete', False), ('Ready', True)]:
+            with self.subTest(before=before):
+                driver = FixtureDriver()
+                readings = [[{'text': text, 'confidence': 0.95}] for text in (before, 'Export complete')]
+                with patch('backends.library.replay.recognize_start_screen', side_effect=readings):
+                    options = {'outcome_text': 'Export complete', 'require_new_outcome': True}
+                    if accepted:
+                        self.assertEqual(await replay(driver, actions, [1920, 1080], **options), 1)
+                    else:
+                        with self.assertRaisesRegex(OutcomeScreenBlocked, 'already present'):
+                            await replay(driver, actions, [1920, 1080], **options)
+                self.assertEqual(driver.events, ['move', 'left'] if accepted else [])
+                self.assertTrue(driver.closed)
+
     async def check_capture_before_input(self, backend):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         png = b'fixture-png'

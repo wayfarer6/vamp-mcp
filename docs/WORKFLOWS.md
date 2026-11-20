@@ -55,6 +55,8 @@ sequenceDiagram
 
 결과 파일까지 검증해 반영하려면 같은 입력으로 `test-and-commit`을 사용합니다. Guest Additions가 설치된 테스트 게스트에 초기 결과 파일을 두고, 호스트에서 다음 값을 설정합니다.
 
+테스트 화면을 초기화해 `outcome_text`가 실행 전에는 없고 실행 후에 한 번만 나타나도록 준비합니다. 성공 문구가 이미 보이면 게스트 입력 전에 검증을 중단합니다.
+
 - `VAMP_REPAIR_ARTIFACT`에 게스트 안의 결과 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_GUEST_USER`에 테스트 계정을, `VAMP_REPAIR_GUEST_PASSWORD_FILE`에 그 계정의 호스트 비밀번호 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_ARTIFACT_BASELINE_SHA256`에는 초기 파일, `VAMP_REPAIR_ARTIFACT_SHA256`에는 완료 후 기대 파일의 SHA-256을 지정합니다.
