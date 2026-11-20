@@ -37,7 +37,7 @@ VirtualBox setup demos are available as QHD MP4s.
 - [Podman · Debian / VirtualBox setup video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD.mp4)
 - [Robot Framework sources and QA results](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-v0.3.10-demo-source-and-qa.zip)
 - [Record in VirtualBox and add the Python script to the VS Code RPA Library](docs/USER_GUIDE.md#2-make-a-vm-recording-appear-in-the-library)
-- [Generate a standalone Robot Framework package for a SPICE or VNC guest](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환) using the [Windows Notepad sample recording](examples/notepad_recording.py).
+- [Generate a standalone Robot Framework package for a VirtualBox, SPICE, or VNC guest](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환) using the [Windows Notepad sample recording](examples/notepad_recording.py).
 - [Standalone Demo ERP for replay and repair](https://github.com/wayfarer6/vamp-demo-erp)
 - [ERP run results and comparison method](docs/ROADMAP.md#observed-erp-run)
 

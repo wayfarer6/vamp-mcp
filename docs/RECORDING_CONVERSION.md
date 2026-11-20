@@ -73,6 +73,15 @@ rpas/windows_notepad_recorded/
 
 ### 먼저 확인하고 재생하기
 
+VirtualBox에서는 VAMP 호스트 Python에 VirtualBox SDK를 설치하고, 1920×1080으로 실행 중인 테스트 VM의 UUID를 지정합니다. 변환 결과를 검토한 뒤 저장소 루트에서 실행하세요.
+
+```powershell
+$vmUuid = '01234567-89ab-cdef-0123-456789abcdef'
+python scripts/run_rpa.py windows_notepad_recorded --var ALLOW_REPLAY:True --var "VIRTUALBOX_VM:$vmUuid" --var EXPECTED_TEXT:Notepad
+```
+
+예제 UUID를 실제 값으로 바꾸세요. Robot은 호스트 OCR로 `Notepad`가 한 번 표시되는지 확인합니다. `VIRTUALBOX_VM`을 지정하지 않으면 아래의 SPICE 또는 VNC 경로를 사용합니다.
+
 ```bash
 .venv/bin/python scripts/run_rpa.py windows_notepad_recorded --dryrun
 # 기본 실행: needs_review + SKIP, VM에 연결하지 않음

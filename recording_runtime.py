@@ -1,7 +1,10 @@
-"""Python-only coordinates and SPICE replay for generated Robot packages."""
+"""Guest replay for generated Robot packages."""
+import asyncio
 import json
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from uuid import UUID
 from robot.api.deco import keyword,library
 from robot.libraries.BuiltIn import BuiltIn
 from recording_converter import key_name,number
@@ -73,7 +76,31 @@ class RecordedWorkflow:
     def review_result(self):
         return {'status':'needs_review','recording':str(self.package/'recording.local.json'),
                 'action_count':len(self.data['actions']),'guest_os':self.data['guest_os'],
-                'message':'Review conversion, coordinates, launcher, credentials and target SPICE URI before ALLOW_REPLAY.'}
+                'message':'Review conversion, coordinates, launcher, credentials and guest target before ALLOW_REPLAY.'}
+
+    @keyword
+    def replay_virtualbox(self, vm_uuid, expected_text=''):
+        if not self.allowed:
+            raise AssertionError('Recorded replay was not enabled')
+        vm = str(UUID(vm_uuid))
+        from backends.library.replay import VBox, replay
+
+        actions = []
+        for action in self.data['actions']:
+            if action['op'] == 'write_env':
+                value = os.environ.get(action['env'])
+                if value is None or not all(32 <= ord(char) <= 126 or char in '\n\t' for char in value):
+                    raise ValueError('Required private input is missing or contains unsupported characters')
+                action = {**action, 'op': 'write', 'text': value}
+            actions.append(action)
+        self.completed = asyncio.run(replay(VBox(vm), actions, self.data['resolution'],
+                                            outcome_text=expected_text or None))
+        result = {'status': 'succeeded' if expected_text else 'replayed_unverified',
+                'actions_replayed': self.completed, 'guest_os': self.data['guest_os'],
+                'resolution': self.data['resolution']}
+        if expected_text:
+            result['verification'] = 'ocr_only'
+        return result
 
     @keyword
     def check_guest_geometry(self):
@@ -123,7 +150,6 @@ class RecordedWorkflow:
         elif op=='key_up':self._up(action['key'])
         elif op in ('write','write_env'):
             if op=='write_env':
-                import os
                 value=os.environ.get(action['env'])
                 if value is None:raise ValueError('Required private input environment variable is missing')
             else:value=action['text']

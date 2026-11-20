@@ -196,22 +196,25 @@ class Workflow(RecordedWorkflow):
       'Suite Setup       Contract.Begin Result    ${RPA_ID}',
       'Suite Teardown    Stop RPA','Task Teardown     End Recorded Task','',
       '*** Variables ***',f'${{RPA_ID}}         {package_id}',
-      '${ALLOW_REPLAY}   ${FALSE}','${EXPECTED_TEXT}  ${EMPTY}','${LANGUAGES}      en','',
+      '${ALLOW_REPLAY}   ${FALSE}','${EXPECTED_TEXT}  ${EMPTY}','${LANGUAGES}      en',
+      '${VIRTUALBOX_VM}  ${EMPTY}','',
       '*** Tasks ***','Replay Reviewed Guest Recording',
       '    ${ready}=    Workflow.Load Recording    ${ALLOW_REPLAY}',
       '    IF    not $ready','    ${review}=    Workflow.Review Result',
       '        Contract.Publish Result    ${review}','        Skip    Review conversion.json and recording.local.json; set ALLOW_REPLAY only after review.',
-      '    END','    Spice.Connect Spice    ${SPICE_URI}','    Workflow.Check Guest Geometry']
+      '    END','    IF    $VIRTUALBOX_VM',
+      '        ${result}=    Workflow.Replay VirtualBox    ${VIRTUALBOX_VM}    ${EXPECTED_TEXT}',
+      '    ELSE','        Spice.Connect Spice    ${SPICE_URI}','        Workflow.Check Guest Geometry']
     lines[lines.index('    ${review}=    Workflow.Review Result')]='        ${review}=    Workflow.Review Result'
-    lines.extend(['    ${count}=    Workflow.Action Count',
-      '    FOR    ${index}    IN RANGE    ${count}',
-      '        Workflow.Replay Event    ${index}','    END'])
-    lines.extend(['    ${result}=    Workflow.Verify Replay    ${EXPECTED_TEXT}    ${LANGUAGES}',
+    lines.extend(['        ${count}=    Workflow.Action Count',
+      '        FOR    ${index}    IN RANGE    ${count}',
+      '            Workflow.Replay Event    ${index}','        END'])
+    lines.extend(['        ${result}=    Workflow.Verify Replay    ${EXPECTED_TEXT}    ${LANGUAGES}','    END',
       '    Contract.Publish Result    ${result}','    Pause For User Verification    ${result}',
       '    Should Not Be Equal    ${result}[status]    verification_failed','','*** Keywords ***','End Recorded Task',
       '    Run Keyword And Continue On Failure    Workflow.Release Recorded Inputs','    Finish RPA Task',''])
     (target/'run.robot').write_text('\n'.join(lines))
-    (target/'README.md').write_text(f'''# {package_id}\n\nGenerated from `{source_path.name}` without executing source code.\n\n- Guest: `{guest_os}`, {width}×{height}; source space: `{coordinate_space}`.\n- Review `conversion.json` and the private `recording.local.json` before replay.\n- `run.robot` controls the order; `workflow.py` and `recording_runtime.py` execute SPICE input.\n- Default run returns `needs_review` without connecting to the VM.\n- Explicit replay: `.venv/bin/python scripts/run_rpa.py {package_id} --var ALLOW_REPLAY:True --var SPICE_URI:<actual-guest-uri>`\n- No application success is claimed unless an expected OCR text is configured; otherwise result is `replayed_unverified`.\n- `recording.local.json` is excluded from Git because recorded keystrokes can contain credentials. Regenerate from a local source on a new checkout.\n- See [conversion guide](../../docs/RECORDING_CONVERSION.md) for refinement and credential replacement.\n''')
+    (target/'README.md').write_text(f'''# {package_id}\n\nGenerated from `{source_path.name}` without executing source code.\n\n- Guest: `{guest_os}`, {width}×{height}; source space: `{coordinate_space}`.\n- Review `conversion.json` and the private `recording.local.json` before replay.\n- `run.robot` controls the order; `workflow.py` and `recording_runtime.py` execute guest input.\n- Default run returns `needs_review` without connecting to the VM.\n- Explicit replay: `.venv/bin/python scripts/run_rpa.py {package_id} --var ALLOW_REPLAY:True --var SPICE_URI:<actual-guest-uri>`\n- For VirtualBox, pass `--var VIRTUALBOX_VM:<running-vm-uuid>` instead of `SPICE_URI` and use a host Python with the VirtualBox SDK.\n- No application success is claimed unless an expected OCR text is configured; otherwise result is `replayed_unverified`.\n- `recording.local.json` is excluded from Git because recorded keystrokes can contain credentials. Regenerate from a local source on a new checkout.\n- See [conversion guide](../../docs/RECORDING_CONVERSION.md) for refinement and credential replacement.\n''')
     return {'status':'generated_needs_review','rpa_id':package_id,'package_path':str(target.resolve()),
             'action_count':len(actions),'initial_win_r':starts_launcher,'report':str((target/'conversion.json').resolve())}
 

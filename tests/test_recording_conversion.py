@@ -96,6 +96,24 @@ class RuntimeTests(unittest.TestCase):
             workflow.spice.inputs.key_release.assert_any_call(19)
             self.assertEqual(workflow.held,{})
 
+    def test_virtualbox_requires_review_and_checks_geometry_before_input(self):
+        vm = '01234567-89ab-cdef-0123-456789abcdef'
+        with tempfile.TemporaryDirectory() as directory:
+            workflow = self.recording(directory)
+            workflow.load_recording()
+            with patch('backends.library.replay.VBox') as factory:
+                with self.assertRaises(AssertionError):
+                    workflow.replay_virtualbox(vm)
+                factory.assert_not_called()
+                workflow.load_recording(True)
+                driver = factory.return_value
+                driver.geometry.return_value = [1280, 720]
+                with self.assertRaisesRegex(ValueError, 'resolution'):
+                    workflow.replay_virtualbox(vm)
+                factory.assert_called_once_with(vm)
+                driver.down.assert_not_called()
+                driver.close.assert_called_once()
+
     def test_invalid_edited_data_is_rejected_before_replay(self):
         with tempfile.TemporaryDirectory() as directory:
             workflow=self.recording(directory)
