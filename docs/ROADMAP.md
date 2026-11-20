@@ -168,11 +168,17 @@ A repeat with CSV baseline verification took **248.54 seconds** in the same two-
 
 A fresh run against the standalone Podman container took **270.93 seconds** including preflight. This run waited for the exact filtered order before each click. The v1 CSV verified in 100.40 seconds, the layout change and stale replay stopped with zero inputs in 31.24 seconds, and the v2 CSV verified in 123.00 seconds. Both guest downloads matched by SHA-256. These are single-run timings. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/0cea8a8)
 
-| Comparable run | Median elapsed time | Provider vision tokens | Result after layout change |
+### Matched ERP comparison
+
+Each method ran three times per layout with Microsoft Edge in a 1920×1080 Windows 11 VirtualBox guest and a fresh state in the standalone Podman ERP. Timing begins after the fixture reset and browser preparation and ends at CSV verification or a terminal result. The VAMP rows use the installed v0.3.11 Library MCP. Its v1 runs executed 18 actions each. The fixed keyboard baseline uses the same task sequence with its own dispatch timing, and the CUA runs include screenshot inspection and tool calls within the same Codex session.
+
+| Method | v1 median and outcome | v2 median and outcome | Provider vision tokens |
 | --- | --- | --- | --- |
-| Screen-driven CUA | Pending | Pending | Pending |
-| Fixed recorded workflow | Pending | Pending | Pending |
-| VAMP saved replay | Pending | Pending | Pending |
+| Screen-driven CUA | 10.546 s, 3 verified | 13.591 s, 3 verified | Unavailable |
+| Fixed keyboard replay | 6.315 s, 3 verified | 6.322 s, 3 failed CSV verification | 0 |
+| VAMP saved replay | 19.554 s, 3 verified | 11.871 s, 3 blocked before input | 0 |
+
+The two v2 replay times measure different terminal outcomes. On v1 the fixed baseline finished fastest and VAMP performed a local OCR check before replay. The CUA trials used prior observations within the session. The archive includes the 18 observations, source CSVs, and MCP results. [Download benchmark evidence](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/vamp-erp-matched-benchmark.zip)
 
 ### Eight-stage showcase checklist
 

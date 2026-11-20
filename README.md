@@ -89,7 +89,7 @@ By decoupling **execution logic** from **visual reasoning**, VAMP avoids expensi
 | Saved replay after scratch verification and review | 54.44 s | 30 actions and a fresh CSV with the expected SHA-256 |
 | Robot Framework scenario across both layouts | 239.05 s | Two matching CSVs and zero inputs from the stale replay |
 
-These single-run measurements cover different portions of the workflow. The matched comparison of screen-driven CUA, a fixed recording, and VAMP saved replay still needs latency, provider vision token, and layout-change results under the same conditions. [Measurement scope and comparison procedure](docs/ROADMAP.md#observed-erp-run)
+In a separate matched comparison with three runs per method and layout, VAMP saved replay verified all three v1 CSVs and stopped all three v2 runs before sending input. Fixed keyboard replay produced three incorrect v2 CSVs, and screen-driven CUA verified all six CSVs across both layouts. [Median timings and evidence](docs/ROADMAP.md#matched-erp-comparison)
 
 ---
 
