@@ -8,9 +8,28 @@ usage() {
     echo "Usage: $0 replay <vamp-demo-erp checkout> <new report directory> [--dryrun]" >&2
     echo "       $0 package <guest recording.py> <package ID> <new report directory>" >&2
     echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm]" >&2
+    echo "       $0 verified-replay <request.json> <ERP checkout> <fresh CSV path> <new report directory> --confirm" >&2
     echo "       $0 repair <request.json> <new report directory> [--validate|--test|--commit]" >&2
     exit 2
 }
+
+if [[ ${1:-} == verified-replay ]]; then
+    [[ $# -eq 6 && $6 == --confirm ]] || usage
+    [[ -f $2 && -f $3/scenario.py ]] || { echo "Provide a request and the ERP checkout." >&2; exit 2; }
+    if [[ -e $4 || -L $4 || ! -d $(dirname -- "$4") ]]; then
+        echo "Choose an unused CSV path in the guest's shared download directory." >&2
+        exit 2
+    fi
+    mkdir -- "$5"
+    export VAMP_DEMO_PYTHON="$python"
+    node "$repo/scripts/demo_library.mjs" saved-replay "$2" --confirm | tee "$5/saved-replay.json"
+    if [[ ! -f $4 || -L $4 ]]; then
+        echo "The replay did not produce the expected CSV." >&2
+        exit 1
+    fi
+    "$python" "$3/scenario.py" verify-csv "$4" | tee "$5/csv-verification.json"
+    exit
+fi
 
 if [[ ${1:-} == saved-replay || ${1:-} == repair ]]; then
     [[ $# -eq 3 || $# -eq 4 ]] || usage

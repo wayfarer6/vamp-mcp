@@ -140,6 +140,14 @@ bash scripts/demo_e2e_showcase.sh saved-replay ./erp-request.json ./erp-saved-qa
 
 Use `--confirm` with a new report directory when the operator has authorized replay on that guest. The report records action count, status, and call duration. A `completed_unverified` result still requires the ERP CSV and screen checks.
 
+To verify the CSV in the same run, configure the test browser to download to a shared guest folder and point the launcher to its host path:
+
+```bash
+bash scripts/demo_e2e_showcase.sh verified-replay ./erp-request.json ../vamp-demo-erp ./shared/orders.csv ./erp-verified-qa --confirm
+```
+
+Use an isolated download folder and a clean ERP fixture. The launcher requires an unused CSV filename before it sends input. It then verifies the newly downloaded file against the three expected shipped orders and records `csv-verification.json` alongside the MCP replay result.
+
 For the repair stage, use the existing demo catalog and provide a local JSON request with `id`, `expected_commit`, and `source_file` (relative to the request file or absolute). Keep the candidate source local until it has been reviewed.
 
 ```bash
