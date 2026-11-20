@@ -1,9 +1,11 @@
 """Save a reviewed recorder definition in its own local Git repository."""
+from contextlib import contextmanager
 import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -48,6 +50,37 @@ def validate_revision(request):
     }
 
 
+@contextmanager
+def scratch_stage(name):
+    try:
+        yield
+    except Exception as error:
+        error.scratch_stage = name
+        raise
+
+
+def scratch_failure(request, error):
+    from backends.virtualbox.history import now, record_event_run
+
+    result = {'status': 'error', 'message': str(error), 'committed': False,
+              'verification_stage': error.scratch_stage}
+    try:
+        rpa_id = str(uuid.UUID(request['id']))
+    except (TypeError, ValueError, AttributeError):
+        return result
+    expected_commit = request['expected_commit']
+    if not isinstance(expected_commit, str) or not re.fullmatch(r'[a-f0-9]{40}', expected_commit):
+        return result
+    payload = {'rpa_id': rpa_id, 'stage': error.scratch_stage,
+               'expected_commit': expected_commit, 'committed': False}
+    try:
+        result['run_id'] = record_event_run(request['scratch_vm'], 'scratch_verification_failed',
+                                            'repair_verification', payload, now())
+    except (OSError, sqlite3.Error):
+        result['history_status'] = 'unavailable'
+    return result
+
+
 def test_revision(request):
     import asyncio
 
@@ -68,8 +101,10 @@ def test_revision(request):
     vm = require_virtualbox_scratch(request.get('scratch_vm'))
     artifact = scratch_artifact_settings() if request.get('commit_after_test') else None
     modal = scratch_modal_settings()
-    if artifact and scratch_artifact_hash(vm, artifact) != artifact[3]:
-        raise ValueError('The scratch output does not match its reset baseline.')
+    if artifact:
+        with scratch_stage('baseline_artifact'):
+            if scratch_artifact_hash(vm, artifact) != artifact[3]:
+                raise ValueError('The scratch output does not match its reset baseline.')
     async def run():
         return await asyncio.wait_for(replay(
             VBox(vm), actions, [width, height],
@@ -77,11 +112,13 @@ def test_revision(request):
             require_new_outcome=artifact is not None,
             forbidden_modal=modal,
         ), timeout=600)
-    completed = asyncio.run(run())
+    with scratch_stage('screen_replay'):
+        completed = asyncio.run(run())
     if artifact:
-        require_virtualbox_scratch(vm)
-        if scratch_artifact_hash(vm, artifact) != artifact[4]:
-            raise ValueError('The scratch output SHA-256 does not match the expected result.')
+        with scratch_stage('result_artifact'):
+            require_virtualbox_scratch(vm)
+            if scratch_artifact_hash(vm, artifact) != artifact[4]:
+                raise ValueError('The scratch output SHA-256 does not match the expected result.')
     return {
         'status': 'scratch_verified' if artifact else 'scratch_screen_verified', 'actions_completed': completed,
         'source_sha256': hashlib.sha256(raw).hexdigest(),
@@ -188,4 +225,9 @@ if __name__=='__main__':
         else:
             result=register(root,request)
         print(json.dumps(result,ensure_ascii=False))
-    except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)
+    except Exception as error:
+        result = {'status': 'error', 'message': str(error)}
+        if hasattr(error, 'scratch_stage') and request.get('id') and request.get('expected_commit'):
+            result = scratch_failure(request, error)
+        print(json.dumps(result))
+        sys.exit(1)

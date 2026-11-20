@@ -1,12 +1,14 @@
 import asyncio
 import importlib.util
 import json
+import os
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
 from tests.test_rpa_start_screen import FixtureDriver
+from backends.virtualbox.history import detail
 
 ROOT=Path(__file__).resolve().parents[1]
 def module(name):
@@ -106,8 +108,21 @@ class SavedRPATests(unittest.TestCase):
             artifact_hash.side_effect = [baseline, 'c' * 64]
             run.side_effect = None
             run.return_value = 2
-            with self.assertRaisesRegex(ValueError, 'SHA-256 does not match'):
+            with self.assertRaisesRegex(ValueError, 'SHA-256 does not match') as failed:
                 registry.test_and_commit(root, request)
+            with patch.dict(os.environ, {'VAMP_DATA_DIR': str(self.root / 'audit')}):
+                response = registry.scratch_failure(request, failed.exception)
+                audit = detail(response['run_id'])
+            self.assertEqual(response['verification_stage'], 'result_artifact')
+            self.assertFalse(response['committed'])
+            self.assertEqual(audit['vm'], vm)
+            self.assertEqual(audit['artifacts'], [])
+            event, = audit['events']
+            self.assertEqual(event['kind'], 'repair_verification')
+            self.assertEqual(json.loads(event['payload_json']), {
+                'rpa_id': request['id'], 'stage': 'result_artifact',
+                'expected_commit': original['commit'], 'committed': False,
+            })
             self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
             self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
 

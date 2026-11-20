@@ -39,16 +39,20 @@ def run_command(*args):
 def event(run_id,kind,payload):
     with connect() as db:db.execute('INSERT INTO events(run_id,kind,created_at,payload_json) VALUES(?,?,?,?)',(run_id,kind,now(),json.dumps(payload)))
 
-def record_elevation_handoff(vm, rpa_id, reason, actions_completed, observed_at):
+def record_event_run(vm, status, kind, payload, observed_at):
     run_id = uuid.uuid4().hex[:16]
-    payload = {'rpa_id': rpa_id, 'reason': reason, 'actions_completed': actions_completed,
-               'policy': 'operator_confirmation_required'}
     with connect() as db:
         db.execute('INSERT INTO runs VALUES(?,?,?,?,?,?,?)',
-                   (run_id, vm, 'finished', observed_at, observed_at, 'operator_handoff', None))
+                   (run_id, vm, 'finished', observed_at, observed_at, status, None))
         db.execute('INSERT INTO events(run_id,kind,created_at,payload_json) VALUES(?,?,?,?)',
-                   (run_id, 'elevation_handoff', observed_at, json.dumps(payload)))
+                   (run_id, kind, observed_at, json.dumps(payload)))
     return run_id
+
+
+def record_elevation_handoff(vm, rpa_id, reason, actions_completed, observed_at):
+    payload = {'rpa_id': rpa_id, 'reason': reason, 'actions_completed': actions_completed,
+               'policy': 'operator_confirmation_required'}
+    return record_event_run(vm, 'operator_handoff', 'elevation_handoff', payload, observed_at)
 
 def row(run_id):
     with connect() as db:r=db.execute('SELECT * FROM runs WHERE id=?',(run_id,)).fetchone()
@@ -127,7 +131,7 @@ def detail(run_id):
         item['video_requested']=bool(initial and json.loads(initial[0]).get('video_started'))
         item['video_saved']=db.execute("SELECT count(*) FROM artifacts WHERE run_id=? AND kind='video' AND bytes>0",(run_id,)).fetchone()[0]>0
         item['evidence_status']='video_saved' if item['video_saved'] else ('video_missing' if item['video_requested'] else 'screenshots_only')
-        if item['robot_status']=='operator_handoff' and not item['artifact_count']:
+        if item['robot_status'] in ('operator_handoff','scratch_verification_failed') and not item['artifact_count']:
             item['evidence_status']='event_only'
         item['events']=[dict(r) for r in db.execute('SELECT * FROM events WHERE run_id=? ORDER BY id DESC LIMIT 30',(run_id,))]
     return item
