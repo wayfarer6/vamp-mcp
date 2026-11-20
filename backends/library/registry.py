@@ -60,7 +60,7 @@ def scratch_stage(name):
 
 
 def scratch_failure(request, error):
-    from backends.virtualbox.history import now, record_event_run
+    from backends.virtualbox.history import capture, now, record_event_run
 
     result = {'status': 'error', 'message': str(error), 'committed': False,
               'verification_stage': error.scratch_stage}
@@ -73,11 +73,23 @@ def scratch_failure(request, error):
         return result
     payload = {'rpa_id': rpa_id, 'stage': error.scratch_stage,
                'expected_commit': expected_commit, 'committed': False}
+    observed = getattr(error, 'observed_occurrences', None)
+    if observed is not None:
+        payload['ocr_comparison'] = {'expected_occurrences': error.expected_occurrences,
+                                     'observed_occurrences': observed}
     try:
         result['run_id'] = record_event_run(request['scratch_vm'], 'scratch_verification_failed',
                                             'repair_verification', payload, now())
     except (OSError, sqlite3.Error):
         result['history_status'] = 'unavailable'
+    if result.get('run_id') and os.environ.get('VAMP_REPAIR_CAPTURE_FAILURE') == '1':
+        from backends.library.scratch import require_virtualbox_scratch
+        try:
+            require_virtualbox_scratch(request['scratch_vm'])
+            capture(result['run_id'], 'after-repair-failure')
+            result['failure_screenshot'] = 'saved'
+        except (ValueError, OSError, RuntimeError, sqlite3.Error, subprocess.SubprocessError):
+            result['failure_screenshot'] = 'unavailable'
     return result
 
 

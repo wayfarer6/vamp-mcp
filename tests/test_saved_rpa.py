@@ -123,6 +123,12 @@ class SavedRPATests(unittest.TestCase):
                 'rpa_id': request['id'], 'stage': 'result_artifact',
                 'expected_commit': original['commit'], 'committed': False,
             })
+            with patch.dict(os.environ, {'VAMP_DATA_DIR': str(self.root / 'audit'),
+                                         'VAMP_REPAIR_CAPTURE_FAILURE': '1'}), \
+                 patch('backends.virtualbox.history.capture') as capture:
+                with_screenshot = registry.scratch_failure(request, failed.exception)
+            capture.assert_called_once_with(with_screenshot['run_id'], 'after-repair-failure')
+            self.assertEqual(with_screenshot['failure_screenshot'], 'saved')
             self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
             self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
 

@@ -171,7 +171,10 @@ class StartScreenBlocked(ValueError):
 
 
 class OutcomeScreenBlocked(ValueError):
-    pass
+    def __init__(self, message, *, expected_occurrences=None, observed_occurrences=None):
+        super().__init__(message)
+        self.expected_occurrences = expected_occurrences
+        self.observed_occurrences = observed_occurrences
 
 
 class ElevationHandoff(ValueError):
@@ -254,7 +257,8 @@ async def verify_outcome_screen(driver, resolution, expected, forbidden_modal=No
     except Exception as exc:
         raise OutcomeScreenBlocked('The guest outcome screen could not be verified.') from exc
     if matches != 1:
-        raise OutcomeScreenBlocked('Expected outcome text must appear exactly once after replay.')
+        raise OutcomeScreenBlocked('Expected outcome text must appear exactly once after replay.',
+                                   expected_occurrences=1, observed_occurrences=matches)
 
 
 async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
@@ -275,7 +279,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
             except Exception as exc:
                 raise OutcomeScreenBlocked('The scratch outcome baseline could not be verified.') from exc
             if existing:
-                raise OutcomeScreenBlocked('The expected outcome text is already present before scratch replay.')
+                raise OutcomeScreenBlocked('The expected outcome text is already present before scratch replay.',
+                                           expected_occurrences=0, observed_occurrences=existing)
         for a in actions:
             if pause_on_uac:
                 await require_clear_elevation_screen(driver, resolution, completed)

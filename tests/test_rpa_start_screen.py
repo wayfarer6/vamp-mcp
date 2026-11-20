@@ -112,8 +112,10 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(await replay(driver, actions, [1920, 1080],
                                                       outcome_text='Export complete'), 1)
                     else:
-                        with self.assertRaises(OutcomeScreenBlocked):
+                        with self.assertRaises(OutcomeScreenBlocked) as blocked:
                             await replay(driver, actions, [1920, 1080], outcome_text='Export complete')
+                        self.assertEqual(blocked.exception.expected_occurrences, 1)
+                        self.assertEqual(blocked.exception.observed_occurrences, text.count('Export complete'))
                 self.assertTrue(driver.closed)
 
     async def test_scratch_promotion_requires_new_outcome_text(self):
