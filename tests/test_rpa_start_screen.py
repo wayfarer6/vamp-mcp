@@ -76,6 +76,24 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             'policy': 'operator_confirmation_required',
         })
 
+    async def test_uncertain_uac_ocr_stops_before_guest_input(self):
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        fixtures = [
+            [{'text': 'unclear', 'confidence': 0.3}],
+            [{'text': 'Installer', 'confidence': 0.95},
+             {'text': 'User Account Control', 'confidence': 0.65}],
+        ]
+        for lines in fixtures:
+            with self.subTest(lines=lines):
+                driver = FixtureDriver()
+                daemon = SimpleNamespace(request=lambda *args, **kwargs: {'lines': lines})
+                with patch.dict('sys.modules', {'model_daemon': daemon}):
+                    with self.assertRaises(ElevationHandoff) as blocked:
+                        await replay(driver, actions, [1920, 1080], pause_on_uac=True)
+                self.assertEqual(blocked.exception.reason, 'screen_unverified')
+                self.assertEqual(blocked.exception.completed, 0)
+                self.assertEqual(driver.events, [])
+
     async def test_virtualbox_outcome_requires_one_confident_match_after_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         for text, accepted in [('Export complete', True), ('Export failed', False),

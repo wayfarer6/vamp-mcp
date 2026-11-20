@@ -185,13 +185,14 @@ def inspect_elevation_screen(path):
     from model_daemon import request
     lines = request('ocr', {'op': 'predict', 'image': str(path),
                             'languages': ['en', 'ko']}, timeout=45)['lines']
-    if not lines:
-        raise ValueError('No readable text in the guest frame.')
-    return any(
-        any(heading in normalized_text(line['text'])
-            for heading in ('user account control', '사용자 계정 컨트롤'))
-        for line in lines if float(line['confidence']) >= 0.8
-    )
+    readings = [(normalized_text(line['text']), float(line['confidence'])) for line in lines]
+    headings = ('user account control', '사용자 계정 컨트롤')
+    prompt_scores = [confidence for text, confidence in readings if any(heading in text for heading in headings)]
+    if any(confidence >= 0.8 for confidence in prompt_scores):
+        return True
+    if prompt_scores or not any(text and confidence >= 0.8 for text, confidence in readings):
+        raise ValueError('The guest frame did not provide a confident elevation check.')
+    return False
 
 
 async def require_clear_elevation_screen(driver, resolution, completed):
