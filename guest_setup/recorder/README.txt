@@ -7,6 +7,8 @@ recorder.zip is committed here so setup runs without the third_party sources; th
 scripts download it from the vamp-mcp GitHub repository when it is not beside them.
 Regenerate it after changing third_party/pyautogui-recorder:
   python3 scripts/build_recorder_zip.py
-Use Record -> Stop -> Download and save a Python file in recordings/.
-Do not record private credentials. Export to host, then use scripts/convert_recording.py.
-This installer is untested in the target guests. It does not start recording automatically.
+Use Start recording -> Stop -> Save Python and save a .py file in recordings/
+or on the mounted VAMPRecords share. In the host VS Code extension, open
+RPA Library -> Create and select the file under Recorded script. If the file
+was copied to another host folder, select it with Add RPA Folder first.
+Do not record private credentials. The setup does not start recording automatically.

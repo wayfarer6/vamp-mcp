@@ -4,18 +4,22 @@ Run INSIDE the guest VM, not on the host.
 1. Confirm guest resolution 1920x1080, OS scale 100%, browser zoom 100%.
 2. Open Desktop/RPA-Recorder (the desktop may be localized/redirected).
    Windows: Start-Recorder.cmd. Debian/Ubuntu GNOME X11: start-recorder.sh.
-3. Record -> perform task -> Stop -> Download. Save recordings/my_task.py.
+3. Start recording -> perform the task -> Stop -> Save Python.
+   Save the result as recordings/my_task.py or on the mounted VAMPRecords share.
    Never record passwords, certificate private keys or CAPTCHA solutions.
 4. Run: python prepare-recording.py recordings/my_task.py
    Debian/Ubuntu: python3 prepare-recording.py recordings/my_task.py
 5. Give the AI VM name + guest OS + absolute recording path, and the desired
    success condition. The .handoff.json records the path/hash without replay.
 
-A guest-only file path is NOT automatically readable by a host MCP server.
-Transfer the Python recording to the host and give its host path, or agree
-on a supported retrieval route. Existing SPICE static conversion is available.
-VirtualBox recorded replay conversion is still pending; its input tools work,
-but do not treat a SPICE URI as a VirtualBox VM connection.
+A guest-only file path is not automatically readable by VS Code on the host.
+Save through the mounted VAMPRecords share, or transfer the Python file to a
+host folder and use RPA Library -> Add RPA Folder to select that folder.
+In RPA Library, choose Create -> Recorded script and select the Python file.
+Enter Name, Description, and an observable Expected result. In Replay
+settings and inputs, select VirtualBox and the actual recording resolution.
+Review the source, mark it reviewed if appropriate, and click Save RPA.
+The library parses supported Python recorder actions without running the file.
 
 The AI can inspect the Python text without executing it, create Robot/Python
 RPA steps and update guest pixel coordinates from fresh screen evidence.

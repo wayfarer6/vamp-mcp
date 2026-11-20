@@ -66,6 +66,8 @@ A manual OS installation may still need [recorder setup](https://github.com/wayf
 
 Supported PyAutoGUI recordings are replayed as parsed guest-device actions. Arbitrary Python, host-window coordinates, unsupported operations and a different guest resolution require adaptation. Hyper-V desktop replay is unsupported.
 
+**Practice task.** At 1920×1080, open the demo ERP Orders page inside the VM. Start recording, search for a synthetic order, then stop and save the Python file. Set **Expected result** to the exact order ID being visible in the result list. In the AI chat beside VS Code, try: “Find the reviewed ERP order search in RPA Library. Show me the selected VirtualBox VM and expected result before running it.” Check the result in the guest.
+
 ![Create an RPA from a recording](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vscode-rpa-create.png)
 
 ## 4. Create with AI: answer questions, then review the metadata
@@ -217,6 +219,8 @@ VirtualBox의 호스트 Python 환경은 필요할 때 자동 준비됩니다. �
 9. **Save RPA**를 누릅니다. 원본 소스는 실행하지 않고 AST로 지원 동작을 읽어 저장합니다. 등록 후 **Edit Details**에서 이름·설명·태그·검토 상태를 수정합니다.
 
 현재 저장 실행기는 지원되는 PyAutoGUI 녹화 동작을 다룹니다. 임의 Python 프로그램, 호스트 화면 좌표, 지원되지 않는 함수, 해상도가 다른 녹화는 그대로 재생할 수 없습니다. 오류가 표시되면 소스와 녹화 조건을 검토하세요. Hyper-V 데스크톱 재생은 미지원입니다.
+
+**연습 예제.** 1920×1080 VM에서 데모 ERP 주문 목록을 엽니다. 레코더를 켜고 합성 주문을 검색한 뒤 중지하고 Python 파일을 저장합니다. **Expected result**에는 결과 목록에 해당 주문 번호가 나와야 한다고 적습니다. VS Code 옆의 AI 채팅에는 “RPA Library에서 검토된 ERP 주문 검색을 찾아줘. 실행 전에 선택할 VirtualBox VM과 완료 조건을 보여줘”라고 요청해 보세요. 재생 후 게스트에서 실제 결과를 확인합니다.
 
 ## 4. Create with AI — 질문에 답해 제목·설명 만들기
 
