@@ -30,7 +30,13 @@ class FixtureDriver:
 
 
 class StartScreenTest(unittest.IsolatedAsyncioTestCase):
-    async def test_virtualbox_and_kvm_capture_before_any_input(self):
+    async def test_virtualbox_captures_before_any_input(self):
+        await self.check_capture_before_input('virtualbox')
+
+    async def test_kvm_captures_before_any_input(self):
+        await self.check_capture_before_input('kvm')
+
+    async def check_capture_before_input(self, backend):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         png = b'fixture-png'
 
@@ -63,14 +69,13 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
 
         with patch.dict('sys.modules', {'PIL': SimpleNamespace(Image=SimpleNamespace(fromarray=from_array))}), \
              patch('backends.library.replay.recognize_start_screen', side_effect=recognize):
-            for driver in (virtualbox, kvm):
-                with self.subTest(backend=type(driver).__name__):
-                    with self.assertRaisesRegex(ValueError, 'Starting screen mismatch'):
-                        await replay(driver, actions, [1920, 1080], start_text='QA-999')
-                    self.assertEqual(driver.events, [])
-                    self.assertTrue(driver.closed)
-                    self.assertEqual(await replay(driver, actions, [1920, 1080], start_text='QA-042'), 1)
-                    self.assertEqual(driver.events, ['move', 'left'])
+            driver = virtualbox if backend == 'virtualbox' else kvm
+            with self.assertRaisesRegex(ValueError, 'Starting screen mismatch'):
+                await replay(driver, actions, [1920, 1080], start_text='QA-999')
+            self.assertEqual(driver.events, [])
+            self.assertTrue(driver.closed)
+            self.assertEqual(await replay(driver, actions, [1920, 1080], start_text='QA-042'), 1)
+            self.assertEqual(driver.events, ['move', 'left'])
 
     async def test_replay_requires_one_confident_match_before_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]

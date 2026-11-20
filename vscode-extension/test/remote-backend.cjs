@@ -298,6 +298,26 @@ test('remote screenshots follow the selected SSH and libvirt connection for the 
   }
 });
 
+test('VirtualBox screenshots request a new frame after the SSH endpoint changes', async () => {
+  const h = harness({ 'remote.backend': 'virtualbox' });
+  const target = { id: 'uuid-1', name: 'lab-desktop' };
+  try {
+    const firstPanel = await h.api.openScreen(target);
+    assert.equal(await h.api.openScreen(target), firstPanel);
+    assert.equal(h.posted.length, 1);
+
+    await h.api.saveSettings({ port: 2222, username: 'other' });
+    const secondPanel = await h.api.openScreen(target);
+    assert.notEqual(secondPanel, firstPanel);
+    assert.deepEqual(h.posted.map(({ port, username, target }) => ({ port, username, target })), [
+      { port: 22, username: 'dev', target: 'uuid-1' },
+      { port: 2222, username: 'other', target: 'uuid-1' },
+    ]);
+  } finally {
+    h.dispose();
+  }
+});
+
 test('remote screenshots never run without a configured host', async () => {
   const h = harness({ 'remote.enabled': false });
   await assert.rejects(() => h.api.verify({ quiet: true }), /turned off/);
