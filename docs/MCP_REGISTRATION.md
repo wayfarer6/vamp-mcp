@@ -11,6 +11,12 @@ In VS Code, enable the definitions contributed by the current VAMP MCP Tools and
 
 For an external client, point **VAMP MCP** at the verified installed `vamp-mcp` binary with no arguments. Use the verified installed `vamp-mcp-vault` binary for **VAMP Vault**. These names are client settings; the Vault entry is not required if you do not use Vault.
 
+## Windows host startup
+
+Both MCP servers require Windows administrator privileges. An external MCP client can stay open in its normal session while the installed `vamp-mcp` CLI requests approval in a **host Windows** UAC dialog and connects to the elevated server. Approve the dialog promptly. If approval is declined or times out, restart the MCP connection when you are ready to approve it.
+
+Start `vamp-mcp-vault` and direct server commands from an administrator host process. Launch VS Code with **Run as administrator** when using its contributed VAMP MCP definitions. Guest UAC prompts appear inside the VM and follow the saved RPA's operator policy. [Guest UAC workflow](WORKFLOWS.md)
+
 ## Using both servers in one workflow
 
 The AI calls each server directly from the same MCP client. For a sign-in, use VAMP MCP to reach and focus the intended input field, then call `vault_deliver_credential` on VAMP Vault with the configured destination. A client that supports MCP form elicitation can show the Vault approval in chat. After approval, Vault sends the field directly to the configured receiver and returns a receipt to the AI.

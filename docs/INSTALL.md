@@ -59,16 +59,18 @@ Get-ExecutionPolicy
 
 실행 정책을 바꾸어도 Hyper-V 설치 여부, 가상화 지원, 서비스 상태, Hyper-V 관리 권한이나 CIM 네임스페이스 접근 권한은 부여되지 않습니다. `Access denied` / CIM 접근 오류라면 정책을 반복해서 완화하지 말고 해당 호스트 권한을 별도로 점검하세요. 필요한 기능 설치나 관리 권한 변경은 장비 관리자와 승인된 절차로 진행합니다. 이 정책 안내는 관리자 실행이나 Hyper-V 설정 변경을 대신하지 않습니다.
 
-### 현재 Windows Hyper-V VM 프로비저닝: VS Code를 직접 관리자 권한으로 실행
+### Windows MCP 실행 권한
 
-**현재 릴리스에서 Hyper-V VM을 실제로 생성·프로비저닝할 때는 사용자가 VS Code를 직접 “관리자 권한으로 실행”해야 합니다.** 일반 편집, 정책 확인, 컨테이너 조회 또는 다른 하이퍼바이저를 위한 기본 실행 방식은 아닙니다.
+Windows에서 VAMP와 VAMP Vault의 MCP 서버는 관리자 권한이 필요합니다. 외부 MCP 클라이언트에서 설치된 `vamp-mcp` 명령을 시작하면 호스트 UAC 승인을 요청합니다. 승인하면 별도의 관리자 서버가 시작되고 기존 클라이언트가 그 서버와 연결됩니다. 직접 서버 파일을 실행하거나 `vamp-mcp-vault`를 시작할 때는 관리자 권한으로 연 호스트를 사용하세요. [MCP 등록 안내](MCP_REGISTRATION.md#windows-host-startup)
+
+VS Code의 VM Manager나 확장이 등록한 MCP 서버를 사용하는 경우 VS Code를 관리자 권한으로 여세요.
 
 1. 작업을 저장하고 기존 VS Code 창을 모두 종료합니다. 별도 창만 열면 기존 비관리자 프로세스를 재사용할 수 있습니다.
 2. 신뢰할 수 있는 VAMP 저장소와 필요한 확장만 사용하세요. 출처를 모르는 프로젝트, 작업(task), 확장 또는 스크립트를 관리자 편집기에서 열거나 실행하지 마세요.
 3. Windows 시작 메뉴에서 **Visual Studio Code → 관리자 권한으로 실행**을 직접 선택하고 UAC 내용을 확인한 뒤 승인합니다. 열린 관리자 VS Code에서 필요한 Hyper-V 빌드만 명시적으로 시작합니다.
 4. 프로비저닝이 끝나면 관리자 VS Code를 종료하고 일반 권한으로 다시 실행합니다. 실패했다고 실행 정책을 완화하거나 관리자 편집기를 계속 켜 두지 마세요.
 
-**Check permissions (UAC)** 진단 창은 권한을 가진 별도 프로세스에서 읽기 전용 진단만 합니다. UAC 진단 성공은 원래 VS Code/MCP 프로세스의 승격이 아니며, 원래 프로세스에 Hyper-V 권한을 부여하지 않습니다. 현재는 VM 생성을 대신 수행하는 권한 상승 브로커가 없습니다. 관리자 실행은 장비 소유자·조직의 허가와 정상적인 Hyper-V 설치/서비스/스위치 구성을 대신하지도 않습니다.
+Hyper-V의 **Check permissions (UAC)**는 별도 프로세스에서 읽기 전용 권한 진단과 스위치 조회를 실행합니다. 실제 프로비저닝은 관리자 권한으로 연 VM Manager 또는 승인된 Windows VAMP MCP의 `vm_create`에서 시작하세요. Hyper-V 설치와 서비스 및 스위치 구성도 확인하세요.
 
 ### Hyper-V Debian 설치 실패 확인
 
@@ -214,10 +216,8 @@ The Hyper-V panel displays the Windows version without probing the VM engine.
 If Create reports missing permissions, choose **Check permissions (UAC)** in the
 Hyper-V panel or request `hyperv_permission_diagnosis` from the Windows-hosted
 VAMP MCP server. Both paths require the user's explicit action and the user's
-own response to the Windows prompt. The fixed administrator window only checks
-the host and lists switches. Opening it does not elevate VS Code or MCP, grant
-access to the original process, or start a VM. Hyper-V provisioning must still
-run from VS Code that the user manually launched with **Run as administrator**,
-for this provisioning task only. Use a trusted checkout, close the elevated
-editor afterwards, and return to normal privileges. No privileged VM build
-broker is included in this release. See the Windows host section above.
+own response to the Windows prompt. The administrator diagnostic window checks
+the host and lists switches. For actual provisioning, use VM Manager from an
+administrator VS Code session or call `vm_create` from an administrator VAMP MCP
+server. The installed `vamp-mcp` CLI can request host UAC to start that server.
+[Windows MCP startup](MCP_REGISTRATION.md#windows-host-startup)
