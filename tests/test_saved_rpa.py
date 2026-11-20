@@ -6,6 +6,8 @@ import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
 
+from tests.test_rpa_start_screen import FixtureDriver
+
 ROOT=Path(__file__).resolve().parents[1]
 def module(name):
     spec=importlib.util.spec_from_file_location(name,ROOT/'backends/library'/f'{name}.py')
@@ -34,6 +36,28 @@ class SavedRPATests(unittest.TestCase):
         self.assertEqual((folder / 'source.py').read_bytes(), original)
         self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), saved['commit'])
         self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
+
+    def test_reviewed_virtualbox_definition_enforces_its_saved_starting_text(self):
+        root = self.root / 'catalog'
+        self.source.write_text("import pyautogui\npyautogui.click(10, 20)\n")
+        saved = registry.register(root, {**self.request, 'backend': 'virtualbox',
+                                         'width': 1920, 'height': 1080, 'inputs': [], 'start_text': 'QA-042'})
+        request = {'registry': str(root), 'id': saved['definition']['id'],
+                   'vm_id': '01234567-89ab-cdef-0123-456789abcdef', 'confirmed': True}
+        for text in ('QA-999', 'Dashboard', 'QA-042 QA-042', 'QA-042'):
+            with self.subTest(text=text):
+                driver = FixtureDriver()
+                with patch.object(replay, 'VBox', return_value=driver), \
+                     patch.object(replay, 'recognize_start_screen',
+                                  return_value=[{'text': text, 'confidence': 0.95}]):
+                    if text == 'QA-042':
+                        result = asyncio.run(replay.run(request))
+                        self.assertEqual(result['actions_completed'], 1)
+                        self.assertEqual(driver.events, ['move', 'left'])
+                    else:
+                        with self.assertRaisesRegex(replay.StartScreenBlocked, 'Starting screen mismatch'):
+                            asyncio.run(replay.run(request))
+                        self.assertEqual(driver.events, [])
 
     def test_virtualbox_scratch_revision_replays_synthetic_actions_without_saving(self):
         vm = '01234567-89ab-cdef-0123-456789abcdef'
