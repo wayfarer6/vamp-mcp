@@ -7,6 +7,22 @@ import {RemoteSshClient, normalizeRemoteConfig, sshArgs} from './client.mjs';
 import {remoteSchema} from './register.mjs';
 import {PYTHON_TOOLS,pythonChildEnvironment} from './python-bridge.mjs';
 function fixture(options={}){const tools=new Map();registerRemoteTools({registerTool:(name,schema,call)=>{assert.ok(!tools.has(name));tools.set(name,{schema,call});}},options);return tools;}
+
+test('KVM bootstrap stops after the OS probe when SSH reports Darwin', async () => {
+ const client = new RemoteSshClient(normalizeRemoteConfig({enabled:true, host:'fixture.invalid', backend:'kvm'}));
+ const commands = [];
+ client.exec = async command => {
+  commands.push(command);
+  assert.equal(command, 'uname -s');
+  return {code:0, stdout:'Darwin\n', stderr:''};
+ };
+ await assert.rejects(client.bootstrap('unused-fixture-server.mjs'), {
+  code:'remote_host_unsupported_os',
+  message:/Detected: Darwin\./,
+ });
+ assert.deepEqual(commands, ['uname -s']);
+});
+
 test('remote credential replay requires a previously trusted SSH host key',async()=>{
  const config=normalizeRemoteConfig({enabled:true,host:'fixture.invalid'});
  const client=new RemoteSshClient(config);
