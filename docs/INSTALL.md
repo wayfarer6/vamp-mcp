@@ -120,13 +120,10 @@ SPICE GI 바인딩은 pip만으로 설치되지 않습니다. `--system-site-pac
 | NVIDIA CUDA | `requirements-nvidia.txt` | `auto`, `0`, `nvidia` | Ubuntu + NVIDIA에서 실행 확인 |
 | CPU 전용 | `requirements-cpu.txt` | `cpu` | 기존 Ubuntu 호스트에서 CPU 추론 확인; 이 설치 프로필의 신규 설치는 미검증 |
 | AMD GPU / ROCm 7.1 | `requirements-amd-rocm.txt` | `rocm` 또는 `auto` | 미검증 |
-| Apple Silicon / MPS | `requirements-apple.txt` | `mps` 또는 `auto` | 미검증 |
 | Huawei Ascend NPU | `requirements-npu-ascend.txt` | `ascend-npu`, `npu:0` | 미검증 |
 | Intel NPU / OpenVINO | `requirements-npu-intel.txt` | `intel-npu` | 미검증 |
 
-CPU 전용 파일의 `+cpu` wheel은 Linux/Windows 계열용이며, macOS에서 CPU를 쓸 때도 Apple 프로필을 설치한 뒤 `DEVICE:cpu`를 지정하세요.
-
-NPU는 공통 런타임이 아닙니다. Ascend와 Intel 프로필은 서로 호환되지 않으며, Qualcomm·AMD Ryzen AI·Apple Neural Engine 등의 모든 NPU를 지원한다는 뜻은 아닙니다. Apple 프로필은 **Metal GPU(MPS)** 경로입니다. 가속기는 YOLO에 적용하며 PaddleOCR는 CPU를 사용합니다.
+CPU 전용 파일의 `+cpu` wheel은 Windows와 Linux용입니다. Ascend와 Intel NPU 프로필은 각 공급사의 런타임이 필요합니다. 가속기는 YOLO에 적용하며 PaddleOCR는 CPU를 사용합니다.
 
 ### AMD
 
@@ -138,25 +135,6 @@ NPU는 공통 런타임이 아닙니다. Ascend와 Intel 프로필은 서로 호
 ```
 
 ROCm도 PyTorch의 `torch.cuda` 인터페이스를 사용합니다. `DEVICE:rocm`은 ROCm build와 AMD 장치가 확인되어야 실행되며 NVIDIA Torch를 AMD 지원으로 오인하지 않습니다. [PyTorch 설치 조합](https://pytorch.org/get-started/previous-versions/)
-
-### Apple Silicon
-
-macOS에서 사용할 SPICE/GI 시스템 라이브러리를 먼저 설치합니다.
-
-```bash
-brew install spice-gtk pygobject3
-# Homebrew GI가 연결된 Python으로 생성해야 함
-python3 -m venv --system-site-packages .venv
-.venv/bin/python -m pip install -r requirements-apple.txt
-```
-
-위의 Python 3.12 OCR 환경·모델 설치도 별도로 수행하세요. macOS가 요구하는 접근성/화면 접근 권한과 호환 SPICE GI를 준비해야 합니다. Mac에서 Linux KVM을 그대로 실행한다는 뜻은 아니며, VM을 제공하는 호스트의 접근 가능한 SPICE 주소를 지정합니다. brew의 Python과 선택한 Torch/Paddle wheel의 Python·아키텍처가 맞는지 확인해야 합니다. Windows/Linux 네이티브 SPICE 컨트롤러와 macOS 컨트롤러는 별개의 설치 환경입니다.
-
-```bash
-.venv/bin/python scripts/run_rpa.py desktop_control --var ACTION:analyze --var DEVICE:mps --var SPICE_URI:spice://VM_HOST:5900
-```
-
-`VM_HOST`는 실제 VM 호스트 주소로 바꾸세요. [Homebrew SPICE](https://formulae.brew.sh/formula/spice-gtk), [PyTorch MPS](https://docs.pytorch.org/docs/stable/notes/mps.html)
 
 ### Ascend NPU
 

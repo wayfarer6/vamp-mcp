@@ -1,6 +1,6 @@
 # VAMP 실사용 QA 시나리오
 
-Windows와 Linux **제어 호스트**에서 GitHub 배포본으로 VS Code 확장과 독립 MCP를 검증한다. 테스트 작업은 격리된 데스크톱에서 샘플 요청을 받아 결과 파일을 저장하고, 별도 승인으로 테스트 계정에 로그인하는 흐름이다. macOS 실기기 검증은 [별도 이슈](https://github.com/wayfarer6/vamp-mcp/issues/7)에서 추적한다.
+Windows와 Linux **제어 호스트**에서 GitHub 배포본으로 VS Code 확장과 독립 MCP를 검증한다. 테스트 작업은 격리된 데스크톱에서 샘플 요청을 받아 결과 파일을 저장하고, 별도 승인으로 테스트 계정에 로그인하는 흐름이다.
 
 ## 준비
 

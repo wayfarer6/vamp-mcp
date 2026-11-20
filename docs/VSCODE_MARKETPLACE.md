@@ -16,7 +16,7 @@ code --install-extension ../artifacts/vamp-mcp-tools-0.2.0.vsix
 
 마지막 설치 명령은 사용자 자신의 VS Code에서 실행하세요. 확장은 자동으로 VM/게스트 패키지를 설치하지 않습니다. 최초 **VAMP: Set Up Python Environment** 명령으로 private venv를 만든 다음, **VAMP: Create VM From ISO**로 파일 선택 창에서 ISO를 고르면 결정론적 설치기가 수행됩니다. 기본 공개 계정 `vboxuser / password123!`를 선택 창과 결과에서 안내합니다.
 
-기본 제어는 별도 Node 설치 없이 desktop VS Code 런타임을 사용합니다. Python/VirtualBox/시스템 드라이버는 별도로 있어야 합니다. 마우스용 VirtualBox SDK, vision용 GPU 런타임도 별도입니다. Windows/Linux/macOS 대상 단일 VSIX이지만 플랫폼별 실제 동작을 검증했다는 뜻은 아닙니다. ARM ISO는 초기 자동 설치 프로필에서 지원하지 않습니다.
+기본 제어는 별도 Node 설치 없이 desktop VS Code 런타임을 사용합니다. Python/VirtualBox/시스템 드라이버는 별도로 있어야 합니다. 마우스용 VirtualBox SDK, vision용 GPU 런타임도 별도입니다. Windows와 Linux에 같은 VSIX를 설치할 수 있습니다. 플랫폼별 실기 결과는 [검증 기록](VALIDATION.md)에서 확인하세요. ARM ISO는 초기 자동 설치 프로필에서 지원하지 않습니다.
 
 ## 게시자 등록과 업로드
 
