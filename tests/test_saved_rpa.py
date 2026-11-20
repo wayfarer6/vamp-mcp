@@ -60,19 +60,34 @@ class SavedRPATests(unittest.TestCase):
         request = {**self.request, 'backend': 'virtualbox'}
         original = registry.register(root, request)
         folder = Path(original['folder'])
-        request.update(id=original['definition']['id'], expected_commit=original['commit'])
+        vm = '01234567-89ab-cdef-0123-456789abcdef'
+        request.update(id=original['definition']['id'], expected_commit=original['commit'],
+                       scratch_vm=vm, outcome_text='Export complete', test_inputs={'query': 'fixture'})
         self.source.write_text("import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
-        validated = registry.validate_revision(request)
-
-        with patch.object(registry, 'test_revision', side_effect=ValueError('Scratch report differs.')):
-            with self.assertRaisesRegex(ValueError, 'report differs'):
+        baseline, expected = 'a' * 64, 'b' * 64
+        artifact = ('/tmp/fixture.csv', 'fixture', self.root / 'fixture-password', baseline, expected)
+        with patch('backends.library.scratch.require_virtualbox_scratch', return_value=vm), \
+             patch('backends.library.scratch.scratch_artifact_settings', return_value=artifact), \
+             patch('backends.library.scratch.scratch_artifact_hash') as artifact_hash, \
+             patch('backends.library.replay.VBox'), \
+             patch('backends.library.replay.replay', new_callable=AsyncMock) as run:
+            artifact_hash.side_effect = [baseline]
+            run.side_effect = ValueError('Expected outcome text is already present.')
+            with self.assertRaisesRegex(ValueError, 'already present'):
                 registry.test_and_commit(root, request)
-        self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
-        self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
+            self.assertTrue(run.await_args.kwargs['require_new_outcome'])
+            artifact_hash.assert_called_once_with(vm, artifact)
+            self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
 
-        proof = {'status': 'scratch_verified', 'source_sha256': validated['source_sha256'],
-                 'guest_verified': True, 'artifact_verified': True}
-        with patch.object(registry, 'test_revision', return_value=proof):
+            artifact_hash.side_effect = [baseline, 'c' * 64]
+            run.side_effect = None
+            run.return_value = 2
+            with self.assertRaisesRegex(ValueError, 'SHA-256 does not match'):
+                registry.test_and_commit(root, request)
+            self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
+            self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
+
+            artifact_hash.side_effect = [baseline, expected]
             result = registry.test_and_commit(root, request)
         self.assertEqual(result['status'], 'verified_commit_needs_review')
         self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), result['commit'])
