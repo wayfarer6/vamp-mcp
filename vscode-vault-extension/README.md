@@ -25,7 +25,11 @@ Use **VAMP Vault: Browse Credentials**, or **VAMP → Browse Credentials**. **Op
 
 **Export Encrypted File** copies the configured KeePassXC database or VeraCrypt container to an existing folder on this computer. Choose Local Vault or a configured SSH Vault, choose the folder, and review the source and destination before confirming. Dismount a VeraCrypt container before exporting it for a consistent copy. The export retains the original filename and refuses to replace an existing file.
 
-For a file inside your locally mounted default VeraCrypt container, use **VAMP Vault: Export File from Mounted VeraCrypt Container...** from the Command Palette. Select the file and an existing local folder, then confirm the decrypted copy. Choose the destination according to the file's sensitivity. The copy keeps the source name and refuses to overwrite.
+### Export a file from a mounted container
+
+With the configured local VeraCrypt container mounted, open **VAMP Vault: Export File from Mounted VeraCrypt Container...** from the Command Palette. Select the file and an existing local folder, then confirm the decrypted copy. The copy keeps the source name and refuses to overwrite. This command requires a Vault extension built from the current source.
+
+For a local Vault MCP client, call [`vault_export_mounted_file`](#mcp-tools) with the file's path relative to the mount root and the local destination folder.
 
 The full [user guide](https://github.com/wayfarer6/vamp-mcp/blob/main/docs/USER_GUIDE.md) is bundled in this VSIX under **VAMP Vault: Open Guide**. The companion VAMP **RPA Library** supports manual Create, AI-guided questions, keyword search and ZIP export.
 
