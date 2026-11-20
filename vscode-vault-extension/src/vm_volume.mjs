@@ -95,7 +95,7 @@ export async function reconcileVirtualBoxDisks(guard, execute = executeVirtualBo
   for (const disk of await guard.registeredDisks()) {
     const { backend, vm, volume, controller, port, medium, mountPoint, observedRunning } = disk;
     const guestOnly = mountPoint === '' && medium === volume;
-    if (backend !== 'virtualbox' || (!guestOnly && (!mountPoint || !releaseHostMount)) ||
+    if (backend !== 'virtualbox' || (!guestOnly && !mountPoint) ||
         !path.isAbsolute(medium) || !/\.vhd$/i.test(medium) ||
         !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(vm) ||
         !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$/.test(controller) ||
@@ -118,7 +118,12 @@ export async function reconcileVirtualBoxDisks(guard, execute = executeVirtualBo
         if (after.power !== 'poweroff' || after.medium !== 'none') throw new Error('Could not verify workspace detachment.');
       }
       await releaseVirtualBoxGuestDisk(execute, medium);
-      if (!guestOnly) await releaseHostMount({ volume, mountPoint });
+      if (!guestOnly) {
+        if (!releaseHostMount) {
+          throw new Error('The VM disk was detached. Host mount cleanup requires verification on this platform.');
+        }
+        await releaseHostMount({ volume, mountPoint });
+      }
       await guard.detached(volume);
       results.push({ vm, status: guestOnly ? 'detached' : 'unmounted' });
     } catch (error) {

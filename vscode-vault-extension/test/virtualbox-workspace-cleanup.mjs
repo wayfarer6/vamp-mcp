@@ -86,6 +86,10 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
   await reconcileHost();
   assert.equal(mountChecks, 0);
   power = 'poweroff';
+  assert.deepEqual(await reconcile(), [{ vm, status: 'pending',
+    error: 'The VM disk was detached. Host mount cleanup requires verification on this platform.' }]);
+  assert.equal(slot, 'none');
+  assert.equal((await state(guard => guard.registeredDisks()))[0].volume, host.volume);
   assert.deepEqual(await reconcileHost(), [{ vm, status: 'pending', error: 'A workspace consumer is still present.' }]);
   assert.equal((await state(guard => guard.registeredDisks()))[0].volume, host.volume);
   otherWriter = false;
