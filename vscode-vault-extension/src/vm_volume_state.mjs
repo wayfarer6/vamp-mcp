@@ -67,7 +67,10 @@ export async function withVmVolumeState(work, { directory = path.join(os.homedir
             if (error.code==='ENOENT') return null;
             throw error;
           });
-          if (existing) delete existing.observedRunning;
+          if (existing) {
+            delete existing.observedRunning;
+            delete existing.attachmentStateMs;
+          }
           if (existing && JSON.stringify(existing)!==JSON.stringify(target)) {
             throw new Error('The detach request does not match the registered VM disk.');
           }

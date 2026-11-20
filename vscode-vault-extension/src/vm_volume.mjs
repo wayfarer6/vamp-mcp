@@ -77,7 +77,11 @@ async function virtualBoxSlot(execute, { vm, controller, port }) {
   if (!selected || fields.get(selected.replace('name', 'type')) !== 'IntelAhci') {
     throw new Error('The selected SATA controller does not exist.');
   }
-  return { power: fields.get('VMState'), medium: fields.get(`${controller}-${port}-0`) || 'none' };
+  const changedAt = fields.get('VMStateChangeTime');
+  const changedMs = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3,9}Z?$/.test(changedAt)
+    ? Date.parse(changedAt.endsWith('Z') ? changedAt : changedAt + 'Z') : NaN;
+  return { power: fields.get('VMState'), medium: fields.get(`${controller}-${port}-0`) || 'none',
+    changedMs: Number.isFinite(changedMs) ? changedMs : null };
 }
 
 async function releaseVirtualBoxGuestDisk(execute, medium) {
@@ -102,10 +106,13 @@ export async function reconcileVirtualBoxDisks(guard, execute = executeVirtualBo
         !Number.isInteger(port) || port < 1 || port > 29) continue;
     try {
       const state = await virtualBoxSlot(execute, disk);
-      if (state.power === 'running' && state.medium === medium && !observedRunning) {
+      const missedCycle = state.power === 'poweroff' && state.changedMs !== null && Number.isSafeInteger(disk.attachmentStateMs)
+        && state.changedMs > disk.attachmentStateMs;
+      const observedCycle = state.medium === medium && (state.power === 'running' || missedCycle);
+      if (observedCycle && observedRunning !== true) {
         await guard.observedRunning(disk);
       }
-      if (observedRunning !== true) continue;
+      if (observedRunning !== true && !(missedCycle && observedCycle)) continue;
       if (state.power !== 'poweroff') {
         results.push({ vm, status: 'waiting_for_shutdown', power: state.power || 'unknown' });
         continue;
@@ -145,7 +152,7 @@ export async function virtualBoxVolume(cli, args, { execute = executeVirtualBox,
     if (state.power !== 'poweroff') {
       throw new Error('Shut down the exact VirtualBox VM before changing its workspace disk.');
     }
-    return state.medium;
+    return state;
   };
   const before=await state();
   const known=operation==='detach' && await guard?.beforeChange(operation,registered);
@@ -153,18 +160,18 @@ export async function virtualBoxVolume(cli, args, { execute = executeVirtualBox,
     if (!args.credentials) return;
     await releaseVirtualBoxGuestDisk(execute, medium);
   };
-  if(known && before==='none'){
+  if(known && before.medium==='none'){
     await releaseGuestDisk();
     await guard.detached(volume);
     return {status:'detached',backend:'virtualbox',vm,controller,port};
   }
   const expected=operation==='attach'?'none':medium;
-  if (before!==expected) throw new Error('The selected slot does not match the requested operation.');
+  if (before.medium!==expected) throw new Error('The selected slot does not match the requested operation.');
   await recheck();
-  if(operation==='attach')await guard?.beforeChange(operation,registered);
+  if(operation==='attach')await guard?.beforeChange(operation,{ ...registered, attachmentStateMs: before.changedMs });
   await execute(['storageattach',vm,'--storagectl',controller,'--port',String(port),'--device','0',
     '--type','hdd','--medium',operation==='attach'?medium:'none']);
-  if (await state()!==(operation==='attach'?medium:'none')) throw new Error('VirtualBox could not verify the resulting disk attachment.');
+  if ((await state()).medium!==(operation==='attach'?medium:'none')) throw new Error('VirtualBox could not verify the resulting disk attachment.');
   if(operation==='detach') {
     await releaseGuestDisk();
     await guard?.detached(volume);

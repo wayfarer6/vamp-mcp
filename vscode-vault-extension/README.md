@@ -463,10 +463,13 @@ before shutting down and calling `vault_detach_vm`.
 The local Vault MCP server checks managed VirtualBox guest VHDs while it is
 running. Once it has observed the VM running with the exact registered disk, it
 can detach that disk after VirtualBox reports the VM powered off. The encrypted
-VHD remains on disk. The server records the running observation so it can
-retry after restart if the disk was busy or the VM state was unavailable.
-Check `workspace_cleanup` in `vault_status` for the latest result. If the server
-missed the running state, use `vault_detach_vm` after shutdown.
+VHD remains on disk. For new attachments, the server also records VirtualBox's
+power-state timestamp. A later power-off timestamp with the same registered
+disk lets the server recover if the entire VM session happened while MCP was
+offline. Busy disks remain pending for retry. Check `workspace_cleanup` in
+`vault_status` for the latest result. Use `vault_detach_vm` after shutdown if
+an older record has no running observation or VirtualBox reports no usable
+timestamp.
 
 On native Linux, when a VirtualBox disk lives inside the configured VeraCrypt
 workspace, Vault can also release the host mount after detaching the disk.

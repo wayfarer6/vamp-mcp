@@ -18,6 +18,7 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
   let power = 'poweroff';
   let slot = medium;
   let busy = true;
+  let changedAt = '2026-11-20T00:00:01.000000000';
   const commands = [];
   function execute(args) {
     commands.push(args);
@@ -26,6 +27,7 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
         assert.deepEqual(args, ['showvminfo', vm, '--machinereadable']);
         return { stdout: [
           `UUID="${vm}"`, `VMState="${power}"`,
+          `VMStateChangeTime="${changedAt}"`,
           'storagecontrollername0="SATA"', 'storagecontrollertype0="IntelAhci"',
           `"SATA-1-0"="${slot.replaceAll('\\', '\\\\')}"`,
         ].join('\n') };
@@ -71,7 +73,7 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
   assert.equal(commands.filter(args => args[0] === 'storageattach').length, 1);
 
   const host = { ...target, volume: path.join(directory, 'container.vc'), mountPoint: directory };
-  await state(guard => guard.beforeChange('attach', host));
+  await state(guard => guard.beforeChange('attach', { ...host, attachmentStateMs: Date.parse('2026-11-20T00:00:01Z') }));
   let otherWriter = true;
   let mountChecks = 0;
   const reconcileHost = () => state(guard => reconcileVirtualBoxDisks(guard, execute, async detached => {
@@ -81,11 +83,11 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
     mountChecks++;
     if (otherWriter) throw new Error('A workspace consumer is still present.');
   }));
-  power = 'running';
   slot = medium;
-  await reconcileHost();
+  assert.deepEqual(await reconcileHost(), []);
   assert.equal(mountChecks, 0);
-  power = 'poweroff';
+  // Both the start and the external shutdown happened while the MCP was offline.
+  changedAt = '2026-11-20T00:00:20.000000000';
   assert.deepEqual(await reconcile(), [{ vm, status: 'pending',
     error: 'The VM disk was detached. Host mount cleanup requires verification on this platform.' }]);
   assert.equal(slot, 'none');
