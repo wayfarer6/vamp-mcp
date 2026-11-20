@@ -80,8 +80,9 @@ try {
     const expected_source_sha256 = process.env.VAMP_DEMO_EXPECTED_SOURCE_SHA256;
     const started = performance.now();
     const result = await call('rpa_run_saved', { id, vm_id, inputs, dry_run, confirmed: !dry_run, expected_source_sha256 });
-    const { status, actions_completed } = result;
+    const { status, actions_completed, message } = result;
     console.log(JSON.stringify({ id, vm_id, dry_run, status, actions_completed,
+      ...(status === 'error' && typeof message === 'string' ? { message } : {}),
       ...(expectBlocked ? { expected_status: 'starting_screen_blocked', expected_actions_completed: 0 } : {}),
       elapsed_seconds: Number(((performance.now() - started) / 1000).toFixed(3)) }, null, 2));
     if (expectBlocked) {

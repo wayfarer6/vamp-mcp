@@ -208,6 +208,7 @@ To repeat just the final installed-MCP check on Windows, use a PowerShell window
 
 ```powershell
 $env:VAMP_DEMO_MCP_CLI = 'C:/path/to/vamp-mcp/bin/vamp-mcp.mjs'
+$env:VAMP_DEMO_PYTHON = 'C:/path/to/configured-VAMP-Python/python.exe'
 $env:VAMP_RPA_REGISTRY = 'C:/path/to/reviewed-demo-catalog'
 $env:VAMP_DEMO_EXPECTED_SOURCE_SHA256 = '<scratch-verified source SHA-256>'
 node scripts/demo_library.mjs saved-replay ./reviewed-v2-request.json --dryrun
