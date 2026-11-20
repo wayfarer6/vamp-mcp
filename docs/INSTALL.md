@@ -70,7 +70,11 @@ Get-ExecutionPolicy
 
 **Check permissions (UAC)** 진단 창은 권한을 가진 별도 프로세스에서 읽기 전용 진단만 합니다. UAC 진단 성공은 원래 VS Code/MCP 프로세스의 승격이 아니며, 원래 프로세스에 Hyper-V 권한을 부여하지 않습니다. 현재는 VM 생성을 대신 수행하는 권한 상승 브로커가 없습니다. 관리자 실행은 장비 소유자·조직의 허가와 정상적인 Hyper-V 설치/서비스/스위치 구성을 대신하지도 않습니다.
 
-### Debian 설치 파일 다운로드 실패: preseed와 postdeb를 구분
+### Hyper-V Debian 설치 실패 확인
+
+현재 Hyper-V Debian 골든 이미지는 내부 스위치와 정적 네트워크 프로필을 사용합니다. Default Switch의 DHCP 화면에서 멈춘 예전 작업은 새 정적 프로필로 다시 시작하세요. **Golden images**에서 실패한 단계를 확인합니다. `static_network_preflight`는 스위치·게이트웨이, `offline_install`은 DVD·응답 ISO, `verify_static_ip_after_reboot`는 SSH와 게스트 설정 완료 파일을 확인하는 단계입니다. [정적 프로필과 복구 절차](../backends/packer/debian-hyperv/README.md)
+
+이전 HTTP 설치 로그를 확인할 때는 다음 두 다운로드를 구분합니다.
 
 - **`preseed.cfg`를 받지 못한 경우:** Debian 설치기 초기에 Packer 임시 HTTP 서버로 접근하는 단계입니다. 빌드 로그의 실제 `preseed/url`, HTTP 포트, 서버 실행 상태와 선택한 Hyper-V 스위치에서 그 호스트 주소까지의 경로를 확인하세요. 일반 웹 브라우저에서 ISO를 내려받았다는 사실만으로 게스트의 이 경로가 검증되지는 않습니다.
 - **`postdeb.sh`를 받지 못한 경우:** preseed 처리 뒤 `late_command`가 빌드 호스트 스크립트 서버에서 게스트 후처리 파일을 받는 별도 단계입니다. 생성된 preseed의 실제 스크립트 기본 URL, 호스트 IPv4/포트, 스크립트 서버 실행 상태를 확인하세요. preseed 다운로드 성공을 postdeb 접근 성공으로 간주하지 마세요. 설치기 로그에 표시된 실패 URL을 기준으로 진단합니다.
