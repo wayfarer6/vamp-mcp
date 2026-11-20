@@ -35,6 +35,7 @@ VirtualBox setup demos are available as QHD MP4s.
 - [Podman · Debian / VirtualBox setup video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD.mp4)
 - [Robot Framework sources and QA results](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-v0.3.10-demo-source-and-qa.zip)
 - [Convert a PyAutoGUI recording to Robot Framework](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
+- [Standalone Demo ERP for replay and repair](https://github.com/wayfarer6/vamp-demo-erp)
 
 ## 💡 Why VAMP?
 
