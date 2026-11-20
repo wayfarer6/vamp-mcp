@@ -146,7 +146,7 @@ For the repair stage, use the existing demo catalog and provide a local JSON req
 bash scripts/demo_e2e_showcase.sh repair ./erp-repair.json ./erp-repair-qa --validate
 ```
 
-Static validation leaves the saved revision untouched. For an authorized scratch run, include `scratch_vm`, `outcome_text`, and the declared `test_inputs`. Use `--test` for a screen check or `--commit` after configuring all [scratch checks](WORKFLOWS.md#ai가-먼저-볼-정보). The launcher saves the verification status in `repair.json`. Review a committed revision before running it again.
+Static validation leaves the saved revision untouched. For an authorized scratch run, include `scratch_vm`, `outcome_text`, and the declared `test_inputs`. Use `--test` for a screen check or `--commit` after configuring all [scratch checks](WORKFLOWS.md#ai가-먼저-볼-정보). The launcher saves the verification status, call time, and Git HEAD before and after the attempt in `repair.json`. A failed verification should show an unchanged HEAD. Review a committed revision before running it again.
 
 One full scripted ERP run took **239.05 seconds** in Robot Framework 7.5.1. The measurement starts at the Robot test case, after the ERP and guest browser are ready. It includes both layouts, local OCR, two CSV checks, and the stale-replay check. Both CSVs matched and the stale v1 action completed zero inputs against v2. The setup used a Windows VirtualBox browser guest at 1920×1080 and rootless Podman in a Debian VirtualBox guest. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/de856ab)
 
