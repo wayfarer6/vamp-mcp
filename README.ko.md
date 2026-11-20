@@ -94,7 +94,7 @@ VAMP는 **HashiCorp Packer**와 **Vagrant**를 결합하여 가상화 인프라 
 - **하이퍼바이저 종속성 제거**: 어떤 호스트 OS나 가상화 엔진을 쓰더라도, AI 에이전트는 동일한 MCP 도구와 표준 SSH 통로를 통해 일관되게 VM을 다룰 수 있습니다.
 
 ### 3. 🚀 비전 데몬 백그라운드 사전 예열 (Cold-Start 해소)
-VAMP MCP 서버는 기동 시 stdio 핸드셰이크를 블로킹하지 않고 백그라운드에서 PaddleOCR과 YOLO 비전 데몬을 비동기로 예열합니다. 에이전트가 화면 검증을 호출할 때 초기 지연 시간 없이 즉각 결과를 얻습니다.
+VAMP MCP는 시작할 때 기본 OmniParser YOLO 아이콘 가중치를 백그라운드에서 준비합니다. SHA-256을 검증하고 사용자 캐시를 재사용합니다. 설정된 OCR·YOLO 워커 예열은 MCP 연결을 기다리게 하지 않습니다. [모델 설정과 사용자 가중치 지정](docs/USER_GUIDE.md#호스트-paddleocr-준비)
 
 ### 4. 🔐 제로 트러스트 자격증명 금고 (`vamp-vault`)
 - **KeePassXC** (`.kdbx`) 및 **VeraCrypt** (`.vhd`) 기반의 강력한 암호화 볼트.

@@ -41,12 +41,15 @@ function python_for(env,platform){
 function ensureVisionServices({runtime,env=process.env,platform=process.platform,spawnProcess=spawn,logger}={}){
   const report={status:'skipped',reason:null,command:null,pid:null};
   if(!enabled(env)){report.reason='disabled_by_VAMP_PRELOAD_MODELS';return report;}
-  if(runtime && fs.existsSync(path.join(runtime,'provisioning-assets.json'))){
+  const downloader=runtime&&path.join(runtime,'scripts/download_models.py');
+  const canDownload=downloader&&!env.VAMP_YOLO_MODEL&&fs.existsSync(downloader)&&fs.existsSync(path.join(runtime,'models/manifest.json'));
+  const lean=runtime&&fs.existsSync(path.join(runtime,'provisioning-assets.json'));
+  if(lean&&!canDownload){
     report.reason='deferred_until_assets_are_used';return report;
   }
   const entry=entrypoint(runtime);
-  if(!entry){report.status='unavailable';report.reason='model_daemon_not_packaged';return report;}
-  if((platform==='win32'||platform==='darwin') && !env.VAMP_OCR_PYTHON && !env.VAMP_YOLO_PYTHON){
+  if(!entry&&!lean){report.status='unavailable';report.reason='model_daemon_not_packaged';return report;}
+  if(!canDownload&&(platform==='win32'||platform==='darwin') && !env.VAMP_OCR_PYTHON && !env.VAMP_YOLO_PYTHON){
     const nativePython=platform==='win32'?'Scripts/python.exe':'bin/python';
     const hostHome=env.VAMP_HOME||path.join(os.homedir(),'.vamp');
     if(!['.venv','.venv-ocr'].some(folder=>fs.existsSync(path.join(runtime,folder,nativePython))) &&
@@ -55,10 +58,10 @@ function ensureVisionServices({runtime,env=process.env,platform=process.platform
     }
   }
   const python=python_for(env,platform);
-  const args=entry.script?[entry.script,...entry.args]:['-c','import model_daemon;model_daemon.ensure_services(wait=False)'];
+  const args=lean?[downloader,'--cache']:entry.script?[entry.script,...entry.args]:['-c','import model_daemon;model_daemon.ensure_services(wait=False)'];
   const command=[python,...args];
   try{
-    const child=spawnProcess(python,args,{cwd:entry.cwd,detached:true,stdio:'ignore',windowsHide:true,env:{...env,VAMP_PRELOAD_MODELS:'1'}});
+    const child=spawnProcess(python,args,{cwd:runtime,detached:true,stdio:'ignore',windowsHide:true,env:{...env,VAMP_PRELOAD_MODELS:'1'}});
     child.on?.('error',error=>{if(logger)logger(`Vision preload unavailable: ${error.message}`);});
     child.unref?.();
     report.status='started';report.command=command;report.pid=child.pid??null;

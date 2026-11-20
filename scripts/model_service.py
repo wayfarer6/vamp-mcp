@@ -2,10 +2,11 @@
 """Manage detached model workers: start/status/stop/restart, without systemd."""
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from model_daemon import KINDS,ensure_services,runtime_dir,status,stop
+from model_daemon import KINDS,ensure_services,model_interpreter,runtime_dir,status,stop
 
 
 def main():
@@ -22,6 +23,11 @@ def main():
         raise RuntimeError('A worker is still stopping; wait for current inference before restart')
     if args.action in ('start','restart'):
         states=ensure_services(wait=not args.no_wait,device=args.device,kinds=kinds)
+        if args.no_wait and os.environ.get('VAMP_PRELOAD_MODELS') == '1' and 'yolo' in kinds and (
+            not os.environ.get('VAMP_YOLO_MODEL') and not model_interpreter('yolo').is_file()
+        ):
+            from scripts.download_models import cache_directory, ensure_weights
+            ensure_weights(cache_directory())
     if args.action=='status':states={kind:status(kind) for kind in kinds}
     print(json.dumps({'runtime_directory':str(runtime_dir()),'services':states},indent=2))
 

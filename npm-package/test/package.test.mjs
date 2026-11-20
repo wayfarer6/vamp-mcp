@@ -24,7 +24,8 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
     path.resolve(path.dirname(cli), '../runtime/backends/common/windows-admin.cjs')),
   )).default.isAdministrator();
   const cache=path.join(temporary,'cache');
-  const env={...process.env,VAMP_ASSETS_DIR:cache,VAMP_RPA_REGISTRY:path.join(temporary,'catalog')};
+  const env={...process.env,VAMP_ASSETS_DIR:cache,VAMP_RPA_REGISTRY:path.join(temporary,'catalog'),
+    VAMP_PRELOAD_MODELS:'0'};
   const sourceManifest=JSON.parse(await readFile(vault
     ? path.resolve(root,'../npm-packages/vault/package.json') : path.join(root,'package.json'),'utf8'));
   assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),sourceManifest.version);
@@ -33,8 +34,13 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
     await t.test('packaged runtime excludes guest provisioning files', async () => {
       const runtime = path.resolve(path.dirname(cli), '../runtime');
       const inventory = await readdir(runtime, { recursive: true, withFileTypes: true });
-      const unexpected = inventory.filter(item => !item.isDirectory() && (!item.isFile() || !/\.(?:mjs|cjs|js|json)$/i.test(item.name)));
+      const downloader = path.join(runtime, 'scripts', 'download_models.py');
+      const unexpected = inventory.filter(item => !item.isDirectory() && (!item.isFile() ||
+        (!/\.(?:mjs|cjs|js|json)$/i.test(item.name) && path.join(item.parentPath, item.name) !== downloader)));
       assert.deepEqual(unexpected.map(item => item.name), []);
+      await access(downloader);
+      await access(path.join(runtime,'models/manifest.json'));
+      await assert.rejects(access(path.join(runtime,'models/omniparser-icon.pt')), {code:'ENOENT'});
       for (const relative of ['guest_setup', 'third_party/pyautogui-recorder', 'backends/packer', 'rpas', 'backends/virtualbox/rpas']) {
         await assert.rejects(access(path.join(runtime, relative)), { code: 'ENOENT' });
       }

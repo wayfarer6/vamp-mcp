@@ -1,4 +1,7 @@
 import importlib
+import hashlib
+from io import BytesIO
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -7,6 +10,28 @@ from unittest.mock import patch
 
 
 class ModelCacheTests(unittest.TestCase):
+    def test_pinned_default_download_is_reused_and_rejects_bad_bytes(self):
+        from scripts.download_models import ensure_weights
+
+        expected = b'fixture weights'
+        manifest = {
+            'repository': 'fixture/model', 'revision': 'pinned',
+            'files': [{'file': 'omniparser-icon.pt', 'remote': 'model.pt',
+                       'sha256': hashlib.sha256(expected).hexdigest()}],
+        }
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'manifest.json').write_text(json.dumps(manifest), encoding='utf-8')
+            cache = root / 'cache'
+            with patch('urllib.request.urlopen', return_value=BytesIO(b'corrupt')) as fetch:
+                with self.assertRaisesRegex(RuntimeError, 'checksum mismatch'):
+                    ensure_weights(cache, root=root, open_url=fetch)
+                self.assertEqual(list(cache.iterdir()), [])
+            with patch('urllib.request.urlopen', return_value=BytesIO(expected)) as fetch:
+                self.assertEqual(ensure_weights(cache, root=root, open_url=fetch)['omniparser-icon.pt'].read_bytes(), expected)
+                ensure_weights(cache, root=root, open_url=fetch)
+                fetch.assert_called_once_with('https://huggingface.co/fixture/model/resolve/pinned/model.pt', timeout=120)
+
     def test_yolo_worker_verifies_requested_class_even_when_no_boxes_are_detected(self):
         from model_server import ModelState
 
@@ -18,7 +43,7 @@ class ModelCacheTests(unittest.TestCase):
              patch('inference_device.prepare_detector', return_value=(model, 'cpu')):
             image = Path(directory) / 'test.png'
             image.touch()
-            request = {'image': str(image), 'required_class': 'modal'}
+            request = {'image': str(image), 'required_class': 'modal', 'model': 'fixture-model.pt'}
             with self.assertRaisesRegex(ValueError, 'does not provide the configured class'):
                 state.predict(request)
             prediction.names[1] = 'modal'

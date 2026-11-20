@@ -39,6 +39,9 @@ for(const name of ['backends/packer','backends/common/packer.cjs','backends/comm
 }
 // A VSIX/npm runtime built on Windows must also execute on Linux/macOS.
 await copyFile(path.join(root,'backends/library/scratch.py'),path.join(runtime,'backends/library/scratch.py'));
+await copyFile(path.join(root,'scripts/download_models.py'),path.join(runtime,'scripts/download_models.py'));
+await mkdir(path.join(runtime,'models'),{recursive:true});
+await copyFile(path.join(root,'models/manifest.json'),path.join(runtime,'models/manifest.json'));
 for(const name of ['vamp-ui-cleanup','vamp-ui-validation','vamp-rpa-ui-checks','vamp-podman']) {
   await cp(path.join(root,'.agents/skills',name),path.join(runtime,'skills',name),{recursive:true});
 }

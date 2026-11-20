@@ -92,7 +92,7 @@ VAMP abstracts the entire virtualization stack using **HashiCorp Packer** and **
 - **Zero Hypervisor Boilerplate**: AI agents and developers interact with the exact same MCP tools and SSH pipelines regardless of the host OS or underlying hypervisor engine.
 
 ### 3. 🚀 Instant Vision Preload (Zero Cold-Start)
-VAMP MCP servers automatically warm up local OCR (PaddleOCR) and YOLO vision daemons asynchronously upon startup. Handshakes and stdio communication remain unblocked, ensuring zero initial latency when an agent requests UI element verification.
+VAMP MCP prepares its default OmniParser YOLO icon weights in the background at startup, checks their SHA-256, and reuses the user cache. Configured OCR and YOLO workers warm up without delaying the MCP handshake. [Model setup and overrides](docs/USER_GUIDE.md#호스트-paddleocr-준비)
 
 ### 4. 🔐 Zero-Trust Credential Isolation (`vamp-vault`)
 - Encrypted **KeePassXC** (`.kdbx`) and optional **VeraCrypt** (`.vhd`) volume storage.

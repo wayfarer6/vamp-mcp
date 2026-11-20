@@ -10,7 +10,8 @@ execFileSync(process.execPath,[path.join(root,'vscode-extension/build.mjs')],{cw
 const dist=path.join(root,'vscode-extension/dist');
 const assetsOutput=process.env.VAMP_RELEASE_ASSETS_OUTPUT ||
   path.join(await mkdtemp(path.join(os.tmpdir(),'vamp-release-')),'assets');
-const runtimeMetadata=new Set(['backends/common/guest-install.json','backends/virtualbox/profiles.json']);
+const runtimeMetadata=new Set(['backends/common/guest-install.json','backends/virtualbox/profiles.json',
+  'scripts/download_models.py','models/manifest.json']);
 execFileSync(process.execPath,[path.join(here,'build-assets.mjs'),assetsOutput],{cwd:here,stdio:'inherit'});
 for (const name of ['runtime','notices']) {
   await rm(path.join(here,name),{recursive:true,force:true});

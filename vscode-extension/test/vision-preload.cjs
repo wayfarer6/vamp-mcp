@@ -86,6 +86,27 @@ test('Windows and macOS use the shared preload for both configured workers',()=>
   }finally{fs.rmSync(root,{recursive:true,force:true});}
 });
 
+test('lean MCP runtime can start the default weights download without provisioning assets',()=>{
+  const root=runtime_tree(false);
+  try{
+    fs.writeFileSync(path.join(root,'provisioning-assets.json'),'{}');
+    fs.mkdirSync(path.join(root,'models'));
+    fs.writeFileSync(path.join(root,'models','manifest.json'),'{}');
+    const script=path.join(root,'scripts','download_models.py');
+    fs.writeFileSync(script,'');
+    const spawnProcess=(python,args,options)=>{
+      assert.equal(python,'python');
+      assert.deepEqual(args,[script,'--cache']);
+      assert.equal(options.detached,true);
+      assert.equal(options.stdio,'ignore');
+      return {pid:1,on(){},unref(){}};
+    };
+    assert.equal(ensureVisionServices({runtime:root,platform:'win32',env:{},spawnProcess}).status,'started');
+    assert.equal(ensureVisionServices({runtime:root,platform:'win32',env:{VAMP_YOLO_MODEL:'custom.pt'},
+      spawnProcess:()=>assert.fail('the configured model must be preserved')}).reason,'deferred_until_assets_are_used');
+  }finally{fs.rmSync(root,{recursive:true,force:true});}
+});
+
 test('a failing interpreter reports unavailable instead of throwing into the server',()=>{
   const root=runtime_tree();
   try{

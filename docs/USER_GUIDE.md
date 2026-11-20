@@ -330,11 +330,13 @@ python3.12 -m venv ~/.vamp/ocr-python
 한 번 올라간 워커는 모델을 재사용합니다. PaddleOCR을 사용할 수 없거나 문구를
 한 번만 확인할 수 없으면, 시작 화면 확인이 설정된 RPA는 입력 전에 중단됩니다.
 
-MCP가 시작될 때 준비된 PaddleOCR과 YOLO 워커를 미리 올립니다. 독립 MCP는
-프로비저닝 자산을 설치해 둔 경우 시작 시 이 자산을 사용합니다. YOLO 환경과
-가중치가 저장소 기본 위치에 없으면 `VAMP_YOLO_PYTHON`과 `VAMP_YOLO_MODEL`을
-지정합니다. `VAMP_YOLO_DEVICE=cuda`는 CUDA를 요구하며, Apple Silicon의 YOLO는
-호환 Torch로 `mps`를 사용할 수 있습니다.
+MCP는 시작할 때 기본 OmniParser YOLO 아이콘 가중치가 없으면 백그라운드에서 내려받습니다.
+고정된 배포 버전과 SHA-256을 확인한 파일을 `~/.vamp/models` 또는 `VAMP_HOME/models`에
+보관하고 다음 시작부터 재사용합니다. 모델 예열과 다운로드는 MCP 연결을 기다리게 하지
+않습니다. YOLO 실행 환경을 다른 위치에 설치했다면 `VAMP_YOLO_PYTHON`을 지정하세요.
+사용자 모델은 `VAMP_YOLO_MODEL`로 지정하고, 자동 준비를 끄려면
+`VAMP_PRELOAD_MODELS=0`을 설정합니다. `VAMP_YOLO_DEVICE=cuda`는 CUDA를 요구하며,
+Apple Silicon의 YOLO는 호환 Torch로 `mps`를 사용할 수 있습니다.
 
 기본 장치 우선순위는 모델별 런타임이 지원하는 **NPU → GPU → CPU**입니다.
 PaddleOCR은 PaddlePaddle NPU 백엔드가 등록한 장치를 먼저 사용하고, 그다음

@@ -16,7 +16,7 @@ class ModelState:
         self.ready=False;self.warm_error=None;self.started=time.time();self.requests=0
         self.ocr_models=[]
         self.ocr_device=None
-        self.yolo_model = os.environ.get('VAMP_YOLO_MODEL', 'models/omniparser-icon.pt')
+        self.yolo_model = os.environ.get('VAMP_YOLO_MODEL')
         self.yolo_device = None
         self.executor=concurrent.futures.ThreadPoolExecutor(max_workers=1)
         self.warm_future = None
@@ -33,13 +33,22 @@ class ModelState:
             self.ocr_device = choose_ocr_device(os.environ.get('VAMP_OCR_DEVICE', 'auto'))
         return self.ocr_device
 
+    def detector_path(self, requested=None):
+        from scripts.download_models import MODEL_ROOT, cache_directory, ensure_weights
+        default = MODEL_ROOT / 'omniparser-icon.pt'
+        if requested and Path(requested).expanduser().resolve() != default.resolve():
+            return requested
+        if not self.yolo_model:
+            self.yolo_model = str(ensure_weights(cache_directory())['omniparser-icon.pt'])
+        return self.yolo_model
+
     def warm(self):
         try:
             with self.lock:
                 if self.kind=='yolo':
                     from PIL import Image
                     from inference_device import prepare_detector
-                    model,device=prepare_detector(self.yolo_model,self.device,self.cache)
+                    model,device=prepare_detector(self.detector_path(),self.device,self.cache)
                     model.predict(Image.new('RGB',(1280,720)),device=device,imgsz=1280,verbose=False)
                     self.yolo_device = device
                 else:
@@ -68,7 +77,7 @@ class ModelState:
             else:
                 from inference_device import prepare_detector
                 requested = data.get('device')
-                model,device=prepare_detector(data.get('model') or self.yolo_model,
+                model,device=prepare_detector(self.detector_path(data.get('model')),
                                               self.device if not requested or requested=='auto' else requested,self.cache)
                 prediction=model.predict(str(image),device=device,imgsz=1280,
                                           conf=float(data.get('confidence',.35)),verbose=False)[0]
