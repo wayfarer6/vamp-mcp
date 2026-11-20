@@ -326,6 +326,7 @@ def worker(image_id):
         if request.get('hyperv_debian'):
             from hyperv_bootstrap import require_deployment_policy
             from hyperv_debian import require_network, run_build
+            update(stage='static_network_preflight')
             network = hyperv_network(request)
             require_network(request['hyperv_debian'], network)
             require_deployment_policy(network)

@@ -54,6 +54,24 @@ The deployed VM's Vagrant configuration and provisioning files remain in its
 live directory. Run Vagrant from that directory with the configured SSH key
 available when managing the VM after the golden export is removed.
 
+### Diagnose an installer or network failure
+
+If an older build stops at the Default Switch DHCP or network preseed screen,
+create a new build using the dedicated internal switch and static profile
+above. The offline installer reads its answer file from the attached ISO.
+
+| Golden Images stage | What to check |
+| --- | --- |
+| `static_network_preflight` | Confirm the selected switch is internal and its Windows adapter has the configured gateway and subnet prefix. |
+| `offline_answer_media` | Check the DVD and daemon package SHA-256 values, the job directory, and the SSH public key. |
+| `offline_install` | Inspect the guest console and Packer log for DVD, answer-media, or installer errors. |
+| `static_ip_provisioning` | Check the reserved IPv4 address, WinNAT gateway, and the Debian mirror connection used by Vagrant. |
+| `verify_static_ip_after_reboot` | Check SSH at the reserved address and the guest setup marker. |
+
+Keep the golden export and live VM directories separate. When removing a
+failed or retired deployment, select the live VM in the VM manager and verify
+the golden image is still listed before cleaning up build files.
+
 ### Standalone build
 
 ```powershell
