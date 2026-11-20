@@ -182,6 +182,8 @@ The two v2 replay times measure different terminal outcomes. On v1 the fixed bas
 
 ### Eight-stage showcase checklist
 
+The separate Codex showcase authoring run reported 21,025 aggregate input tokens and 120 output tokens for the verified v1 keyboard recording, and 23,626 aggregate input tokens and 228 output tokens for the v2 repair. Each turn reported 13,952 cached input tokens. These counts come from the Codex CLI `turn.completed` events. The events report aggregate usage without an image-token breakdown, so the matched CUA benchmark still records provider vision tokens as unavailable.
+
 Use this sequence for the [VirtualBox ERP showcase](https://github.com/wayfarer6/vamp-mcp/issues/17). Start each layout trial from the same synthetic order state and keep each stage's files in its own report directory.
 
 Use the guided launcher from an interactive Bash terminal. Set `VAMP_RPA_REGISTRY` to an isolated demo catalog. Set `VAMP_DEMO_HOST_URL` if the standalone ERP uses a different local URL or port.
