@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import re
+import sqlite3
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -306,8 +307,20 @@ async def run(request, dialogue=False):
     if dialogue and references:
         vault_dialogue({'vault':'preflight','references':references})
     if metadata['backend']=='virtualbox':
-        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text,
-                               pause_on_uac=request.get('pause_on_uac') is True)
+        try:
+            completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text,
+                                   pause_on_uac=request.get('pause_on_uac') is True)
+        except ElevationHandoff as error:
+            from backends.virtualbox.history import record_elevation_handoff
+            observed_at=datetime.now(timezone.utc).isoformat()
+            result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
+                    'actions_completed':error.completed,'at':observed_at,'message':str(error)}
+            try:
+                result['run_id']=record_elevation_handoff(request['vm_id'],metadata['id'],error.reason,
+                                                          error.completed,observed_at)
+            except (OSError, sqlite3.Error):
+                result['history_status']='unavailable'
+            return result
     elif metadata['backend']=='kvm':
         import asyncvnc
         uri=request.get('libvirt_uri','qemu:///session')
@@ -334,10 +347,6 @@ if __name__=='__main__':
     except VaultDeliveryDenied as error:
         print(json.dumps({'status':'approval_required','actions_completed':error.completed,
                           'message':'Vault delivery did not receive confirmation. Replay stopped.'}))
-    except ElevationHandoff as error:
-        print(json.dumps({'status':'operator_handoff','reason':error.reason,
-                          'actions_completed':error.completed,'at':datetime.now(timezone.utc).isoformat(),
-                          'message':str(error)}))
     except StartScreenBlocked as error:
         print(json.dumps({'status':'starting_screen_blocked','actions_completed':0,'message':str(error)}))
     except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)

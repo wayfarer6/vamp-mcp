@@ -1,8 +1,12 @@
 import unittest
+import json
+import os
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backends.library.replay import ElevationHandoff, OutcomeScreenBlocked, VNC, VBox, replay
+from backends.library.replay import ElevationHandoff, OutcomeScreenBlocked, VNC, VBox, replay, run
+from backends.virtualbox.history import detail
 
 
 class FixtureDriver:
@@ -48,6 +52,29 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(blocked.exception.completed, 1)
                 self.assertEqual(driver.events, ['move', 'left'])
                 self.assertTrue(driver.closed)
+
+    async def test_uac_handoff_is_visible_in_virtualbox_run_history(self):
+        driver = FixtureDriver()
+        metadata = {'id': 'fixture-rpa', 'backend': 'virtualbox', 'resolution': [1920, 1080]}
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
+             patch('backends.library.replay.load', return_value=(metadata, actions)), \
+             patch('backends.library.replay.VBox', return_value=driver), \
+             patch('backends.library.replay.inspect_elevation_screen', return_value=True):
+            result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True})
+            record = detail(result['run_id'])
+        self.assertEqual(result['status'], 'operator_handoff')
+        self.assertEqual(driver.events, [])
+        self.assertEqual(record['vm'], 'fixture-vm')
+        self.assertEqual(record['evidence_status'], 'event_only')
+        self.assertEqual(record['artifacts'], [])
+        event, = record['events']
+        self.assertEqual(event['kind'], 'elevation_handoff')
+        self.assertEqual(event['created_at'], result['at'])
+        self.assertEqual(json.loads(event['payload_json']), {
+            'rpa_id': 'fixture-rpa', 'reason': 'uac_prompt_detected', 'actions_completed': 0,
+            'policy': 'operator_confirmation_required',
+        })
 
     async def test_virtualbox_outcome_requires_one_confident_match_after_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
