@@ -8,17 +8,23 @@ usage() {
     echo "Usage: $0 replay <vamp-demo-erp checkout> <new report directory> [--dryrun]" >&2
     echo "       $0 package <guest recording.py> <package ID> <new report directory>" >&2
     echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm]" >&2
+    echo "       $0 repair <request.json> <new report directory> [--validate|--test|--commit]" >&2
     exit 2
 }
 
-if [[ ${1:-} == saved-replay ]]; then
+if [[ ${1:-} == saved-replay || ${1:-} == repair ]]; then
     [[ $# -eq 3 || $# -eq 4 ]] || usage
-    mode=${4:---dryrun}
-    [[ $mode == --dryrun || $mode == --confirm ]] || usage
-    [[ -f $2 ]] || { echo "The saved replay request is missing." >&2; exit 2; }
+    if [[ $1 == repair ]]; then
+        mode=${4:---validate}
+        [[ $mode == --validate || $mode == --test || $mode == --commit ]] || usage
+    else
+        mode=${4:---dryrun}
+        [[ $mode == --dryrun || $mode == --confirm ]] || usage
+    fi
+    [[ -f $2 ]] || { echo "The demo request is missing." >&2; exit 2; }
     mkdir -- "$3"
     export VAMP_DEMO_PYTHON="$python"
-    node "$repo/scripts/demo_saved_replay.mjs" "$2" "$mode" | tee "$3/saved-replay.json"
+    node "$repo/scripts/demo_library.mjs" "$1" "$2" "$mode" | tee "$3/$1.json"
     exit
 fi
 
