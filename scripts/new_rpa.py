@@ -20,7 +20,7 @@ def create_package(package_id,guest_os='windows11',package_root=None):
         'outputs':{'summary':'${OUTPUT DIR}/summary.json','robot_log':'${OUTPUT DIR}/log.html',
                    'robot_report':'${OUTPUT DIR}/report.html'}}
     target.mkdir(parents=True)
-    (target/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')
+    (target/'manifest.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n', encoding='utf-8')
     (target/'workflow.py').write_text(f'''"""Edit detailed input, coordinates and verification here, not in host PyAutoGUI."""
 from robot.api.deco import keyword,library
 from robot.libraries.BuiltIn import BuiltIn

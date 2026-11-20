@@ -10,7 +10,7 @@ def load_package(package_id):
     if not re.fullmatch(r'[a-z][a-z0-9_]*',package_id):
         raise ValueError('Invalid RPA id')
     directory=ROOT/'rpas'/package_id
-    manifest=json.loads((directory/'manifest.json').read_text())
+    manifest=json.loads((directory/'manifest.json').read_text(encoding='utf-8'))
     required={'format_version','id','name','version','default_entrypoint','entrypoints',
               'python_libraries','dependencies','skill','outputs'}
     if set(manifest)!=required or manifest['format_version']!=1 or manifest['id']!=package_id:
