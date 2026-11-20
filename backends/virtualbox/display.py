@@ -19,7 +19,7 @@ DISPLAY_DATA={'GUI/Fullscreen':'','GUI/Seamless':'','GUI/Scale':'true',
               'CustomVideoMode1':'1920x1080x32'}
 
 def command(*args):
-    result=subprocess.run([executable(),*map(str,args)],capture_output=True,text=True,timeout=60)
+    result=subprocess.run([executable(),*map(str,args)],capture_output=True,encoding='utf-8',timeout=60)
     if result.returncode:raise RuntimeError(result.stderr.strip()[:500] or 'VBoxManage failed')
     return result.stdout
 
