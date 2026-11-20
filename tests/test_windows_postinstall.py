@@ -58,6 +58,8 @@ class WindowsPostinstallTests(unittest.TestCase):
         code=(ROOT/'guest_setup/http/postwin.ps1').read_text()
         code=code.replace('if(-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)){','if($false){')
         code=code.replace('Set-ExecutionPolicy -Scope Process -ExecutionPolicy Unrestricted -Force','')
+        code=code.replace("$sshRoot = 'HKLM:\\SOFTWARE\\OpenSSH'",
+                          "$sshRoot = Join-Path $env:TEMP 'fixture-openssh'")
         entry.write_text(code,encoding='utf8')
         harness=root/'run.ps1'
         harness.write_text(
@@ -66,13 +68,21 @@ class WindowsPostinstallTests(unittest.TestCase):
             +f"$env:TEMP={quote(root/'temp')}\n"
             +f"$env:APPDATA={quote(root/'app-data')}\n"
             +"$env:USERNAME='test-guest'\n"
+            +"function Get-Service { param($Name,$ErrorAction) @{Status='Running'} }\n"
+            +"function Set-Service { param($Name,$StartupType) }\n"
+            +"function Start-Service { param($Name) }\n"
+            +"function New-ItemProperty { param($Path,$Name,$Value,$PropertyType,[switch]$Force) }\n"
+            +"function Get-NetFirewallRule { param($Name,$ErrorAction) @{Name=$Name} }\n"
+            +"function Enable-NetFirewallRule { param($Name) }\n"
             +"function Invoke-WebRequest { param($Uri,$OutFile,[switch]$UseBasicParsing,$TimeoutSec) "
             +f"Copy-Item -LiteralPath {quote(source)} -Destination $OutFile }}\n"
             +f"& {quote(entry)}\n",
             encoding='utf8',
         )
-        result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(harness)],capture_output=True,text=True)
-        state=json.loads((root/'program-data/RPA-Recorder-Setup/postinstall-result.json').read_text(encoding='utf-8-sig'))
+        result=subprocess.run(['powershell.exe','-NoProfile','-ExecutionPolicy','Bypass','-File',str(harness)],capture_output=True,text=True,timeout=45)
+        state_file=root/'program-data/RPA-Recorder-Setup/postinstall-result.json'
+        self.assertTrue(state_file.exists(),result.stdout+result.stderr)
+        state=json.loads(state_file.read_text(encoding='utf-8-sig'))
         return root,result,state
 
     def test_first_login_executes_setup_without_another_login(self):
