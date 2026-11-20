@@ -162,22 +162,41 @@ class StartScreenBlocked(ValueError):
     pass
 
 
+class OutcomeScreenBlocked(ValueError):
+    pass
+
+
+async def screen_match_count(driver, resolution, expected):
+    with TemporaryDirectory(prefix='vamp-rpa-screen-') as folder:
+        screenshot = Path(folder) / 'screen.png'
+        await driver.capture(screenshot, resolution)
+        lines = await asyncio.to_thread(recognize_start_screen, screenshot, expected)
+    phrase = re.compile(r'(?<![\w-])' + re.escape(normalized_text(expected)) + r'(?![\w-])')
+    return sum(len(phrase.findall(normalized_text(line['text'])))
+               for line in lines if float(line['confidence']) >= 0.8)
+
+
 async def verify_start(driver, resolution, expected):
     try:
-        with TemporaryDirectory(prefix='vamp-rpa-start-') as folder:
-            screenshot = Path(folder) / 'screen.png'
-            await driver.capture(screenshot, resolution)
-            lines = await asyncio.to_thread(recognize_start_screen, screenshot, expected)
-        phrase = re.compile(r'(?<![\w-])' + re.escape(normalized_text(expected)) + r'(?![\w-])')
-        matches = sum(len(phrase.findall(normalized_text(line['text'])))
-                      for line in lines if float(line['confidence']) >= 0.8)
+        matches = await screen_match_count(driver, resolution, expected)
     except Exception as exc:
         raise StartScreenBlocked('Starting screen could not be verified. Check guest capture and host OCR before replaying.') from exc
     if matches != 1:
         raise StartScreenBlocked('Starting screen mismatch. Expected text must appear exactly once before replay.')
 
 
-async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None):
+async def verify_outcome_screen(driver, resolution, expected):
+    try:
+        if driver.geometry() != resolution:
+            raise ValueError('Guest resolution changed during replay.')
+        matches = await screen_match_count(driver, resolution, expected)
+    except Exception as exc:
+        raise OutcomeScreenBlocked('The guest outcome screen could not be verified.') from exc
+    if matches != 1:
+        raise OutcomeScreenBlocked('Expected outcome text must appear exactly once after replay.')
+
+
+async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None):
     completed=0
     try:
         actual = driver.geometry()
@@ -218,6 +237,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None):
                 driver.scroll(a['clicks'])
             else:raise ValueError('Unsupported replay operation: '+op)
             await driver.drain();completed+=1;await asyncio.sleep(.01)
+        if outcome_text is not None:
+            await verify_outcome_screen(driver, resolution, outcome_text)
     except VaultDeliveryDenied as error:
         error.completed = completed
         raise

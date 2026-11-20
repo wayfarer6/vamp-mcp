@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backends.library.replay import VNC, VBox, replay
+from backends.library.replay import OutcomeScreenBlocked, VNC, VBox, replay
 
 
 class FixtureDriver:
@@ -35,6 +35,28 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_kvm_captures_before_any_input(self):
         await self.check_capture_before_input('kvm')
+
+    async def test_virtualbox_outcome_requires_one_confident_match_after_input(self):
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        for text, accepted in [('Export complete', True), ('Export failed', False),
+                               ('Export complete Export complete', False)]:
+            with self.subTest(text=text):
+                driver = FixtureDriver()
+
+                def recognize(screenshot, expected):
+                    self.assertEqual(driver.events, ['move', 'left'])
+                    self.assertEqual(screenshot.read_bytes(), b'fixture')
+                    self.assertEqual(expected, 'Export complete')
+                    return [{'text': text, 'confidence': 0.95}]
+
+                with patch('backends.library.replay.recognize_start_screen', side_effect=recognize):
+                    if accepted:
+                        self.assertEqual(await replay(driver, actions, [1920, 1080],
+                                                      outcome_text='Export complete'), 1)
+                    else:
+                        with self.assertRaises(OutcomeScreenBlocked):
+                            await replay(driver, actions, [1920, 1080], outcome_text='Export complete')
+                self.assertTrue(driver.closed)
 
     async def check_capture_before_input(self, backend):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
