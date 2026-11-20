@@ -200,11 +200,12 @@ class OutcomeScreenBlocked(ValueError):
 
 
 class ElevationHandoff(ValueError):
-    def __init__(self, completed, reason, phase, program_name=None, observed_at=None):
+    def __init__(self, completed, reason, phase, program_name=None, observed_at=None, prompt_kind=None):
         self.completed = completed
         self.reason = reason
         self.phase = phase
         self.program_name = program_name
+        self.prompt_kind = prompt_kind
         self.observed_at = observed_at or datetime.now(timezone.utc).isoformat()
         super().__init__('Check the guest desktop before continuing.')
 
@@ -212,6 +213,7 @@ class ElevationHandoff(ValueError):
 @dataclass(frozen=True)
 class ElevationPrompt:
     program_name: str | None
+    kind: str
 
 
 def elevation_program_name(lines):
@@ -244,7 +246,14 @@ def inspect_elevation_screen(path):
     headings = ('user account control', '사용자 계정 컨트롤')
     prompt_scores = [confidence for text, confidence in readings if any(heading in text for heading in headings)]
     if any(confidence >= 0.8 for confidence in prompt_scores):
-        return ElevationPrompt(elevation_program_name(lines))
+        visible = [text for text, confidence in readings if confidence >= 0.8]
+        credential = any(re.match(r'(?:password|pin)\s*:', text)
+                         or 'administrator user name and password' in text
+                         or '암호를 입력' in text or text.startswith(('암호:', 'pin 입력'))
+                         for text in visible)
+        consent = any('do you want to allow' in text or '변경할 수 있도록 허용' in text for text in visible)
+        kind = 'credential' if credential else 'consent' if consent else 'unknown'
+        return ElevationPrompt(elevation_program_name(lines), kind)
     if prompt_scores or not any(text and confidence >= 0.8 for text, confidence in readings):
         raise ValueError('The guest frame did not provide a confident elevation check.')
     return None
@@ -261,7 +270,8 @@ async def require_clear_elevation_screen(driver, resolution, completed, phase):
     except Exception as error:
         raise ElevationHandoff(completed, 'screen_unverified', phase) from error
     if detected:
-        raise ElevationHandoff(completed, 'uac_prompt_detected', phase, getattr(detected, 'program_name', None))
+        raise ElevationHandoff(completed, 'uac_prompt_detected', phase, getattr(detected, 'program_name', None),
+                               prompt_kind=getattr(detected, 'kind', None))
 
 
 async def check_elevation_boundary(driver, resolution, completed, phase, wait_seconds, resume_text, on_resume):
@@ -273,6 +283,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
             raise
         program_name = blocked.program_name
         observed_at = blocked.observed_at
+        prompt_kind = blocked.prompt_kind
     try:
         async with asyncio.timeout(wait_seconds):
             while True:
@@ -285,9 +296,10 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
                     continue
                 break
     except TimeoutError as error:
-        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase, program_name, observed_at) from error
+        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase, program_name, observed_at,
+                               prompt_kind=prompt_kind) from error
     if on_resume is not None:
-        on_resume(completed, phase, program_name, observed_at)
+        on_resume(completed, phase, program_name, observed_at, prompt_kind)
 
 
 async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
@@ -419,13 +431,15 @@ async def run(request, dialogue=False):
             or (resume_text is not None and not wait_seconds)):
         raise ValueError('UAC resume requires VirtualBox, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
     resume_events = []
-    def record_resume(completed, phase, program_name, observed_at):
+    def record_resume(completed, phase, program_name, observed_at, prompt_kind):
         from backends.virtualbox.history import record_event_run
         payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'],
                    'actions_completed': completed, 'phase': phase, 'prompt_observed_at': observed_at,
                    'policy': 'operator_wait_screen_verified', 'program_identity': 'unverified'}
         if program_name is not None:
             payload['program_name_ocr'] = program_name
+        if prompt_kind is not None:
+            payload['prompt_kind'] = prompt_kind
         try:
             resume_events.append(record_event_run(request['vm_id'], 'resumed', 'elevation_resumed',
                                                    payload, datetime.now(timezone.utc).isoformat()))
@@ -458,10 +472,13 @@ async def run(request, dialogue=False):
                     'at':observed_at,'message':str(error)}
             if error.program_name is not None:
                 result['program_name_ocr'] = error.program_name
+            if error.prompt_kind is not None:
+                result['prompt_kind'] = error.prompt_kind
             try:
                 result['run_id']=record_elevation_handoff(request['vm_id'],metadata['id'],error.reason,
                                                           error.completed,observed_at,error.phase,
-                                                          metadata['replay_commit'], error.program_name)
+                                                          metadata['replay_commit'], error.program_name,
+                                                          error.prompt_kind)
             except (OSError, sqlite3.Error):
                 result['history_status']='unavailable'
             return result

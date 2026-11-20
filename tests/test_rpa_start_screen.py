@@ -67,6 +67,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             {'text': 'Windows PowerShell', 'confidence': .99, 'xyxy': [809, 503, 977, 519], 'language': 'ko'},
             {'text': '확인된 게시자: Microsoft Windows', 'confidence': .96, 'xyxy': [757, 552, 977, 569], 'language': 'ko'},
             {'text': 'Unrelated foreground text', 'confidence': .99, 'xyxy': [1350, 500, 1540, 520]},
+            {'text': 'Password:', 'confidence': .99},
         ]
         daemon = SimpleNamespace(request=lambda *args, **kwargs: {'lines': lines})
         with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
@@ -79,6 +80,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['phase'], 'before_action')
         self.assertEqual(result['program_identity'], 'unverified')
         self.assertEqual(result['program_name_ocr'], 'Windows PowerShell')
+        self.assertEqual(result['prompt_kind'], 'credential')
         self.assertEqual(result['replay_commit'], commit)
         self.assertEqual(driver.events, [])
         self.assertEqual(record['vm'], 'fixture-vm')
@@ -92,6 +94,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             'policy': 'operator_confirmation_required', 'phase': 'before_action',
             'program_identity': 'unverified', 'replay_commit': commit,
             'program_name_ocr': 'Windows PowerShell',
+            'prompt_kind': 'credential',
         })
 
     async def test_virtualbox_uac_after_final_action_precedes_outcome_ocr(self):
@@ -131,7 +134,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
              patch('backends.library.replay.VBox', return_value=driver), \
              patch('backends.library.replay.asyncio.sleep'), \
              patch('backends.library.replay.inspect_elevation_screen',
-                   side_effect=[False, SimpleNamespace(program_name='Fixture Setup'), False, False, False, False]), \
+                   side_effect=[False, SimpleNamespace(program_name='Fixture Setup', kind='consent'),
+                                False, False, False, False]), \
              patch('backends.library.replay.datetime') as clock, \
              patch('backends.library.replay.verify_start', side_effect=[StartScreenBlocked('not ready'), None]) as verify:
             observed = datetime(2026, 11, 20, 10, tzinfo=timezone.utc)
@@ -151,6 +155,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload['actions_completed'], 1)
         self.assertEqual(payload['prompt_observed_at'], observed.isoformat())
         self.assertEqual(payload['program_name_ocr'], 'Fixture Setup')
+        self.assertEqual(payload['prompt_kind'], 'consent')
         self.assertEqual(payload['policy'], 'operator_wait_screen_verified')
 
     async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
