@@ -1,10 +1,31 @@
 import importlib
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 
 class ModelCacheTests(unittest.TestCase):
+    def test_yolo_worker_verifies_requested_class_even_when_no_boxes_are_detected(self):
+        from model_server import ModelState
+
+        prediction = SimpleNamespace(names={0: 'icon'}, boxes=[], speed={})
+        model = SimpleNamespace(predict=lambda *args, **kwargs: [prediction])
+        state = ModelState('yolo', 'cpu')
+        self.addCleanup(state.executor.shutdown)
+        with TemporaryDirectory() as directory, \
+             patch('inference_device.prepare_detector', return_value=(model, 'cpu')):
+            image = Path(directory) / 'test.png'
+            image.touch()
+            request = {'image': str(image), 'required_class': 'modal'}
+            with self.assertRaisesRegex(ValueError, 'does not provide the configured class'):
+                state.predict(request)
+            prediction.names[1] = 'modal'
+            result = state.predict(request)
+        self.assertEqual(result['verified_class'], 'modal')
+        self.assertEqual(result['targets'], [])
+
     def test_auto_device_prioritizes_npu_then_gpu_then_cpu(self):
         from inference_device import choose_device
         from ocr_worker import choose_ocr_device
