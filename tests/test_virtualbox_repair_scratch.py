@@ -15,7 +15,10 @@ class VirtualBoxRepairScratchTest(unittest.TestCase):
             'UUID': self.VM, 'VMState': 'running',
             **{f'nic{index}': 'none' for index in range(1, 9)},
             'clipboard': 'disabled', 'clipboard_file_transfers': 'off',
-            'draganddrop': 'disabled', 'vrde': 'off', 'usb': 'off', 'teleporterenabled': 'off',
+            'draganddrop': 'disabled', 'vrde': 'off', 'usb': 'off', 'ehci': 'off', 'xhci': 'off',
+            'audio_in': 'off', 'audio_out': 'off', 'teleporterenabled': 'off',
+            **{f'uart{index}': 'off' for index in range(1, 5)},
+            **{f'lpt{index}': 'off' for index in range(1, 3)},
         }
 
     def check(self, vm=None, fields=None, environment=None):
@@ -39,6 +42,7 @@ class VirtualBoxRepairScratchTest(unittest.TestCase):
             ('nic8', 'nat'), ('clipboard', 'bidirectional'),
             ('clipboard_file_transfers', 'on'), ('draganddrop', 'hosttoguest'),
             ('vrde', 'on'), ('usb', 'on'), ('teleporterenabled', 'on'),
+            ('xhci', 'on'), ('uart2', '0x03f8,4'), ('audio_in', 'on'),
             ('SharedFolderNameMachineMapping1', 'workspace'),
         ]:
             with self.subTest(name=name), self.assertRaisesRegex(ValueError, 'isolation'):

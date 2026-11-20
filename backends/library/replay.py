@@ -76,8 +76,11 @@ class VBox:
         try:from vboxapi import VirtualBoxManager
         except ImportError:raise ValueError('VirtualBox mouse SDK is missing. Run VAMP Python setup on Windows, or configure VAMP Mouse Python Executable with vboxapi on Linux/macOS') from None
         self.manager=VirtualBoxManager(None,None);self.box=self.manager.getVirtualBox();machine=self.box.findMachine(vm)
-        if str(machine.state) not in ('5','Running'):raise ValueError('Start the target VM before replay')
-        self.session=self.manager.getSessionObject();machine.lockMachine(self.session,1);self.console=self.session.console
+        if machine.state != self.manager.constants.MachineState_Running:
+            raise ValueError('Start the target VM before replay')
+        self.session=self.manager.getSessionObject()
+        machine.lockMachine(self.session,self.manager.constants.LockType_Shared)
+        self.console=self.session.console
     def geometry(self):return list(self.console.display.getScreenResolution(0)[:2])
     async def capture(self, path, resolution):
         png = self.console.display.takeScreenShotToArray(0, *resolution, self.manager.constants.BitmapFormat_PNG)

@@ -39,6 +39,12 @@ def require_virtualbox_scratch(vm, *, read_config=show_vm, environment=None):
         'draganddrop': 'disabled',
         'vrde': 'off',
         'usb': 'off',
+        'ehci': 'off',
+        'xhci': 'off',
+        'audio_in': 'off',
+        'audio_out': 'off',
+        **{f'uart{index}': 'off' for index in range(1, 5)},
+        **{f'lpt{index}': 'off' for index in range(1, 3)},
         'teleporterenabled': 'off',
     }
     exposed = [name for name, value in isolated.items() if fields.get(name) != value]
@@ -83,6 +89,18 @@ def scratch_artifact_hash(vm, settings, *, execute=subprocess.run):
     if not match or int(match[1]) > 1024 * 1024:
         raise ValueError('The scratch output must be a regular file of at most 1 MiB.')
     with TemporaryDirectory(prefix='vamp-repair-artifact-') as directory:
+        if os.name == 'nt':
+            account = subprocess.run(
+                ['whoami.exe', '/user', '/fo', 'csv', '/nh'],
+                check=True, capture_output=True, text=True, timeout=10,
+            ).stdout
+            sid = re.search(r'"(S-1-[\d-]+)"', account)
+            if not sid:
+                raise ValueError('Could not identify the local account for scratch artifact verification.')
+            # An elevated VirtualBox service can own the copied file. Grant the
+            # same desktop user explicit inherited access within this temp folder.
+            subprocess.run(['icacls.exe', directory, '/grant', f'*{sid[1]}:(OI)(CI)M'],
+                           check=True, capture_output=True, timeout=10)
         target = Path(directory) / 'output'
         run('copyfrom', '--no-replace', source, str(target))
         metadata = target.lstat()
