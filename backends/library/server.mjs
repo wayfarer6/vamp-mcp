@@ -40,8 +40,8 @@ server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices. E
   child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));
  }));
 });
-server.tool('rpa_revision','Inspect a saved skill’s local Git history, read its latest committed source only when repair is needed, or validate and commit an authorized repair. Repairs become unreviewed and do not run automatically.',{
- id:identifier,action:z.enum(['status','read-source','update']).default('status'),source:z.string().max(64000).optional(),expected_commit:z.string().regex(/^[a-f0-9]{40}$/).optional(),commit_message:z.string().max(200).optional(),confirmed:z.boolean().default(false)
+server.tool('rpa_revision','Inspect a saved skill’s local Git history, read its latest committed source, statically validate a proposed repair without saving it, or commit an authorized repair. Static validation does not execute guest actions. Committed repairs require review.',{
+ id:identifier,action:z.enum(['status','read-source','validate','update']).default('status'),source:z.string().max(64000).optional(),expected_commit:z.string().regex(/^[a-f0-9]{40}$/).optional(),commit_message:z.string().max(200).optional(),confirmed:z.boolean().default(false)
 },{readOnlyHint:false,destructiveHint:true},async request=>{
  const item=await definition(request.id),folder=path.join(root,request.id);
  const latest=(await runGit('git',['-C',folder,'rev-parse','HEAD'],{timeout:15000})).stdout.trim();
@@ -50,13 +50,13 @@ server.tool('rpa_revision','Inspect a saved skill’s local Git history, read it
   return result({id:item.id,version:item.version,latest_commit:latest,history:history.split('\n')});
  }
  if(request.action==='read-source')return result({id:item.id,version:item.version,commit:latest,source:(await runGit('git',['-C',folder,'show','HEAD:source.py'],{timeout:15000,maxBuffer:5*1024*1024})).stdout,requires_review:true});
- if(!request.confirmed||!request.source||!request.expected_commit)return result({status:'needs_authorized_revision',message:'Read the latest source/commit first, then provide source, expected_commit and confirmed:true for the authorized repair.'});
+ if((request.action==='update'&&!request.confirmed)||!request.source||!request.expected_commit)return result({status:'needs_authorized_revision',message:'Read the latest source/commit first and provide source and expected_commit. Committing requires confirmed:true.'});
  if(latest!==request.expected_commit)return result({status:'revision_conflict',message:'Read the new latest revision before editing.'});
  if((await runGit('git',['-C',folder,'status','--porcelain','--untracked-files=no'],{timeout:15000})).stdout.trim())return result({status:'uncommitted_changes',message:'Preserve or commit the user’s working changes before an AI repair.'});
  const temporary=await mkdtemp(path.join(os.tmpdir(),'vamp-repair-'));
  try{
   const source=path.join(temporary,'source.py');await writeFile(source,request.source,{mode:0o600});
-  const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,start_text:item.start_text||'',tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name};
+  const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,start_text:item.start_text||'',tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name,validate_only:request.action==='validate'};
   const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/registry.py');
   const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[script],{windowsHide:true,timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
   return result(repaired.status==='registered'?{status:'committed_needs_review',id:item.id,version:repaired.definition.version,commit:repaired.commit,reviewed:false}:repaired);

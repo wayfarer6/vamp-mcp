@@ -15,6 +15,24 @@ class SavedRPATests(unittest.TestCase):
         self.temp=tempfile.TemporaryDirectory();self.addCleanup(self.temp.cleanup);self.root=Path(self.temp.name)
         self.source=self.root/'source.py';self.source.write_text("import pyautogui\npyautogui.write('${query}')\npyautogui.press('enter')\n")
         self.request={'title':'Search invoice','description':'Enter a query into the guest search field','source_path':str(self.source),'backend':'kvm','width':640,'height':480,'inputs':['query'],'reviewed':True}
+
+    def test_virtualbox_revision_validation_preserves_registered_source_and_head(self):
+        request = {**self.request, 'backend': 'virtualbox'}
+        saved = registry.register(self.root / 'catalog', request)
+        folder = Path(saved['folder'])
+        original = (folder / 'source.py').read_bytes()
+        self.source.write_text("import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
+        result = registry.validate_revision(request)
+        self.assertEqual(result['status'], 'static_validation_passed')
+        self.assertEqual(result['action_count'], 2)
+        self.assertFalse(result['guest_verified'])
+        self.assertFalse(result['committed'])
+
+        with self.assertRaisesRegex(ValueError, 'placeholder'):
+            registry.validate_revision({**request, 'inputs': ['missing']})
+        self.assertEqual((folder / 'source.py').read_bytes(), original)
+        self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), saved['commit'])
+        self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
     def test_registers_title_description_contract_without_executing_source(self):
         saved=registry.register(self.root/'catalog',self.request)
         self.assertEqual(saved['definition']['name'],'Search invoice');self.assertFalse(saved['definition']['source_executed']);self.assertEqual(saved['definition']['action_count'],2)

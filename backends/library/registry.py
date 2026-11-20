@@ -18,7 +18,7 @@ def git(folder,*args,check=True):
     return p.stdout.strip()
 
 
-def register(root,request):
+def validate_recording_request(request):
     title=str(request.get('title','')).strip();description=str(request.get('description','')).strip()
     if not 1<=len(title)<=120 or not 10<=len(description)<=4000:raise ValueError('Enter a title and a description of at least 10 characters')
     backend=request.get('backend','virtualbox')
@@ -33,6 +33,22 @@ def register(root,request):
     for name in names:
         if not any('${'+name+'}' in a.get('text','') for a in actions):raise ValueError(f'Input {name} has no ${{{name}}} placeholder in the recorded text')
     if len(actions)>10000 or any(a.get('seconds',0)>60 or a.get('interval',0)>10 or a.get('presses',0)>1000 or a.get('clicks',0)>1000 for a in actions):raise ValueError('Split large recordings or long delays into smaller tasks')
+    return title,description,backend,width,height,raw,actions,names
+
+
+def validate_revision(request):
+    _,_,backend,width,height,raw,actions,names=validate_recording_request(request)
+    if not actions:
+        raise ValueError('A repair must contain at least one recorded action')
+    return {
+        'status':'static_validation_passed','backend':backend,'resolution':[width,height],
+        'inputs':names,'action_count':len(actions),'source_sha256':hashlib.sha256(raw).hexdigest(),
+        'source_executed':False,'guest_verified':False,'committed':False,
+    }
+
+
+def register(root,request):
+    title,description,backend,width,height,raw,actions,names=validate_recording_request(request)
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True,mode=0o700)
     git(root,'--version')
     identifier=str(uuid.UUID(request['id'])) if request.get('id') else str(uuid.uuid4())
@@ -52,6 +68,8 @@ def register(root,request):
     try:
         os.close(fd)
         if request.get('expected_commit') and git(folder,'rev-parse','HEAD')!=request['expected_commit']:raise ValueError('RPA changed since it was read. Read the latest revision before repairing')
+        if request.get('expected_commit') and git(folder,'status','--porcelain','--untracked-files=no'):
+            raise ValueError('The RPA has uncommitted changes. Preserve them before repairing')
         version='1.0.0'
         if previous:
             old=str(previous.get('version','1.0.0')).split('.');version='.'.join(old[:2]+[str(int(old[2])+1)])
@@ -79,5 +97,8 @@ def register(root,request):
 
 if __name__=='__main__':
     try:
-        request=json.load(sys.stdin);print(json.dumps(register(request.pop('registry'),request),ensure_ascii=False))
+        request=json.load(sys.stdin)
+        root=request.pop('registry')
+        result=validate_revision(request) if request.pop('validate_only',False) else register(root,request)
+        print(json.dumps(result,ensure_ascii=False))
     except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)
