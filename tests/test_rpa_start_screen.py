@@ -145,6 +145,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                                 'uac_resume_text': 'Installed'})
             run_id, = result['elevation_resume_run_ids']
             record = detail(run_id)
+            wait_id, = result['elevation_wait_run_ids']
+            handoff, = detail(wait_id)['events']
         self.assertEqual(result['actions_completed'], 2)
         self.assertEqual(driver.events, ['move', 'left', 'move', 'left'])
         self.assertEqual(verify.await_count, 2)
@@ -157,6 +159,13 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload['program_name_ocr'], 'Fixture Setup')
         self.assertEqual(payload['prompt_kind'], 'consent')
         self.assertEqual(payload['policy'], 'operator_wait_screen_verified')
+        self.assertEqual(handoff['kind'], 'elevation_handoff')
+        self.assertEqual(handoff['created_at'], observed.isoformat())
+        handoff_payload = json.loads(handoff['payload_json'])
+        self.assertEqual(handoff_payload['actions_completed'], 1)
+        self.assertEqual(handoff_payload['program_name_ocr'], 'Fixture Setup')
+        self.assertEqual(handoff_payload['prompt_kind'], 'consent')
+        self.assertEqual(handoff_payload['policy'], 'operator_confirmation_required')
 
     async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
         driver = FixtureDriver()

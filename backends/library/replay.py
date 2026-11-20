@@ -274,13 +274,16 @@ async def require_clear_elevation_screen(driver, resolution, completed, phase):
                                prompt_kind=getattr(detected, 'kind', None))
 
 
-async def check_elevation_boundary(driver, resolution, completed, phase, wait_seconds, resume_text, on_resume):
+async def check_elevation_boundary(driver, resolution, completed, phase, wait_seconds, resume_text, on_resume,
+                                   on_wait=None):
     try:
         await require_clear_elevation_screen(driver, resolution, completed, phase)
         return
     except ElevationHandoff as blocked:
         if blocked.reason != 'uac_prompt_detected' or not wait_seconds or driver.held:
             raise
+        if on_wait is not None:
+            on_wait(blocked)
         program_name = blocked.program_name
         observed_at = blocked.observed_at
         prompt_kind = blocked.prompt_kind
@@ -353,11 +356,11 @@ async def verify_outcome_screen(driver, resolution, expected, forbidden_modal=No
 
 async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
                  require_new_outcome=False,forbidden_modal=None,pause_on_uac=False,
-                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None):
+                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None,on_uac_wait=None):
     completed=0
     async def check_uac(phase):
         await check_elevation_boundary(driver, resolution, completed, phase, uac_wait_seconds,
-                                       uac_resume_text, on_uac_resume)
+                                       uac_resume_text, on_uac_resume, on_uac_wait)
     try:
         actual = driver.geometry()
         if actual != resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {actual}; recalibrate rather than guessing')
@@ -431,6 +434,28 @@ async def run(request, dialogue=False):
             or (resume_text is not None and not wait_seconds)):
         raise ValueError('UAC resume requires VirtualBox, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
     resume_events = []
+    wait_events = []
+
+    def record_handoff(error):
+        from backends.virtualbox.history import record_elevation_handoff
+        return record_elevation_handoff(request['vm_id'], metadata['id'], error.reason, error.completed,
+                                        error.observed_at, error.phase, metadata['replay_commit'],
+                                        error.program_name, error.prompt_kind)
+
+    def record_wait(error):
+        try:
+            wait_events.append(record_handoff(error))
+        except (OSError, sqlite3.Error):
+            wait_events.append(None)
+
+    def attach_elevation_history(result):
+        if wait_events:
+            result['elevation_wait_run_ids'] = [run_id for run_id in wait_events if run_id is not None]
+        if resume_events:
+            result['elevation_resume_run_ids'] = [run_id for run_id in resume_events if run_id is not None]
+        if None in wait_events or None in resume_events:
+            result['history_status'] = 'unavailable'
+
     def record_resume(completed, phase, program_name, observed_at, prompt_kind):
         from backends.virtualbox.history import record_event_run
         payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'],
@@ -462,9 +487,9 @@ async def run(request, dialogue=False):
         try:
             completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text,
                                    pause_on_uac=request.get('pause_on_uac') is True, uac_wait_seconds=wait_seconds,
-                                   uac_resume_text=resume_text, on_uac_resume=record_resume)
+                                   uac_resume_text=resume_text, on_uac_resume=record_resume,
+                                   on_uac_wait=record_wait)
         except ElevationHandoff as error:
-            from backends.virtualbox.history import record_elevation_handoff
             observed_at=error.observed_at
             result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
                     'actions_completed':error.completed,'phase':error.phase,
@@ -475,12 +500,10 @@ async def run(request, dialogue=False):
             if error.prompt_kind is not None:
                 result['prompt_kind'] = error.prompt_kind
             try:
-                result['run_id']=record_elevation_handoff(request['vm_id'],metadata['id'],error.reason,
-                                                          error.completed,observed_at,error.phase,
-                                                          metadata['replay_commit'], error.program_name,
-                                                          error.prompt_kind)
+                result['run_id'] = record_handoff(error)
             except (OSError, sqlite3.Error):
                 result['history_status']='unavailable'
+            attach_elevation_history(result)
             return result
     elif metadata['backend']=='kvm':
         import asyncvnc
@@ -499,10 +522,7 @@ async def run(request, dialogue=False):
             completed=await replay(VNC(client),actions,metadata['resolution'],vault_steps,start_text=start_text)
     else:raise ValueError('This backend has no recorded desktop replay adapter')
     result = {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
-    if resume_events:
-        result['elevation_resume_run_ids'] = [run_id for run_id in resume_events if run_id is not None]
-        if None in resume_events:
-            result['history_status'] = 'unavailable'
+    attach_elevation_history(result)
     return result
 
 if __name__=='__main__':
