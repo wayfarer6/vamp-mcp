@@ -4,6 +4,9 @@ import packerModule from '../common/packer.cjs';
 import hyperVUacModule from '../hyperv/uac.cjs';
 // First-party MIT integration; upstream files remain unmodified.
 import { execFile } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { constants } from 'node:fs';
+import { open } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { registerDisplayTools } from '../../third_party/mcp-virtualbox/dist/tools/display.js';
@@ -83,7 +86,7 @@ server.tool('vm_recording_share','Prepare host recording share (no overwriting e
 async function transferAction(action,values) {
   const script=await resolveVmScript('transfers.py');
   const output=await new Promise((resolve,reject)=>{
-    const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{timeout:180000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
+    const child=execFile(process.env.RPA_HOST_PYTHON || 'python',[script],{env:{...process.env,PYTHONIOENCODING:'utf-8'},timeout:180000,maxBuffer:1024*1024},(error,stdout,stderr)=>{
       if(error && !stdout)reject(new Error(stderr || error.message));else resolve(stdout);
     });child.stdin.end(JSON.stringify({action,...values}));
   });return JSON.parse(output);
@@ -94,9 +97,37 @@ server.tool('vm_exchange_prepare','Configure the VM-scoped VAMPFiles shared fold
 server.tool('vm_file_put','Stage a <=1 GiB host file in the VM shared folder. Returns staged, not proof of a guest mount. Existing files require overwrite=true.',{
   vm:z.string().min(1),local_path:z.string().min(1),guest_path:z.string().min(1),overwrite:z.boolean().default(false),
 },async args=>result(await transferAction('put',args)));
-server.tool('vm_file_get','Copy a <=1 GiB shared guest file to the host and return size/SHA-256 without file contents.',{
+server.tool('vm_file_get','Copy a <=1 GiB shared guest file to the host and return size/SHA-256. If the user explicitly asks for the result in chat, set attach_to_chat for a CSV up to 256 KiB. Only attach a file the user has approved for disclosure to their chat client.',{
   vm:z.string().min(1),guest_path:z.string().min(1),local_path:z.string().min(1),overwrite:z.boolean().default(false),
-},async args=>result(await transferAction('get',args)));
+  attach_to_chat:z.boolean().default(false),
+},async ({attach_to_chat,...args})=>{
+  const copied=await transferAction('get',args);
+  if (!attach_to_chat || copied.status!=='copied' || !copied.host_copy_verified) return result(copied);
+  if (path.extname(copied.local_path).toLowerCase()!=='.csv' || path.extname(args.guest_path).toLowerCase()!=='.csv' ||
+      !Number.isSafeInteger(copied.bytes) || copied.bytes<0 || copied.bytes>256*1024) {
+    return result({...copied,chat_attachment:'unavailable_format_or_size'});
+  }
+  try {
+    const file=await open(copied.local_path,constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    let bytes;
+    try {
+      if (!(await file.stat()).isFile()) throw Error('The verified copy is no longer a regular file.');
+      const buffer=Buffer.alloc(copied.bytes+1);
+      const {bytesRead}=await file.read(buffer,0,buffer.length,0);
+      bytes=buffer.subarray(0,bytesRead);
+      if (bytesRead!==copied.bytes || createHash('sha256').update(bytes).digest('hex')!==copied.sha256) {
+        throw Error('The verified copy changed.');
+      }
+    } finally { await file.close(); }
+    const response=result({...copied,chat_attachment:'included'});
+    response.content.push({type:'resource',annotations:{audience:['user']},resource:{
+      uri:pathToFileURL(copied.local_path).href,mimeType:'text/csv',blob:bytes.toString('base64'),
+    }});
+    return response;
+  } catch {
+    return result({...copied,chat_attachment:'copy_could_not_be_reverified'});
+  }
+});
 server.tool('vm_import_recording','Copy a user-chosen .py/.handoff.json under guest RPA-Recorder using Guest Additions. Parse without execution; authorized sandbox account only.',{
   vm:z.string().min(1),guest_path:z.string().min(1),username:z.string().default('vboxuser'),
 },async args=>{

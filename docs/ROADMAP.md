@@ -186,6 +186,8 @@ bash scripts/demo_e2e_showcase.sh showcase ../vamp-demo-erp ./showcase-report \
 
 Use a new report directory and two unused CSV paths in existing shared download folders. Change the guest browser's download destination for the final run. The launcher stops at each operator checkpoint and on a failed verification. Save the live AI recording and the request files at the prompts. The repair request must name the saved RPA and a separate scratch VM.
 
+For the chat delivery step, have the guest save the synthetic ERP CSV in its mounted `VAMPFiles` share. After the user approves sharing that file in chat, call `vm_file_get` with a fresh local destination and `attach_to_chat: true`. A CSV of at most 256 KiB is returned as a user-facing MCP resource after its SHA-256 is rechecked. The host copy is still saved if the file cannot be attached. Verify that the selected chat client lets the user open or save the file as part of the filmed run.
+
 | Stage | Action | Evidence to retain |
 | --- | --- | --- |
 | 1. Start infrastructure | Boot the disposable VirtualBox guest and launch the standalone ERP fixture. Open its Orders page in the guest. | Guest UUID, 1920×1080 desktop, ERP checkout revision, and initial order state. |
