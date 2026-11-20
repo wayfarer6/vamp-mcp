@@ -148,6 +148,8 @@ bash scripts/demo_e2e_showcase.sh verified-replay ./erp-request.json ../vamp-dem
 
 Use an isolated download folder and a clean ERP fixture. The launcher requires an unused CSV filename before it sends input. It then verifies the newly downloaded file against the three expected shipped orders and records `csv-verification.json` alongside the MCP replay result.
 
+A Windows VirtualBox guest at 1920×1080 completed a verified saved replay against the loopback ERP fixture. The MCP call took **35.97 seconds** and delivered **17 actions**. The new shared CSV matched all three expected orders. After resetting and switching to v2, the same reviewed RPA returned `starting_screen_blocked` with **zero completed actions**. These measurements cover the saved replay and its starting-screen gate.
+
 For the repair stage, use the existing demo catalog and provide a local JSON request with `id`, `expected_commit`, and `source_file` (relative to the request file or absolute). Keep the candidate source local until it has been reviewed.
 
 ```bash
