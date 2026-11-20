@@ -32,8 +32,9 @@ test('reviewed replay stops on denied delivery and resumes on a receipt', {timeo
   const root=await mkdtemp(path.join(os.tmpdir(),'vamp-replay-'));
   t.after(()=>rm(root,{recursive:true,force:true}));
   const id=randomUUID(), vmId=randomUUID(), token=randomUUID();
-  const registry=path.join(root,id);
-  await mkdir(registry);
+  const catalog=path.join(root,'한글 카탈로그');
+  const registry=path.join(catalog,id);
+  await mkdir(registry,{recursive:true});
   const trace=path.join(root,'trace.jsonl');
   const engine=fileURLToPath(new URL('./replay.py',import.meta.url));
   const harness=path.join(root,'driver.py');
@@ -67,11 +68,12 @@ runpy.run_path(${JSON.stringify(engine)}, run_name='__main__')
     {op:'press',presses:1,keys:['enter'],interval:0},
   ]);
   const hash=value=>createHash('sha256').update(value).digest('hex');
+  const expectedResult='주문 저장 완료';
   await Promise.all([
     writeFile(path.join(registry,'source.py'),source),
     writeFile(path.join(registry,'actions.json'),actions),
     writeFile(path.join(registry,'rpa.json'),JSON.stringify({id,format:'vamp-saved-rpa',backend:'virtualbox',reviewed:true,
-      inputs:['login'],resolution:[1920,1080],expected_result:'fixture',source_sha256:hash(source),actions_sha256:hash(actions)})),
+      inputs:['login'],resolution:[1920,1080],expected_result:expectedResult,source_sha256:hash(source),actions_sha256:hash(actions)})),
   ]);
   const git=(...args)=>execFileSync('git',['-C',registry,...args],{stdio:'pipe'});
   git('init','-q');
@@ -89,13 +91,17 @@ runpy.run_path(${JSON.stringify(engine)}, run_name='__main__')
   }));
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(socketPath,resolve);});
   t.after(()=>server.close());
-  const request={id,vm_id:vmId,registry:root,inputs:{login:'${vault:QA/Fixture#password}'},vault_destination:'fixture',confirmed:true};
+  const request={id,vm_id:vmId,registry:catalog,inputs:{login:'${vault:QA/Fixture#password}'},vault_destination:'fixture',confirmed:true};
   const python=process.env.RPA_HOST_PYTHON || (process.platform==='win32'?'python':'python3');
   const original=process.env.VAULT_MASTER_PASSWORD;
+  const originalEncoding=process.env.PYTHONIOENCODING;
   process.env.VAULT_MASTER_PASSWORD='qa-replay-env-fixture';
+  process.env.PYTHONIOENCODING='ascii';
   t.after(()=>{
     if(original===undefined) delete process.env.VAULT_MASTER_PASSWORD;
     else process.env.VAULT_MASTER_PASSWORD=original;
+    if(originalEncoding===undefined) delete process.env.PYTHONIOENCODING;
+    else process.env.PYTHONIOENCODING=originalEncoding;
   });
   const run=()=>runWithVault(python,harness,request,{socketPath,token});
   const keys=async()=>(await readFile(trace,'utf8')).trim().split(/\r?\n/).map(JSON.parse);
@@ -107,6 +113,7 @@ runpy.run_path(${JSON.stringify(engine)}, run_name='__main__')
   await writeFile(trace,'');
   const finished=await run();
   assert.equal(finished.status,'completed_unverified');
+  assert.equal(finished.expected_result,expectedResult);
   assert.equal(finished.resolved,1);
   assert.deepEqual(await keys(),['tab','enter']);
   assert.ok(!JSON.stringify(finished).includes('fixture-must-not-leave-bridge'));
