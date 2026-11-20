@@ -438,9 +438,10 @@ async def run(request, dialogue=False):
 
     def record_handoff(error):
         from backends.virtualbox.history import record_elevation_handoff
+        recorded_at = datetime.now(timezone.utc).isoformat() if error.reason == 'uac_resume_not_verified' else None
         return record_elevation_handoff(request['vm_id'], metadata['id'], error.reason, error.completed,
                                         error.observed_at, error.phase, metadata['replay_commit'],
-                                        error.program_name, error.prompt_kind)
+                                        error.program_name, error.prompt_kind, recorded_at=recorded_at)
 
     def record_wait(error):
         try:

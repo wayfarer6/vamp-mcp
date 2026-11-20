@@ -97,7 +97,7 @@ SQLite의 `runs`에는 VM·시각·상태·Robot 결과, `events`에는 작업 �
 
 ## UAC 기록
 
-VirtualBox 저장 RPA가 UAC 화면에서 멈추면 `elevation_handoff` 이벤트에 관찰 시점과 운영자 확인 정책을 남깁니다. 같은 실행을 재개하면 `elevation_resumed` 이벤트의 생성 시각은 재개 시점이며, `prompt_observed_at`은 처음 프롬프트를 감지한 시점입니다. 프로그램 이름은 OCR에서 확인할 수 있었을 때 `program_name_ocr`에 기록합니다. 실행 파일의 신원은 `unverified`로 표시됩니다.
+VirtualBox 저장 RPA가 UAC 화면에서 멈추면 `elevation_handoff` 이벤트에 관찰 시점과 운영자 확인 정책을 남깁니다. 운영자 확인을 기다리는 경우 감지 기록을 먼저 저장합니다. 제한 시간이 지나면 별도의 `uac_resume_not_verified` 기록을 남깁니다. 이 기록과 `elevation_resumed` 이벤트의 생성 시각은 각각 제한 시간 종료 및 재개 시점이며, `prompt_observed_at`은 최초 감지 시점입니다. 프로그램 이름은 OCR에서 확인할 수 있었을 때 `program_name_ocr`에 기록합니다. 실행 파일의 신원은 `unverified`로 표시됩니다.
 
 OCR로 읽은 프롬프트 종류는 `prompt_kind`에 기록합니다. 동의 화면은 `consent`, 암호나 PIN 입력 화면은 `credential`, 종류가 불분명하면 `unknown`입니다. 모든 종류에서 운영자가 게스트 화면을 확인합니다.
 
