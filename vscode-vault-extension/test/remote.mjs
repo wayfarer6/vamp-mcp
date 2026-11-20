@@ -57,16 +57,17 @@ async function check(name, fn) {
 
 const workdir = await mkdtemp(path.join(os.tmpdir(), 'vamp-vault-remote-'));
 const fakeBin = path.join(workdir, 'bin');
+const fakeSsh = path.join(fakeBin, 'ssh');
 await mkdir(fakeBin, { recursive: true });
 
 // Stand-in ssh: run the remote command in a shell whose HOME is the "host".
-await writeFile(path.join(fakeBin, 'ssh'), [
+await writeFile(fakeSsh, [
   '#!/bin/sh',
   '# test stand-in for ssh: the last argument is the remote shell command',
   'for last do :; done',
   'exec env HOME="$FAKE_REMOTE_HOME" sh -c "$last"',
 ].join('\n'));
-await chmod(path.join(fakeBin, 'ssh'), 0o755);
+await chmod(fakeSsh, 0o755);
 if (keepassCli) {
   await writeFile(path.join(fakeBin, 'keepassxc-cli'), `#!/bin/sh\nexec ${JSON.stringify(keepassCli)} "$@"\n`);
   await chmod(path.join(fakeBin, 'keepassxc-cli'), 0o755);
@@ -78,10 +79,13 @@ const makeHost = async (label) => {
     label,
     home,
     path: file => path.join(home, '.vamp/vault', file),
-    spawnImpl: (command, args, options) => spawn(command, args, {
-      ...options,
-      env: { ...(options.env ?? process.env), PATH: `${fakeBin}:${process.env.PATH ?? ''}`, FAKE_REMOTE_HOME: home },
-    }),
+    spawnImpl: (command, args, options) => {
+      assert.equal(command, 'ssh', 'The mock must handle each SSH call locally.');
+      return spawn('sh', [fakeSsh, ...args], {
+        ...options,
+        env: { ...(options.env ?? process.env), PATH: [fakeBin, process.env.PATH ?? ''].join(path.delimiter), FAKE_REMOTE_HOME: home },
+      });
+    },
   };
 };
 
@@ -261,8 +265,11 @@ await check('the server and the setup script upload into the host home', async (
   assert.ok(report.setup_script);
   const server = await stat(hostOne.path('server.mjs'));
   const script = await stat(hostOne.path('remote_vault_setup.sh'));
-  assert.equal(server.mode & 0o777, 0o600, 'the uploaded server is private');
-  assert.equal(script.mode & 0o777, 0o700, 'the uploaded setup script is private');
+  assert.ok(server.isFile() && script.isFile());
+  if (process.platform !== 'win32') {
+    assert.equal(server.mode & 0o777, 0o600, 'the uploaded server is private');
+    assert.equal(script.mode & 0o777, 0o700, 'the uploaded setup script is private');
+  }
 });
 
 await check('setup makes the host vault directory private and reports each step', async () => {
@@ -270,7 +277,8 @@ await check('setup makes the host vault directory private and reports each step'
   const report = await client.runSetup();
   assert.ok(['ok', 'needs_attention'].includes(report.status), `unexpected status ${report.status}`);
   const dir = await stat(path.join(hostOne.home, '.vamp/vault'));
-  assert.equal(dir.mode & 0o777, 0o700);
+  assert.ok(dir.isDirectory());
+  if (process.platform !== 'win32') assert.equal(dir.mode & 0o777, 0o700);
   assert.ok(report.steps.some(step => step.id === 'node'));
   if (keepassCli) assert.ok(report.steps.some(step => step.id === 'keepassxc' && ['ok', 'needs_manual'].includes(step.status)));
 });
@@ -291,7 +299,7 @@ if (!keepassCli) {
     const client = new RemoteVaultClient(normalizeRemoteVaultConfig({ host: 'host1' }), { spawnImpl: hostOne.spawnImpl });
     const created = await client.call('vault_create', {}, { password: passwordOne });
     assert.equal(created.status, 'created');
-    assert.equal(created.file, hostOne.path('vault.kdbx').replace(hostOne.home, hostOne.home));
+    assert.equal(path.normalize(created.file), hostOne.path('vault.kdbx'));
 
     const second = new RemoteVaultClient(normalizeRemoteVaultConfig({ host: 'host2' }), { spawnImpl: hostTwo.spawnImpl });
     await second.upload({
@@ -357,7 +365,9 @@ if (!keepassCli) {
   console.log('\nMCP proxy (what the agent sees)');
 
   // Stand-in extension host: secret storage + approval dialogs.
-  const socketPath = path.join(workdir, 'bridge.sock');
+  const socketPath = process.platform === 'win32'
+    ? `\\\\.\\pipe\\${path.basename(workdir)}-bridge`
+    : path.join(workdir, 'bridge.sock');
   const token = 'remote-test-token';
   const bridgeCalls = [];
   let approveNext = true;
@@ -386,10 +396,20 @@ if (!keepassCli) {
   });
   await new Promise((resolve, reject) => { bridgeServer.once('error', reject); bridgeServer.listen(socketPath, resolve); });
 
+  const proxyShim = path.join(workdir, 'proxy-ssh.cjs');
+  await writeFile(proxyShim, [
+    "const child = require('node:child_process');",
+    "const spawn = child.spawn;",
+    "child.spawn = (command, args, options) => command === 'ssh'",
+    "  ? spawn('sh', [process.env.VAULT_TEST_FAKE_SSH, ...args], options)",
+    "  : spawn(command, args, options);",
+    "require('node:module').syncBuiltinESMExports();",
+  ].join('\n'));
   const startProxy = async () => {
     const transport = new StdioClientTransport({
       command: process.execPath,
       args: [
+        '--require', proxyShim,
         path.join(remoteRuntime, 'vault_proxy.mjs'),
         '--host', 'host1',
         '--username', 'me',
@@ -399,7 +419,8 @@ if (!keepassCli) {
         '--approval-mode', 'per-session',
       ],
       env: {
-        PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        PATH: [fakeBin, process.env.PATH ?? ''].join(path.delimiter),
+        VAULT_TEST_FAKE_SSH: fakeSsh,
         HOME: workdir,
         FAKE_REMOTE_HOME: hostOne.home,
         VAULT_BRIDGE_SOCKET: socketPath,
@@ -488,7 +509,7 @@ if (!keepassCli) {
     approveNext = true;
   });
 
-  await check('remote placeholders use approved process stdin and return a receipt only', async () => {
+  await check('remote placeholders use approved process stdin on Linux and fail closed elsewhere', async () => {
     const program=hostOne.path('stdin-test.mjs');
     const marker=hostOne.path('stdin-test.ok');
     const digest=createHash('sha256').update(entryPassword+'\n').digest('hex');
@@ -508,8 +529,15 @@ if (!keepassCli) {
     assert.deepEqual(payload(await proxy.callTool(input)),{status:'denied'});
     await assert.rejects(stat(marker),{code:'ENOENT'});
     approveNext=true;
-    assert.deepEqual(payload(await proxy.callTool(input)),{status:'delivered',destination:'probe'});
+    const approved = payload(await proxy.callTool(input));
     assert.equal(count(),before+2);
+    if (process.platform !== 'linux') {
+      assert.equal(approved.status, 'error');
+      assert.ok(!JSON.stringify(approved).includes(entryPassword));
+      await assert.rejects(stat(marker), { code: 'ENOENT' });
+      return;
+    }
+    assert.deepEqual(approved,{status:'delivered',destination:'probe'});
     assert.equal(await readFile(marker,'utf8'),'ok');
     const audit=await readFile(hostOne.path('credential-delivery.jsonl'),'utf8');
     assert.ok(!audit.includes(entryPassword) && !audit.includes(passwordOne));
