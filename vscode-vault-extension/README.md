@@ -416,6 +416,10 @@ for local file containers from the VeraCrypt 1.26 driver. With other driver
 versions it can fall back to showing drive letters. Automatic Windows host
 dismount requires a verified backing path and a workspace drive with no
 registered VirtualBox disks. Busy or unverified mounts remain pending.
+On Windows with VirtualBox 7.2.22 and VeraCrypt 1.26.31, an external VM
+power-off left cleanup pending while a file on the workspace was open.
+After the file closed, the next reconciliation dismounted the volume.
+Remounting the same container recovered the file saved before shutdown.
 
 For KVM, use `backend: "kvm"`, a secondary virtio target such as `vdb`,
 and `libvirt_uri` when using `qemu:///system`. The tools check and change
