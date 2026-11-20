@@ -39,7 +39,7 @@ class Recorder:
         style.configure('TFrame',background='#111827');style.configure('TLabel',background='#111827',foreground='#e5e7eb')
         style.configure('TButton',font=('Segoe UI',11),padding=(12,9));style.configure('TCheckbutton',background='#111827',foreground='#e5e7eb')
         style.configure('Accent.TButton',background='#6750c8',foreground='white')
-        self.active=False;self.events=[];self.pending=queue.Queue();self.lock=threading.Lock();self.last=0
+        self.active=False;self.recorded_input=False;self.events=[];self.pending=queue.Queue();self.lock=threading.Lock();self.last=0
         self.held=set();self.bounds=(0,0,0,0);self.last_saved=None;self.folder,self.shared=output_folder()
         frame=ttk.Frame(self.root,padding=22);frame.pack(fill='both',expand=True)
         ttk.Label(frame,text='VAMP  /  Recorder',font=('Segoe UI',22,'bold')).pack(anchor='w')
@@ -77,6 +77,7 @@ class Recorder:
         with self.lock:
             if not self.active:return
             now=time.monotonic();delay=max(0,now-self.last);self.last=now
+            self.recorded_input=True
             self.pending.put((delay,code))
     def click(self,x,y,button,pressed):
         if not pressed:return
@@ -103,13 +104,15 @@ class Recorder:
         if self.active:return
         if sys.platform!='win32' and os.environ.get('XDG_SESSION_TYPE')=='wayland':
             messagebox.showwarning('X11 session required','Global recording requires GNOME on Xorg. Log out and choose that session.');return
-        with self.lock:self.active=True;self.last=time.monotonic();self.held.clear()
+        with self.lock:self.active=True;self.recorded_input=False;self.last=time.monotonic();self.held.clear()
         self.status.set('● RECORDING · F8 or Stop to pause');self.start_button.configure(state='disabled');self.write_health()
     def stop(self):
         with self.lock:
+            elapsed=time.monotonic()-self.last if self.active and self.recorded_input else 0
             self.active=False
             for name in self.held:self.pending.put((0,f'pyautogui.keyUp({name!r})'))
             self.held.clear()
+            if elapsed>0.001:self.pending.put((0,f'time.sleep({elapsed:.5f})'))
         self.start_button.configure(state='normal');self.status.set('Stopped · Save Python to share with the AI');self.write_health()
     def poll(self):
         self.bounds=(self.root.winfo_rootx(),self.root.winfo_rooty(),self.root.winfo_rootx()+self.root.winfo_width(),self.root.winfo_rooty()+self.root.winfo_height())
