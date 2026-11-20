@@ -1,5 +1,6 @@
 """Replay reviewed, AST-parsed actions on guest devices. Never exec recorder code."""
 import asyncio
+from datetime import datetime, timezone
 import hashlib
 import json
 import os
@@ -172,6 +173,40 @@ class OutcomeScreenBlocked(ValueError):
     pass
 
 
+class ElevationHandoff(ValueError):
+    def __init__(self, completed, reason):
+        self.completed = completed
+        self.reason = reason
+        super().__init__('Check the guest desktop before continuing.')
+
+
+def inspect_elevation_screen(path):
+    from model_daemon import request
+    lines = request('ocr', {'op': 'predict', 'image': str(path),
+                            'languages': ['en', 'ko']}, timeout=45)['lines']
+    if not lines:
+        raise ValueError('No readable text in the guest frame.')
+    return any(
+        any(heading in normalized_text(line['text'])
+            for heading in ('user account control', '사용자 계정 컨트롤'))
+        for line in lines if float(line['confidence']) >= 0.8
+    )
+
+
+async def require_clear_elevation_screen(driver, resolution, completed):
+    try:
+        if driver.geometry() != resolution:
+            raise ValueError('Guest resolution changed.')
+        with TemporaryDirectory(prefix='vamp-elevation-') as folder:
+            screenshot = Path(folder) / 'screen.png'
+            await driver.capture(screenshot, resolution)
+            detected = await asyncio.to_thread(inspect_elevation_screen, screenshot)
+    except Exception as error:
+        raise ElevationHandoff(completed, 'screen_unverified') from error
+    if detected:
+        raise ElevationHandoff(completed, 'uac_prompt_detected')
+
+
 async def screen_match_count(driver, resolution, expected):
     with TemporaryDirectory(prefix='vamp-rpa-screen-') as folder:
         screenshot = Path(folder) / 'screen.png'
@@ -202,7 +237,7 @@ async def verify_outcome_screen(driver, resolution, expected):
         raise OutcomeScreenBlocked('Expected outcome text must appear exactly once after replay.')
 
 
-async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None):
+async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,pause_on_uac=False):
     completed=0
     try:
         actual = driver.geometry()
@@ -212,6 +247,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
             if driver.geometry() != resolution:
                 raise ValueError('Guest resolution changed during starting-screen verification. Replay stopped.')
         for a in actions:
+            if pause_on_uac:
+                await require_clear_elevation_screen(driver, resolution, completed)
             op=a['op']
             if op=='wait':await asyncio.sleep(a['seconds'])
             elif op=='key_down':driver.down(a['key'])
@@ -245,6 +282,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
             await driver.drain();completed+=1;await asyncio.sleep(.01)
         if outcome_text is not None:
             await verify_outcome_screen(driver, resolution, outcome_text)
+        if pause_on_uac:
+            await require_clear_elevation_screen(driver, resolution, completed)
     except VaultDeliveryDenied as error:
         error.completed = completed
         raise
@@ -267,7 +306,8 @@ async def run(request, dialogue=False):
     if dialogue and references:
         vault_dialogue({'vault':'preflight','references':references})
     if metadata['backend']=='virtualbox':
-        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text)
+        completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text,
+                               pause_on_uac=request.get('pause_on_uac') is True)
     elif metadata['backend']=='kvm':
         import asyncvnc
         uri=request.get('libvirt_uri','qemu:///session')
@@ -294,6 +334,10 @@ if __name__=='__main__':
     except VaultDeliveryDenied as error:
         print(json.dumps({'status':'approval_required','actions_completed':error.completed,
                           'message':'Vault delivery did not receive confirmation. Replay stopped.'}))
+    except ElevationHandoff as error:
+        print(json.dumps({'status':'operator_handoff','reason':error.reason,
+                          'actions_completed':error.completed,'at':datetime.now(timezone.utc).isoformat(),
+                          'message':str(error)}))
     except StartScreenBlocked as error:
         print(json.dumps({'status':'starting_screen_blocked','actions_completed':0,'message':str(error)}))
     except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)

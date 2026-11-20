@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from backends.library.replay import OutcomeScreenBlocked, VNC, VBox, replay
+from backends.library.replay import ElevationHandoff, OutcomeScreenBlocked, VNC, VBox, replay
 
 
 class FixtureDriver:
@@ -35,6 +35,19 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
 
     async def test_kvm_captures_before_any_input(self):
         await self.check_capture_before_input('kvm')
+
+    async def test_virtualbox_uac_handoff_stops_before_next_action(self):
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}] * 2
+        for next_screen, reason in [(True, 'uac_prompt_detected'), (ValueError('OCR failed'), 'screen_unverified')]:
+            with self.subTest(reason=reason):
+                driver = FixtureDriver()
+                with patch('backends.library.replay.inspect_elevation_screen', side_effect=[False, next_screen]):
+                    with self.assertRaises(ElevationHandoff) as blocked:
+                        await replay(driver, actions, [1920, 1080], pause_on_uac=True)
+                self.assertEqual(blocked.exception.reason, reason)
+                self.assertEqual(blocked.exception.completed, 1)
+                self.assertEqual(driver.events, ['move', 'left'])
+                self.assertTrue(driver.closed)
 
     async def test_virtualbox_outcome_requires_one_confident_match_after_input(self):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
