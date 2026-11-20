@@ -77,6 +77,7 @@ def scratch_failure(request, error):
     if observed is not None:
         payload['ocr_comparison'] = {'expected_occurrences': error.expected_occurrences,
                                      'observed_occurrences': observed}
+        result['ocr_comparison'] = payload['ocr_comparison']
     try:
         result['run_id'] = record_event_run(request['scratch_vm'], 'scratch_verification_failed',
                                             'repair_verification', payload, now())

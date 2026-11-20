@@ -17,7 +17,9 @@ try {
   if (step === 'saved-replay' && (!uuid.test(vm_id) ||
       !['--dryrun', '--confirm', '--confirm-expect-blocked'].includes(mode)))
     throw new Error('Supply a VirtualBox VM UUID and choose --dryrun, --confirm, or --confirm-expect-blocked.');
-  const repairActions = { '--validate': 'validate', '--test': 'test', '--commit': 'test-and-commit' };
+  const expectRejected = mode === '--test-expect-rejected';
+  const repairActions = { '--validate': 'validate', '--test': 'test', '--commit': 'test-and-commit',
+    '--test-expect-rejected': 'test' };
   const action = repairActions[mode];
   if (step !== 'saved-replay' && (step !== 'repair' || !action))
     throw new Error('Select a saved replay or a repair mode.');
@@ -53,7 +55,7 @@ try {
     const elapsed_seconds = Number(((performance.now() - started) / 1000).toFixed(3));
     const after = await call('rpa_revision', { id, action: 'status' });
     const { status, committed, commit, guest_verified, modal_check_verified, artifact_verified, run_id,
-      verification_stage, source_sha256 } = result;
+      verification_stage, source_sha256, ocr_comparison } = result;
     const head_before = before.latest_commit;
     const head_after = after.latest_commit;
     const commitId = /^[0-9a-f]{40}$/;
@@ -61,11 +63,14 @@ try {
       ? head_before === expected_commit && head_after === commit && head_after !== head_before
       : head_before === head_after);
     console.log(JSON.stringify({ id, action, status, committed, commit, guest_verified, modal_check_verified,
-      artifact_verified, run_id, verification_stage, source_sha256, head_before, head_after,
+      artifact_verified, run_id, verification_stage, source_sha256, ocr_comparison, head_before, head_after,
       head_verified, elapsed_seconds }, null, 2));
     const expected = { validate: 'static_validation_passed', test: 'scratch_screen_verified',
       'test-and-commit': 'verified_commit_needs_review' };
-    if (status !== expected[action] || !head_verified) process.exitCode = 1;
+    const rejected = status === 'error' && committed === false && verification_stage === 'screen_replay'
+      && ocr_comparison?.expected_occurrences === 1 && ocr_comparison.observed_occurrences === 0
+      && head_before === expected_commit;
+    if (!head_verified || (expectRejected ? !rejected : status !== expected[action])) process.exitCode = 1;
   } else {
     const dry_run = mode === '--dryrun';
     const expectBlocked = mode === '--confirm-expect-blocked';

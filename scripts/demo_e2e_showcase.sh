@@ -9,7 +9,7 @@ usage() {
     echo "       $0 package <guest recording.py> <package ID> <new report directory>" >&2
     echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm|--confirm-expect-blocked]" >&2
     echo "       $0 verified-replay <request.json> <ERP checkout> <fresh CSV path> <new report directory> --confirm" >&2
-    echo "       $0 repair <request.json> <new report directory> [--validate|--test|--commit]" >&2
+    echo "       $0 repair <request.json> <new report directory> [--validate|--test|--commit|--test-expect-rejected]" >&2
     echo "       $0 showcase <ERP checkout> <new report directory> <recording.py> <package ID> <saved request.json> <repair request.json> <fresh v1 CSV> <fresh v2 CSV>" >&2
     exit 2
 }
@@ -133,7 +133,7 @@ if [[ ${1:-} == saved-replay || ${1:-} == repair ]]; then
     [[ $# -eq 3 || $# -eq 4 ]] || usage
     if [[ $1 == repair ]]; then
         mode=${4:---validate}
-        [[ $mode == --validate || $mode == --test || $mode == --commit ]] || usage
+        [[ $mode == --validate || $mode == --test || $mode == --commit || $mode == --test-expect-rejected ]] || usage
     else
         mode=${4:---dryrun}
         [[ $mode == --dryrun || $mode == --confirm || $mode == --confirm-expect-blocked ]] || usage

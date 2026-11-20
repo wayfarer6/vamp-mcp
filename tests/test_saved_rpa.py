@@ -123,6 +123,18 @@ class SavedRPATests(unittest.TestCase):
             artifact_hash.assert_called_once_with(vm, artifact)
             self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
 
+            artifact_hash.side_effect = [baseline]
+            run.side_effect = replay.OutcomeScreenBlocked('Expected result absent',
+                expected_occurrences=1, observed_occurrences=0)
+            with self.assertRaises(replay.OutcomeScreenBlocked) as failure:
+                registry.test_and_commit(root, request)
+            with patch.dict(os.environ, {'VAMP_DATA_DIR': str(self.root / 'audit')}):
+                response = registry.scratch_failure(request, failure.exception)
+            self.assertEqual(response['verification_stage'], 'screen_replay')
+            self.assertEqual(response['ocr_comparison'], {'expected_occurrences': 1, 'observed_occurrences': 0})
+            self.assertFalse(response['committed'])
+            self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), original['commit'])
+
             artifact_hash.side_effect = [baseline, 'c' * 64]
             run.side_effect = None
             run.return_value = 2

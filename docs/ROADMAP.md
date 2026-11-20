@@ -211,4 +211,6 @@ The launcher runs the packaging, replay, and repair commands in the table. Keep 
 
 Stage 5 was rerun on a 1920×1080 Windows VirtualBox guest with the v2 Orders page open. The launcher exited successfully after reporting `starting_screen_blocked` and zero completed actions in 11.937 seconds. The RPA catalog was in a Korean-named host folder.
 
+For the rollback clip, reset the scratch fixture and run `repair <negative-request.json> <new report directory> --test-expect-rejected` with an authorized test candidate that leaves the expected OCR result absent. This mode never promotes a candidate. It requires a screen verification failure with zero observed matches and identical Git HEAD values before and after. Reset the scratch fixture again before testing the corrected candidate.
+
 For the matched benchmark, record every trial before calculating medians. The [ERP benchmark guide](https://github.com/wayfarer6/vamp-demo-erp#compare-replay-methods) documents the observation fields and the `python benchmark.py observations.json` command. Keep the observations and aggregate output alongside the Robot and MCP reports.
