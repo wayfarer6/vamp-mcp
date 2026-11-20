@@ -5,6 +5,8 @@ description: Control or observe an authorized VirtualBox VM through the pinned m
 
 Read `backends/virtualbox/README.md` in the project for installation and commands. Use `backends/virtualbox/client.py` or the stdio server; SPICE URIs and Hyper-V VMConnect are separate backends.
 
+On a Windows host, run the local VirtualBox MCP client as administrator. Start VS Code with **Run as administrator** or start Codex CLI from an administrator terminal so its MCP child process inherits elevation. If VAMP tools are missing, verify host elevation, restart the client, and confirm that its MCP configuration contains VAMP. The VS Code extension suppresses the server definition when unelevated, and the standalone server exits at startup. Handle host elevation and guest UAC as separate steps.
+
 List VMs before selecting a target. Start only when requested; default `vm_start` frontend is `separate` so the user can observe via VirtualBox Manager Show. Detach the UI to keep the VM running; do not select shutdown/save/power-off. Starting is not evidence the guest or application is ready.
 
 Keep each scenario as a folder with `.robot`, `workflow.py` and manifest under this backend. Launch Windows programs through Win+R, Linux GNOME through Alt+F2 or another environment-appropriate common launcher rather than desktop icon positions. Send keyboard/mouse to the VM, using coordinates from the VM screenshot, not the host observation window. Mouse clicks require USB tablet plus working host VirtualBox Python SDK. Do not install a guest automation agent just to control input.

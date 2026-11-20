@@ -23,6 +23,8 @@
 
 ## How to use
 
+**Windows host requirement for local VirtualBox.** VAMP MCP requires Windows administrator privileges. For the VS Code extension, start VS Code with **Run as administrator**. For Codex CLI or another standalone MCP client, start the client from an administrator terminal so the MCP server inherits elevation. Approve the host UAC prompt and restart any client that was already open. An unelevated VS Code window does not publish the VAMP MCP definition, and the standalone server exits at startup.
+
 Contributions are welcome. See the [contribution guide](CONTRIBUTING.md) and [AI contributor instructions](AGENTS.md).
 
 Run GUI automation inside a guest while you keep using your host desktop. With saved RPA, local replay can check the screen and output files without sending frames to a model. An external agent can receive screen data if its client requests it during exploration or targeted fallback. Vault-managed secrets can be delivered through the approved guest connection.
