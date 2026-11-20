@@ -61,6 +61,8 @@ sequenceDiagram
 
 MCP 시작 시 받는 기본 OmniParser 가중치는 아이콘 감지용입니다. 수정에 사용할 모달 모델은 적용할 앱의 실제 화면에서 검증하세요. 성공 문구가 같은 화면에 있더라도 모달을 검출하면 커밋이 차단돼야 합니다. 모달이 없는 화면에서도 일반 아이콘이나 버튼을 모달로 오인하지 않는지 확인하세요.
 
+격리된 Windows 11 VirtualBox 게스트에서 테스트용 로컬 모델로 확인했습니다. 성공 문구와 결과 파일을 생성해도 차단 창이 표시된 후보는 Git HEAD를 유지했습니다. 같은 결과를 차단 창 없이 생성한 후보는 OCR, YOLO, 결과 파일 SHA-256 검사를 모두 통과하고 재검토가 필요한 커밋을 생성했습니다.
+
 - `VAMP_REPAIR_ARTIFACT`에 게스트 안의 결과 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_GUEST_USER`에 테스트 계정을, `VAMP_REPAIR_GUEST_PASSWORD_FILE`에 그 계정의 호스트 비밀번호 파일 절대 경로를 지정합니다.
 - `VAMP_REPAIR_ARTIFACT_BASELINE_SHA256`에는 초기 파일, `VAMP_REPAIR_ARTIFACT_SHA256`에는 완료 후 기대 파일의 SHA-256을 지정합니다.
