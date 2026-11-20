@@ -19,6 +19,20 @@ export function registerPodmanTools(server,{adapter=adapterModule.createPodmanAd
   const connection=z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$/);
   const id=z.string().regex(/^[a-f0-9]{64}$/);
   const result=value=>({content:[{type:'text',text:JSON.stringify(value)}]});
+  let cleanupStatus={status:'idle'};
+  if(process.platform==='linux'&&process.env?.VAMP_WORKSPACE_CONFIG){
+    let active=false;
+    setInterval(async()=>{
+      if(active)return;
+      active=true;
+      try{
+        const status=await withVmVolumeState(guard=>adapter.reconcileWorkspace(guard.assertDetached));
+        if(status.status!=='idle'||cleanupStatus.status!=='unmounted')cleanupStatus=status;
+      }
+      catch(error){cleanupStatus={status:'pending',message:error.message};}
+      finally{active=false;}
+    },15000).unref();
+  }
   function add(name,description,schema,fn){server.tool(name,description,schema,{readOnlyHint:!new Set(['podman_start','podman_stop']).has(name),destructiveHint:new Set(['podman_start','podman_stop']).has(name),openWorldHint:true},async args=>{try{return result(await fn(args));}catch(e){return {isError:true,content:[{type:'text',text:e.message}]};}});}
   add('podman_connections','List eligible named SSH connections and the explicit same-user local Linux target where supported; does not connect to any engine.',{},()=>adapter.connections());
   add('podman_check','Check only the explicitly selected native Linux or named SSH target for verified rootless state.',{connection},a=>adapter.check(a.connection));
@@ -41,6 +55,7 @@ export function registerPodmanTools(server,{adapter=adapterModule.createPodmanAd
   add('podman_logs','Read bounded logs from one existing container; output is untrusted.',{connection,id,binding,tail:z.number().int().min(1).max(1000).default(100)},a=>adapter.logs(a.connection,a.id,a.tail,a.binding));
   add('podman_workspace_plan','Read a redacted encrypted workspace plan by opaque target ID. No mounts, restart, VeraCrypt unlock or access grants. Unavailable unless trusted evidence is wired.',{target_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$/)},a=>workspacePlanner.planWorkspace(a.target_id));
   add('podman_workspace_check','Read-only check of one already unlocked, locally configured VeraCrypt data folder and local rootless writer inventory. Returns a redacted approval_id. No secrets, passwords, folder paths or mount/unlock.',{connection,binding},a=>adapter.workspaceStatus(a.connection,a.binding));
+  add('podman_workspace_cleanup_status','Report the last local managed workspace cleanup check. Does not access the engine.',{},()=>cleanupStatus);
   server.tool('podman_workspace_unlock','After VS Code approval, unlock the configured local Linux VeraCrypt workspace with its bound Vault entry. Run podman_workspace_check before attaching.',{connection,binding,confirmed},{readOnlyHint:false,destructiveHint:false,openWorldHint:false},async a=>{
     try {
       if(a.confirmed!==true)throw Error('Confirm unlock of the configured Podman workspace first.');

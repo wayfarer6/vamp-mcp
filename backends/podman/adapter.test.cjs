@@ -254,11 +254,16 @@ test('local workspace uses checked binding, pinned image, single disposable cont
  const m={mountId:'mount',scopeId:'scope',directory:'/mnt/volume/task',mountPoint:'/mnt/volume'};
  const config={imageId,workloadId:'fixture',volumePath:'/private/fixture.hc',mountPoint:'/mnt/volume',
   veracryptPath:'/usr/bin/veracrypt',credentialEntry:'VeraCrypt/Fixture'};
- let created=false,running=false,conflict=false,dismounted=false;
+ let created=false,running=false,conflict=false,dismounted=false,cleanup=null;
  const calls=[];
  const adapter=createPodmanAdapter({platform:'linux',desktopImageIds:imageId,
   userIdentity:()=>({uid:1000,euid:1000,home:'/home/test'}),workspaceConfigPath:'/private/config',
   workspaceDependencies:{release:()=> '6.8.0',read:async()=>({config,raw:'fixture'}),reserve:async(_uid,fn)=>fn(),
+    state:async(_uid,action,value)=>{
+      if(action==='save')cleanup=value;
+      else if(action==='clear')cleanup=null;
+      else return cleanup;
+    },
     sourceFactory:()=>({readForAttachment:fn=>fn(m,async()=>m),inspect:async()=>({state:'verified_mounted_scope'}),
       dismount:async observed=>{assert.equal(observed,m);dismounted=true;return true;}})},
   execute:async(_exe,argv,options)=>{
@@ -333,4 +338,17 @@ test('local workspace uses checked binding, pinned image, single disposable cont
  const cleaned=await adapter.workspaceDetach('local-linux',id,binding,assertDetached);
  assert.equal(cleaned.workspace_cleanup,'unmounted');
  assert.equal(dismounted,true);
+ dismounted=false;
+ const third=await adapter.workspaceStatus('local-linux',binding);
+ await adapter.workspaceAttach('local-linux',binding,third.approval_id);
+ assert.equal((await adapter.reconcileWorkspace(assertDetached)).status,'waiting_for_shutdown');
+ created=false;
+ running=false;
+ conflict=true;
+ await assert.rejects(adapter.reconcileWorkspace(assertDetached),/reserves/);
+ assert.equal(dismounted,false);
+ assert.equal(cleanup.id,id);
+ conflict=false;
+ assert.equal((await adapter.reconcileWorkspace(assertDetached)).status,'unmounted');
+ assert.equal(cleanup,null);
 });

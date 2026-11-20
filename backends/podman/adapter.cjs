@@ -255,6 +255,10 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     const snapshot=await workspaceSnapshot(connection,binding);
     return workspace.lockWorkspace(snapshot,workspaceOperations(snapshot).scan,assertDetached);
   }
+  async function reconcileWorkspace(assertDetached){
+    const snapshot=await ready(LOCAL_TARGET);
+    return workspace.reconcile(snapshot,workspaceOperations(snapshot),assertDetached);
+  }
   async function desktop(connection,id,binding){
     const snapshot=await existing(connection,id,binding);
     const allowed=approvedImages();
@@ -318,7 +322,7 @@ function createPodmanAdapter({execute,platform=process.platform,spawnProcess=spa
     child.stdout.pause();
     return {...metadata,viewOnly:mode==='view_only',mode,child,close};
   }
-  return {workspaceStatus,workspaceUnlock,workspaceLock,workspaceAttach,workspaceDetach,screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
+  return {workspaceStatus,workspaceUnlock,workspaceLock,workspaceAttach,workspaceDetach,reconcileWorkspace,screenTarget,capture,openScreenStream,detectLocal,connections,check,list,start:(c,id,binding)=>action(c,id,binding,'start'),stop:(c,id,binding)=>action(c,id,binding,'stop'),logs};
 }
 module.exports={createPodmanAdapter,standardLocations,LOCAL_TARGET,boundedExecutor};
 

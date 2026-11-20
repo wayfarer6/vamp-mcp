@@ -35,8 +35,8 @@ test('thin MCP routes existing operations and a read-only plan without startup t
  const hostBuilder={prepareDebianHost:async args=>{calls.push({method:'prepareDebianHost',args});return {status:'queued'};},debianHostStatus:async id=>{calls.push({method:'debianHostStatus',id});return {status:'building'};}};
  await mod.evaluate();const server=mod.namespace.createPodmanServer({adapter,hostBuilder,getViewerModule:async()=>'fixture',
   openBrowserViewer:async options=>{calls.push({method:'createViewer',args:[options.containerId,options.mode]});return {url:shown};}});
- assert.equal(calls.length,0);assert.equal(server.tools.size,17);
- assert.deepEqual([...server.tools.keys()],['podman_connections','podman_check','podman_list','podman_debian_vm_build_status','podman_prepare_debian_vm','podman_start','podman_stop','podman_logs','podman_workspace_plan','podman_workspace_check','podman_workspace_unlock','podman_workspace_lock','podman_workspace_detach','podman_workspace_attach','vault_attach_container','podman_capture_container_screen','podman_view_container_screen']);
+ assert.equal(calls.length,0);assert.equal(server.tools.size,18);
+ assert.deepEqual([...server.tools.keys()],['podman_connections','podman_check','podman_list','podman_debian_vm_build_status','podman_prepare_debian_vm','podman_start','podman_stop','podman_logs','podman_workspace_plan','podman_workspace_check','podman_workspace_cleanup_status','podman_workspace_unlock','podman_workspace_lock','podman_workspace_detach','podman_workspace_attach','vault_attach_container','podman_capture_container_screen','podman_view_container_screen']);
  const readOnly=server.tools.get('podman_workspace_plan');
  assert.equal(readOnly.annotations.readOnlyHint,true);
  const plan=await readOnly.callback({target_id:'demo'});

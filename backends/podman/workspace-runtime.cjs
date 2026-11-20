@@ -3,7 +3,7 @@ const fs=require('node:fs/promises');
 const {constants}=require('node:fs');
 const os=require('node:os');
 const path=require('node:path');
-const {createHmac,randomBytes}=require('node:crypto');
+const {createHash,createHmac,randomBytes}=require('node:crypto');
 const {createMountedWorkspaceSource}=require('../common/veracrypt-workspace.cjs');
 const ID=/^[a-f0-9]{64}$/;
 const LABEL='io.vamp.workspace';
@@ -26,15 +26,37 @@ async function readConfig(file,uid){
     return {config:JSON.parse(raw),raw};
   }finally{await handle.close();}
 }
-async function locked(uid,fn){
+async function runtimeDirectory(uid){
   const parent='/run/user/'+uid;
   const stat=await fs.lstat(parent);
   if(!stat.isDirectory()||stat.uid!==uid||(stat.mode&0o777)!==0o700||await fs.realpath(parent)!==parent)throw Error('Trusted local runtime directory unavailable');
+  return parent;
+}
+async function locked(uid,fn){
+  const parent=await runtimeDirectory(uid);
   const lock=path.join(parent,'vamp-workspace-attach.lock');
   try{await fs.mkdir(lock,{mode:0o700});}catch{throw Error('Another workspace attach is active or a previous reservation must be reviewed');}
   try{return await fn();}finally{await fs.rmdir(lock).catch(()=>{});}
 }
-function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,reserve=locked,sourceFactory=createMountedWorkspaceSource,release=os.release,now=Date.now}){
+async function cleanupState(uid, action, value){
+  const folder=await runtimeDirectory(uid);
+  const file=path.join(folder,'vamp-workspace-cleanup.json');
+  if(action==='save'){
+    const temporary=path.join(folder,'vamp-workspace-'+randomBytes(12).toString('hex')+'.part');
+    try{
+      await fs.writeFile(temporary,JSON.stringify(value),{flag:'wx',mode:0o600});
+      await fs.rename(temporary,file);
+    }finally{await fs.unlink(temporary).catch(error=>{if(error.code!=='ENOENT')throw error;});}
+    return;
+  }
+  if(action==='clear'){
+    await fs.unlink(file).catch(error=>{if(error.code!=='ENOENT')throw error;});
+    return;
+  }
+  try{return (await readConfig(file,uid)).config;}
+  catch(error){if(error.code==='ENOENT')return null;throw error;}
+}
+function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,reserve=locked,sourceFactory=createMountedWorkspaceSource,release=os.release,now=Date.now,state=cleanupState}){
   const secret=randomBytes(32);
   const approvals=new Map();
   function supported(snapshot){return platform==='linux'&&snapshot?.local===true&&!/microsoft|wsl/i.test(release());}
@@ -47,6 +69,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
       selection:{topology:'linux-local',volumePath:config.volumePath,mountPoint:config.mountPoint,directory:config.directory,workloadId:config.workloadId}})};
   }
   const proof=(snapshot,ctx,m)=>createHmac('sha256',secret).update(JSON.stringify([snapshot.binding,ctx.raw,m.mountId,m.scopeId])).digest('hex');
+  const mountKey=(snapshot,ctx,m)=>createHash('sha256').update(JSON.stringify([snapshot.binding,ctx.raw,m.mountId,m.scopeId])).digest('hex');
   async function status(snapshot,scan){
     const ctx=await context(snapshot);
     return ctx.source.readForAttachment(async m=>{
@@ -83,6 +106,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
       const ctx=await context(snapshot);
       return ctx.source.readForAttachment(async (m,revalidate)=>{
         if(!safePath(m.directory)||proof(snapshot,ctx,m)!==approved.fingerprint)throw Error('Workspace approval no longer matches the mounted folder; check and authorize again');
+        if(await state(snapshot.uid,'read'))throw Error('A previous managed workspace is still awaiting cleanup.');
         await scan(m);
         const image='sha256:'+ctx.config.imageId, label=labelFor(m);
         const images=JSON.parse(await command(['image','inspect','--',image]));
@@ -103,6 +127,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
           const started=await inspect(id);
           if(started.State?.Running!==true||!verifiedMount(started,m,ctx.config.imageId))throw Error('Workspace container start not verified');
           await revalidate();
+          await state(snapshot.uid,'save',{id,mount:mountKey(snapshot,ctx,m)});
           return {status:'attached',id,destination:DEST,access:'rw',network:'none',actual_read_write_verified:false};
         }catch{
           // Preserve evidence on uncertain failures; no automatic rm/stop of
@@ -139,6 +164,7 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
         if(assertDetached){
           try{
             const cleanup=await unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached);
+            await state(snapshot.uid,'clear');
             return {status:'detached',id,local_podman_writers_verified_absent:true,workspace_cleanup:cleanup.status};
           }catch(error){
             return {status:'detached',id,workspace_cleanup:'pending',cleanup_reason:error.message};
@@ -153,11 +179,29 @@ function workspaceRuntime({platform,allowedImages,configPath,read=readConfig,res
   async function lockWorkspace(snapshot,scan,assertDetached){
     return reserve(snapshot.uid,async()=>{
       const ctx=await context(snapshot);
-      return ctx.source.readForAttachment((mount,revalidate)=>
-        unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached));
+      return ctx.source.readForAttachment(async (mount,revalidate)=>{
+        const result=await unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached);
+        await state(snapshot.uid,'clear');
+        return result;
+      });
     });
   }
-  return {status,unlock,lockWorkspace,attach,detach,verify,supported};
+  async function reconcile(snapshot,{scan,present},assertDetached){
+    return reserve(snapshot.uid,async()=>{
+      const saved=await state(snapshot.uid,'read');
+      if(!saved)return {status:'idle'};
+      if(!ID.test(saved.id)||!ID.test(saved.mount))throw Error('Invalid Podman workspace cleanup record.');
+      if(await present(saved.id))return {status:'waiting_for_shutdown'};
+      const ctx=await context(snapshot);
+      return ctx.source.readForAttachment(async (mount,revalidate)=>{
+        if(saved.mount!==mountKey(snapshot,ctx,mount))throw Error('The current mount differs from the recorded workspace.');
+        const result=await unmountVerified(snapshot,ctx,mount,revalidate,scan,assertDetached);
+        await state(snapshot.uid,'clear');
+        return result;
+      });
+    });
+  }
+  return {status,unlock,lockWorkspace,attach,detach,reconcile,verify,supported};
 }
 const labelFor=m=>m.mountId+'.'+m.scopeId;
 function verifiedMount(v,m,imageId){
