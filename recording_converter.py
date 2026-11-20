@@ -159,9 +159,11 @@ def generate(source_path,package_id,guest_os='windows11',width=1920,height=1080,
     for action in actions:
         if action['op']=='key_down':held.add(action['key'])
         if action['op']=='key_up':held.discard(action['key'])
-    starts_launcher=(len(actions)>=2 and actions[0].get('op')=='key_down' and actions[0].get('key')=='super'
-                     and actions[1].get('op')=='key_down' and actions[1].get('key','').lower()=='r') or (
-                     actions[0].get('op')=='hotkey' and actions[0].get('keys')==['super','r'])
+    first_inputs=[action for action in actions if action['op']!='wait'][:2]
+    starts_launcher=bool(first_inputs) and (
+        (len(first_inputs)==2 and first_inputs[0].get('op')=='key_down' and first_inputs[0].get('key')=='super'
+         and first_inputs[1].get('op')=='key_down' and first_inputs[1].get('key','').lower()=='r') or (
+         first_inputs[0].get('op')=='hotkey' and first_inputs[0].get('keys')==['super','r']))
     warnings=['Mechanical conversion only: review target positions and replace waits with state checks.',
               'Review all recorded input for private credentials before replay or sharing.']
     if held:warnings.append(f'{len(held)} key(s) remain held at recording end; replay teardown will release them.')

@@ -59,4 +59,6 @@ SPICE/KVM MCP 브랜치에서도 `vm_recorder_media`로 같은 ISO를 만들 수
 
 독립 Robot Framework 패키지가 필요하면 호스트에서 `recording_converter.py`를 실행합니다. 게스트에서 녹화한 파일에는 `--coordinate-space guest`를 사용합니다. 패키지를 검토한 뒤 재생할 VirtualBox VM UUID와 예상 결과 문구를 지정합니다. Windows 메모장 예제는 1920×1080 VirtualBox 게스트에서 5개 동작을 재생하고 호스트 OCR로 상태 표시줄을 확인했습니다. [변환과 실행 예제](RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
 
+녹화기는 입력 사이의 대기 시간을 저장합니다. 마지막 입력으로 앱이 열리는 작업이라면 검토한 파일에서 화면이 표시될 시간을 확보한 뒤 결과를 판정하세요.
+
 Windows·Debian 게스트의 저장·공유 결과는 [검증 기록](VALIDATION.md)에 있습니다. 새 OS 무인 설치부터 녹화, VSIX 등록과 재생까지 이어지는 화면 검증은 [#19](https://github.com/wayfarer6/vamp-mcp/issues/19)에서 추적합니다.

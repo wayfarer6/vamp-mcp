@@ -45,11 +45,17 @@ time.sleep(1.5)
     def test_generate_keeps_typed_text_out_of_public_scaffold(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);source=root/'녹화 🧪.py'
-            source.write_text("import pyautogui\npyautogui.write('PRIVATE_RECORDING_VALUE')\n")
+            original=("import pyautogui\nimport time\n"
+                              "time.sleep(0.6)\npyautogui.keyDown('cmd')\n"
+                              "time.sleep(0.03)\npyautogui.keyDown('r')\n"
+                              "pyautogui.keyUp('r')\npyautogui.keyUp('cmd')\n"
+                              "pyautogui.write('PRIVATE_RECORDING_VALUE')\n")
+            source.write_text(original)
             result=generate(source,'example',package_root=root/'rpas')
             package=Path(result['package_path'])
             conversion=json.loads((package/'conversion.json').read_text(encoding='ascii'))
             self.assertEqual(conversion['source_name'],source.name)
+            self.assertTrue(conversion['initial_win_r'])
             self.assertIn(source.name,(package/'README.md').read_text(encoding='utf-8'))
             self.assertIn('PRIVATE_RECORDING_VALUE',(package/'recording.local.json').read_text())
             if os.name == 'posix':
@@ -57,7 +63,7 @@ time.sleep(1.5)
             for name in ['workflow.py','run.robot','conversion.json','README.md','manifest.json']:
                 self.assertNotIn('PRIVATE_RECORDING_VALUE',(package/name).read_text(encoding='utf-8'))
             with self.assertRaises(ValueError):generate(source,'example',package_root=root/'rpas')
-            self.assertEqual(source.read_text(),"import pyautogui\npyautogui.write('PRIVATE_RECORDING_VALUE')\n")
+            self.assertEqual(source.read_text(),original)
 
     def test_invalid_input_does_not_leave_a_partial_package(self):
         with tempfile.TemporaryDirectory() as directory:
