@@ -44,6 +44,7 @@ server.tool('rpa_run_saved','Replay a reviewed saved skill. Enable pause_on_uac 
 server.tool('rpa_revision','Inspect or validate an RPA repair. test checks the outcome screen in an isolated VirtualBox guest. test-and-commit requires a new OCR outcome, a passing configured YOLO modal check, and a verified output file before committing. update commits after static validation only. Every committed repair requires review.',{
  id:identifier,action:z.enum(['status','read-source','validate','test','test-and-commit','update']).default('status'),source:z.string().max(64000).optional(),expected_commit:z.string().regex(/^[a-f0-9]{40}$/).optional(),commit_message:z.string().max(200).optional(),confirmed:z.boolean().default(false),
  scratch_vm:identifier.optional(),outcome_text:z.string().trim().min(1).max(240).optional(),
+ start_text:z.string().trim().min(1).max(240).optional(),
  test_inputs:z.record(z.string().max(10000)).optional(),
 },{readOnlyHint:false,destructiveHint:true},async request=>{
  const item=await definition(request.id),folder=path.join(root,request.id);
@@ -64,7 +65,7 @@ server.tool('rpa_revision','Inspect or validate an RPA repair. test checks the o
  const temporary=await mkdtemp(path.join(os.tmpdir(),'vamp-repair-'));
  try{
   const source=path.join(temporary,'source.py');await writeFile(source,request.source,{mode:0o600});
-  const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,start_text:item.start_text||'',tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name,validate_only:request.action==='validate'};
+  const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,start_text:request.start_text??item.start_text??'',tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name,validate_only:request.action==='validate'};
   if(testing)Object.assign(payload,{test_only:true,commit_after_test:promote,scratch_vm:request.scratch_vm,outcome_text:request.outcome_text,test_inputs:request.test_inputs});
   const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/registry.py');
   const repaired=await new Promise(resolve=>{const child=execFile(python,[script],{windowsHide:true,timeout:testing?620000:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});

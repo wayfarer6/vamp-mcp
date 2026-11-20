@@ -40,7 +40,7 @@ try {
     throw new Error('Select a reviewed VirtualBox RPA from the demo catalog.');
   }
   if (step === 'repair') {
-    const { source_file, expected_commit, scratch_vm, outcome_text, test_inputs } = request;
+    const { source_file, expected_commit, scratch_vm, outcome_text, test_inputs, start_text } = request;
     if (typeof source_file !== 'string' || !/^[0-9a-f]{40}$/.test(expected_commit)) {
       throw new Error('Supply source_file and the exact expected_commit.');
     }
@@ -48,7 +48,7 @@ try {
     const before = await call('rpa_revision', { id, action: 'status' });
     const started = performance.now();
     const result = await call('rpa_revision', { id, action, source, expected_commit,
-      scratch_vm, outcome_text, test_inputs, confirmed: action !== 'validate' });
+      scratch_vm, outcome_text, test_inputs, start_text, confirmed: action !== 'validate' });
     const elapsed_seconds = Number(((performance.now() - started) / 1000).toFixed(3));
     const after = await call('rpa_revision', { id, action: 'status' });
     const { status, committed, commit, guest_verified, modal_check_verified, artifact_verified, run_id,

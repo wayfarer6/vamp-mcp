@@ -83,13 +83,14 @@ class SavedRPATests(unittest.TestCase):
 
     def test_virtualbox_scratch_promotion_preserves_head_on_failure_and_advances_on_success(self):
         root = self.root / 'catalog'
-        request = {**self.request, 'backend': 'virtualbox'}
+        request = {**self.request, 'backend': 'virtualbox', 'start_text': 'Update Status'}
         original = registry.register(root, request)
         folder = Path(original['folder'])
         registry.git(folder, 'config', 'core.autocrlf', 'true')
         vm = '01234567-89ab-cdef-0123-456789abcdef'
         request.update(id=original['definition']['id'], expected_commit=original['commit'],
-                       scratch_vm=vm, outcome_text='Export complete', test_inputs={'query': 'fixture'})
+                       scratch_vm=vm, outcome_text='Export complete', test_inputs={'query': 'fixture'},
+                       start_text='Fulfillment')
         self.source.write_bytes(b"import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
         baseline, expected = 'a' * 64, 'b' * 64
         artifact = ('/tmp/fixture.csv', 'fixture', self.root / 'fixture-password', baseline, expected)
@@ -111,6 +112,7 @@ class SavedRPATests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'already present'):
                 registry.test_and_commit(root, request)
             self.assertTrue(run.await_args.kwargs['require_new_outcome'])
+            self.assertEqual(run.await_args.kwargs['start_text'], 'Fulfillment')
             self.assertEqual(run.await_args.kwargs['forbidden_modal'], modal)
             modal_settings.assert_called_once_with(required=True)
             artifact_hash.assert_called_once_with(vm, artifact)
@@ -151,6 +153,7 @@ class SavedRPATests(unittest.TestCase):
         self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD^'), original['commit'])
         self.assertEqual((folder / 'source.py').read_bytes(), self.source.read_bytes())
         self.assertFalse(json.loads((folder / 'rpa.json').read_text())['reviewed'])
+        self.assertEqual(json.loads((folder / 'rpa.json').read_text())['start_text'], 'Fulfillment')
     def test_registers_title_description_contract_without_executing_source(self):
         saved=registry.register(self.root/'catalog',self.request)
         self.assertEqual(saved['definition']['name'],'Search invoice');self.assertFalse(saved['definition']['source_executed']);self.assertEqual(saved['definition']['action_count'],2)
