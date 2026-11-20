@@ -30,7 +30,7 @@ import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
 import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeholders.mjs';
 import { exportEncryptedFile } from '../../src/encrypted_export.mjs';
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
-import { hypervVolume, kvmVolume, reconcileVirtualBoxGuestDisks, virtualBoxVolume } from '../../src/vm_volume.mjs';
+import { hypervVolume, kvmVolume, reconcileVirtualBoxDisks, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
 import { auditRemoteDelivery, deliverCredential, deliveryTarget, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
 import podmanModule from '../../../backends/podman/adapter.cjs';
@@ -1359,7 +1359,23 @@ const main = async () => {
       if (reconciling) return;
       reconciling = true;
       try {
-        scope.workspaceCleanup = await withVmVolumeState(reconcileVirtualBoxGuestDisks);
+        scope.workspaceCleanup = await withVmVolumeState(guard => {
+          const releaseHostMount = process.platform !== 'linux' ? undefined : async ({ volume, mountPoint }) => {
+            const cli = await getCli();
+            const observed = await cli.listVolumes();
+            if (!observed.available) throw new Error('The host VeraCrypt mount state could not be verified.');
+            if (!observed.mounted.some(item => item.volume === volume || item.mount_point === mountPoint)) return;
+            const adapter = scope.workspaceAdapter ??= podmanModule.createPodmanAdapter();
+            const { binding } = await adapter.check('local-linux');
+            await adapter.workspaceLock('local-linux', binding, async target => {
+              if (target.volume !== volume || target.mountPoint !== mountPoint) {
+                throw new Error('The configured workspace does not match the detached VM disk.');
+              }
+              await guard.assertDetached({ ...target, detachedVolume: volume });
+            });
+          };
+          return reconcileVirtualBoxDisks(guard, undefined, releaseHostMount);
+        });
       } catch (error) {
         scope.workspaceCleanup = [{ status: 'pending', error: error.message }];
       } finally {

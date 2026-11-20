@@ -457,6 +457,12 @@ VHD remains on disk. The server records the running observation so it can
 retry after restart if the disk was busy or the VM state was unavailable.
 Check `workspace_cleanup` in `vault_status` for the latest result. If the server
 missed the running state, use `vault_detach_vm` after shutdown.
+
+On native Linux, when a VirtualBox disk lives inside the configured VeraCrypt
+workspace, Vault can also release the host mount after detaching the disk.
+The local Podman workspace check must confirm the exact volume and mount and
+find no remaining container consumer. Busy or unverified mounts remain
+pending for retry and are shown in `workspace_cleanup`.
 If Hyper-V is still using a checkpoint differencing disk in that slot, wait
 for the checkpoint merge to finish before retrying detach.
 If the host reports `needs_elevation`, open VS Code as administrator or

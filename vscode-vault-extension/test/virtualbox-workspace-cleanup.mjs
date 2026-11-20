@@ -3,7 +3,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { reconcileVirtualBoxGuestDisks } from '../src/vm_volume.mjs';
+import { reconcileVirtualBoxDisks } from '../src/vm_volume.mjs';
 import { withVmVolumeState } from '../src/vm_volume_state.mjs';
 
 const vm = '01234567-89ab-cdef-0123-456789abcdef';
@@ -47,7 +47,7 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
     }
   }
   const state = work => withVmVolumeState(work, { directory });
-  const reconcile = () => state(guard => reconcileVirtualBoxGuestDisks(guard, execute));
+  const reconcile = () => state(guard => reconcileVirtualBoxDisks(guard, execute));
   await state(guard => guard.beforeChange('attach', target));
   assert.deepEqual(await reconcile(), []);
   assert.deepEqual(commands.map(args => args[0]), ['showvminfo']);
@@ -69,4 +69,26 @@ test('VirtualBox cleanup waits for power off and retries a busy guest disk after
   assert.deepEqual(await reconcile(), [{ vm, status: 'detached' }]);
   assert.deepEqual(await state(guard => guard.registeredDisks()), []);
   assert.equal(commands.filter(args => args[0] === 'storageattach').length, 1);
+
+  const host = { ...target, volume: path.join(directory, 'container.vc'), mountPoint: directory };
+  await state(guard => guard.beforeChange('attach', host));
+  let otherWriter = true;
+  let mountChecks = 0;
+  const reconcileHost = () => state(guard => reconcileVirtualBoxDisks(guard, execute, async detached => {
+    assert.deepEqual(detached, { volume: host.volume, mountPoint: host.mountPoint });
+    assert.equal(slot, 'none');
+    await guard.assertDetached({ ...detached, detachedVolume: host.volume });
+    mountChecks++;
+    if (otherWriter) throw new Error('A workspace consumer is still present.');
+  }));
+  power = 'running';
+  slot = medium;
+  await reconcileHost();
+  assert.equal(mountChecks, 0);
+  power = 'poweroff';
+  assert.deepEqual(await reconcileHost(), [{ vm, status: 'pending', error: 'A workspace consumer is still present.' }]);
+  assert.equal((await state(guard => guard.registeredDisks()))[0].volume, host.volume);
+  otherWriter = false;
+  assert.deepEqual(await reconcileHost(), [{ vm, status: 'unmounted' }]);
+  assert.deepEqual(await state(guard => guard.registeredDisks()), []);
 });

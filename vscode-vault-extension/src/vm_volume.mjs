@@ -90,11 +90,12 @@ async function releaseVirtualBoxGuestDisk(execute, medium) {
   await execute(['closemedium', 'disk', uuid]);
 }
 
-export async function reconcileVirtualBoxGuestDisks(guard, execute = executeVirtualBox) {
+export async function reconcileVirtualBoxDisks(guard, execute = executeVirtualBox, releaseHostMount) {
   const results = [];
   for (const disk of await guard.registeredDisks()) {
     const { backend, vm, volume, controller, port, medium, mountPoint, observedRunning } = disk;
-    if (backend !== 'virtualbox' || mountPoint !== '' || medium !== volume ||
+    const guestOnly = mountPoint === '' && medium === volume;
+    if (backend !== 'virtualbox' || (!guestOnly && (!mountPoint || !releaseHostMount)) ||
         !path.isAbsolute(medium) || !/\.vhd$/i.test(medium) ||
         !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(vm) ||
         !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$/.test(controller) ||
@@ -117,8 +118,9 @@ export async function reconcileVirtualBoxGuestDisks(guard, execute = executeVirt
         if (after.power !== 'poweroff' || after.medium !== 'none') throw new Error('Could not verify workspace detachment.');
       }
       await releaseVirtualBoxGuestDisk(execute, medium);
+      if (!guestOnly) await releaseHostMount({ volume, mountPoint });
       await guard.detached(volume);
-      results.push({ vm, status: 'detached' });
+      results.push({ vm, status: guestOnly ? 'detached' : 'unmounted' });
     } catch (error) {
       results.push({ vm, status: 'pending', error: error.message });
     }

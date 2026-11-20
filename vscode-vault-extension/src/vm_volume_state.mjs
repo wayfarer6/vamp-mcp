@@ -44,9 +44,10 @@ export async function withVmVolumeState(work, { directory = path.join(os.homedir
           });
         }
       },
-      async assertDetached({ volume, mountPoint } = {}) {
+      async assertDetached({ volume, mountPoint, detachedVolume } = {}) {
         for (const record of await records()) {
           const attached = await readRecord(record);
+          if (attached.volume===detachedVolume && attached.volume===volume && attached.mountPoint===mountPoint) continue;
           if ((!volume && !mountPoint) || attached.volume===volume || attached.mountPoint===mountPoint) {
             throw new Error('Detach the VM workspace disk before dismounting or deleting the encrypted volume.');
           }
