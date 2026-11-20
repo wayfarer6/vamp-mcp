@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { lstat, mkdir, readFile, readdir, rmdir, unlink, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readFile, readdir, rename, rmdir, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -29,6 +29,21 @@ export async function withVmVolumeState(work, { directory = path.join(os.homedir
       return record;
     };
     return await work({
+      async registeredDisks() {
+        return Promise.all((await records()).map(readRecord));
+      },
+      async observedRunning(target) {
+        const name = keyFor(target.volume);
+        const pending = path.join(lock, name);
+        try {
+          await writeFile(pending, JSON.stringify({ ...target, observedRunning: true }), { mode: 0o600 });
+          await rename(pending, path.join(directory, name));
+        } finally {
+          await unlink(pending).catch(error => {
+            if (error.code !== 'ENOENT') throw error;
+          });
+        }
+      },
       async assertDetached({ volume, mountPoint } = {}) {
         for (const record of await records()) {
           const attached = await readRecord(record);
@@ -51,6 +66,7 @@ export async function withVmVolumeState(work, { directory = path.join(os.homedir
             if (error.code==='ENOENT') return null;
             throw error;
           });
+          if (existing) delete existing.observedRunning;
           if (existing && JSON.stringify(existing)!==JSON.stringify(target)) {
             throw new Error('The detach request does not match the registered VM disk.');
           }

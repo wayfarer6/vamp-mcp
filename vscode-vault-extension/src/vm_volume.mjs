@@ -66,12 +66,67 @@ async function workspaceDisk(cli, {operation,vm,volume,mountPoint,disk,wsl=false
   return { medium,recheck,volume:backing,mountPoint:root };
 }
 
-export async function virtualBoxVolume(cli, args, {
-  execute = (argv) => run(process.env.VAULT_VBOXMANAGE || (process.platform==='win32'
+const executeVirtualBox = argv => run(process.env.VAULT_VBOXMANAGE || (process.platform==='win32'
     ? path.join(process.env.ProgramFiles || 'C:\\Program Files','Oracle/VirtualBox/VBoxManage.exe') : 'VBoxManage'),
-    argv, { timeout: 30000 }),
-  guard,
-} = {}) {
+    argv, { timeout: 30000 });
+
+async function virtualBoxSlot(execute, { vm, controller, port }) {
+  const fields = parseState((await execute(['showvminfo', vm, '--machinereadable'])).stdout);
+  if (fields.get('UUID')?.toLowerCase() !== vm.toLowerCase()) throw new Error('VirtualBox reported a different VM.');
+  const selected = [...fields.keys()].find(key => /^storagecontrollername\d+$/.test(key) && fields.get(key) === controller);
+  if (!selected || fields.get(selected.replace('name', 'type')) !== 'IntelAhci') {
+    throw new Error('The selected SATA controller does not exist.');
+  }
+  return { power: fields.get('VMState'), medium: fields.get(`${controller}-${port}-0`) || 'none' };
+}
+
+async function releaseVirtualBoxGuestDisk(execute, medium) {
+  const inventory = (await execute(['list', 'hdds'])).stdout;
+  const matches = inventory.split(/\r?\n\s*\r?\n/).filter(record =>
+    /^Location:[ \t]*(.+)$/m.exec(record)?.[1].trim() === medium);
+  if (!matches.length) return;
+  const uuid = /^UUID:[ \t]*([a-f0-9-]{36})\s*$/im.exec(matches[0])?.[1];
+  if (matches.length !== 1 || !uuid) throw new Error('Could not identify the registered VirtualBox guest disk.');
+  await execute(['closemedium', 'disk', uuid]);
+}
+
+export async function reconcileVirtualBoxGuestDisks(guard, execute = executeVirtualBox) {
+  const results = [];
+  for (const disk of await guard.registeredDisks()) {
+    const { backend, vm, volume, controller, port, medium, mountPoint, observedRunning } = disk;
+    if (backend !== 'virtualbox' || mountPoint !== '' || medium !== volume ||
+        !path.isAbsolute(medium) || !/\.vhd$/i.test(medium) ||
+        !/^[a-f\d]{8}(?:-[a-f\d]{4}){3}-[a-f\d]{12}$/i.test(vm) ||
+        !/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$/.test(controller) ||
+        !Number.isInteger(port) || port < 1 || port > 29) continue;
+    try {
+      const state = await virtualBoxSlot(execute, disk);
+      if (state.power === 'running' && state.medium === medium && !observedRunning) {
+        await guard.observedRunning(disk);
+      }
+      if (observedRunning !== true) continue;
+      if (state.power !== 'poweroff') {
+        results.push({ vm, status: 'waiting_for_shutdown', power: state.power || 'unknown' });
+        continue;
+      }
+      if (state.medium !== 'none') {
+        if (state.medium !== medium) throw new Error('The workspace slot now contains a different disk.');
+        await execute(['storageattach', vm, '--storagectl', controller, '--port', String(port),
+          '--device', '0', '--type', 'hdd', '--medium', 'none']);
+        const after = await virtualBoxSlot(execute, disk);
+        if (after.power !== 'poweroff' || after.medium !== 'none') throw new Error('Could not verify workspace detachment.');
+      }
+      await releaseVirtualBoxGuestDisk(execute, medium);
+      await guard.detached(volume);
+      results.push({ vm, status: 'detached' });
+    } catch (error) {
+      results.push({ vm, status: 'pending', error: error.message });
+    }
+  }
+  return results;
+}
+
+export async function virtualBoxVolume(cli, args, { execute = executeVirtualBox, guard } = {}) {
   const {operation, vm, controller, port}=args;
   if (!/^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$/.test(controller) || !Number.isInteger(port) || port < 1 || port > 29) {
     throw new Error('Choose a SATA controller and secondary port.');
@@ -79,25 +134,17 @@ export async function virtualBoxVolume(cli, args, {
   const {medium,recheck,volume,mountPoint}=await (args.credentials ? guestDisk(cli,args) : workspaceDisk(cli,args));
   const registered={backend:'virtualbox',vm,controller,port,medium,volume,mountPoint};
   const state = async () => {
-    const fields = parseState((await execute(['showvminfo',vm,'--machinereadable'])).stdout);
-    if (fields.get('UUID')?.toLowerCase()!==vm.toLowerCase() || fields.get('VMState')!=='poweroff') {
+    const state = await virtualBoxSlot(execute, registered);
+    if (state.power !== 'poweroff') {
       throw new Error('Shut down the exact VirtualBox VM before changing its workspace disk.');
     }
-    const selected=[...fields.keys()].find(key=>/^storagecontrollername\d+$/.test(key) && fields.get(key)===controller);
-    if (!selected || fields.get(selected.replace('name','type'))!=='IntelAhci') throw new Error('The selected SATA controller does not exist.');
-    return fields.get(`${controller}-${port}-0`) || 'none';
+    return state.medium;
   };
   const before=await state();
   const known=operation==='detach' && await guard?.beforeChange(operation,registered);
   const releaseGuestDisk = async () => {
     if (!args.credentials) return;
-    const inventory=(await execute(['list','hdds'])).stdout;
-    const matches=inventory.split(/\r?\n\s*\r?\n/).filter(record=>
-      /^Location:[ \t]*(.+)$/m.exec(record)?.[1].trim()===medium);
-    if (!matches.length) return;
-    const uuid=/^UUID:[ \t]*([a-f0-9-]{36})\s*$/im.exec(matches[0])?.[1];
-    if (matches.length!==1 || !uuid) throw new Error('Could not identify the registered VirtualBox guest disk.');
-    await execute(['closemedium','disk',uuid]);
+    await releaseVirtualBoxGuestDisk(execute, medium);
   };
   if(known && before==='none'){
     await releaseGuestDisk();

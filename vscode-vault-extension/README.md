@@ -449,6 +449,14 @@ matching `vm_id`, and the bound entry's `password` field. VS Code shows the
 entry, SSH host, disk and mount directory for approval. VeraCrypt reads the
 password over SSH standard input. Dismount the workspace inside the guest
 before shutting down and calling `vault_detach_vm`.
+
+The local Vault MCP server checks managed VirtualBox guest VHDs while it is
+running. Once it has observed the VM running with the exact registered disk, it
+can detach that disk after VirtualBox reports the VM powered off. The encrypted
+VHD remains on disk. The server records the running observation so it can
+retry after restart if the disk was busy or the VM state was unavailable.
+Check `workspace_cleanup` in `vault_status` for the latest result. If the server
+missed the running state, use `vault_detach_vm` after shutdown.
 If Hyper-V is still using a checkpoint differencing disk in that slot, wait
 for the checkpoint merge to finish before retrying detach.
 If the host reports `needs_elevation`, open VS Code as administrator or

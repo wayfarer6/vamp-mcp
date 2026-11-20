@@ -30,7 +30,7 @@ import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
 import { checkVaultPlaceholders, parseVaultPlaceholder } from '../../src/placeholders.mjs';
 import { exportEncryptedFile } from '../../src/encrypted_export.mjs';
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
-import { hypervVolume, kvmVolume, virtualBoxVolume } from '../../src/vm_volume.mjs';
+import { hypervVolume, kvmVolume, reconcileVirtualBoxGuestDisks, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
 import { auditRemoteDelivery, deliverCredential, deliveryTarget, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
 import podmanModule from '../../../backends/podman/adapter.cjs';
@@ -1163,6 +1163,7 @@ tool('vault_status', {
         approved_this_session: scope.approvedThisSession.size,
       },
       bridge: { configured: Boolean(settings.bridgeSocket), connected: Boolean(scope.bridge) },
+      workspace_cleanup: scope.workspaceCleanup || [],
     };
     if (!status.database.exists) {
       status.locked = true;
@@ -1352,6 +1353,22 @@ const main = async () => {
     return;
   }
   await server.connect(new StdioServerTransport());
+  if (!settings.remoteHost && ['linux', 'win32', 'darwin'].includes(process.platform)) {
+    let reconciling = false;
+    const reconcile = async () => {
+      if (reconciling) return;
+      reconciling = true;
+      try {
+        scope.workspaceCleanup = await withVmVolumeState(reconcileVirtualBoxGuestDisks);
+      } catch (error) {
+        scope.workspaceCleanup = [{ status: 'pending', error: error.message }];
+      } finally {
+        reconciling = false;
+      }
+    };
+    void reconcile();
+    setInterval(reconcile, 15000).unref();
+  }
   console.error(`VAMP Vault stdio server ready${settings.remoteHost ? ` (remote host ${settings.remoteHost})` : ''}`);
 };
 
