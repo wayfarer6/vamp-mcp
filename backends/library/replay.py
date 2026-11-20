@@ -1,5 +1,6 @@
 """Replay reviewed, AST-parsed actions on guest devices. Never exec recorder code."""
 import asyncio
+from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -196,11 +197,37 @@ class OutcomeScreenBlocked(ValueError):
 
 
 class ElevationHandoff(ValueError):
-    def __init__(self, completed, reason, phase):
+    def __init__(self, completed, reason, phase, program_name=None):
         self.completed = completed
         self.reason = reason
         self.phase = phase
+        self.program_name = program_name
         super().__init__('Check the guest desktop before continuing.')
+
+
+@dataclass(frozen=True)
+class ElevationPrompt:
+    program_name: str | None
+
+
+def elevation_program_name(lines):
+    """Read only the label immediately above a localized UAC publisher row."""
+    publisher_labels = ('verified publisher:', 'publisher:', '확인된 게시자:', '게시자:')
+    boxed = [(item['text'].strip(), item['xyxy']) for item in lines
+             if float(item['confidence']) >= 0.8 and isinstance(item.get('xyxy'), list)
+             and len(item['xyxy']) == 4]
+    names = set()
+    for publisher, (left, top, _, _) in boxed:
+        if not normalized_text(publisher).startswith(publisher_labels):
+            continue
+        candidates = [(top - box[3], text) for text, box in boxed
+                      if 0 < top - box[3] <= 64 and left - 16 <= box[0] <= left + 120
+                      and 1 <= len(text) <= 96 and any(char.isalpha() for char in text)
+                      and all(char.isalnum() or char in ' ._()-' for char in text)]
+        if candidates:
+            gap = min(distance for distance, _ in candidates)
+            names.update(text for distance, text in candidates if distance - gap <= 4)
+    return names.pop() if len(names) == 1 else None
 
 
 def inspect_elevation_screen(path):
@@ -211,10 +238,10 @@ def inspect_elevation_screen(path):
     headings = ('user account control', '사용자 계정 컨트롤')
     prompt_scores = [confidence for text, confidence in readings if any(heading in text for heading in headings)]
     if any(confidence >= 0.8 for confidence in prompt_scores):
-        return True
+        return ElevationPrompt(elevation_program_name(lines))
     if prompt_scores or not any(text and confidence >= 0.8 for text, confidence in readings):
         raise ValueError('The guest frame did not provide a confident elevation check.')
-    return False
+    return None
 
 
 async def require_clear_elevation_screen(driver, resolution, completed, phase):
@@ -228,7 +255,7 @@ async def require_clear_elevation_screen(driver, resolution, completed, phase):
     except Exception as error:
         raise ElevationHandoff(completed, 'screen_unverified', phase) from error
     if detected:
-        raise ElevationHandoff(completed, 'uac_prompt_detected', phase)
+        raise ElevationHandoff(completed, 'uac_prompt_detected', phase, getattr(detected, 'program_name', None))
 
 
 async def check_elevation_boundary(driver, resolution, completed, phase, wait_seconds, resume_text, on_resume):
@@ -238,6 +265,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
     except ElevationHandoff as blocked:
         if blocked.reason != 'uac_prompt_detected' or not wait_seconds or driver.held:
             raise
+        program_name = blocked.program_name
     try:
         async with asyncio.timeout(wait_seconds):
             while True:
@@ -250,9 +278,9 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
                     continue
                 break
     except TimeoutError as error:
-        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase) from error
+        raise ElevationHandoff(completed, 'uac_resume_not_verified', phase, program_name) from error
     if on_resume is not None:
-        on_resume(completed, phase)
+        on_resume(completed, phase, program_name)
 
 
 async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
@@ -384,11 +412,13 @@ async def run(request, dialogue=False):
             or (resume_text is not None and not wait_seconds)):
         raise ValueError('UAC resume requires VirtualBox, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
     resume_events = []
-    def record_resume(completed, phase):
+    def record_resume(completed, phase, program_name):
         from backends.virtualbox.history import record_event_run
         payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'],
                    'actions_completed': completed, 'phase': phase,
                    'policy': 'operator_wait_screen_verified', 'program_identity': 'unverified'}
+        if program_name is not None:
+            payload['program_name_ocr'] = program_name
         try:
             resume_events.append(record_event_run(request['vm_id'], 'resumed', 'elevation_resumed',
                                                    payload, datetime.now(timezone.utc).isoformat()))
@@ -419,10 +449,12 @@ async def run(request, dialogue=False):
                     'actions_completed':error.completed,'phase':error.phase,
                     'program_identity':'unverified','replay_commit':metadata['replay_commit'],
                     'at':observed_at,'message':str(error)}
+            if error.program_name is not None:
+                result['program_name_ocr'] = error.program_name
             try:
                 result['run_id']=record_elevation_handoff(request['vm_id'],metadata['id'],error.reason,
                                                           error.completed,observed_at,error.phase,
-                                                          metadata['replay_commit'])
+                                                          metadata['replay_commit'], error.program_name)
             except (OSError, sqlite3.Error):
                 result['history_status']='unavailable'
             return result

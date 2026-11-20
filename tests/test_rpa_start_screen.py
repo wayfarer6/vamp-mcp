@@ -60,15 +60,23 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         metadata = {'id': 'fixture-rpa', 'backend': 'virtualbox', 'resolution': [1920, 1080],
                     'replay_commit': commit}
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        lines = [
+            {'text': '사용자 계정 컨트롤', 'confidence': .96, 'xyxy': [756, 371, 865, 385]},
+            {'text': 'Windows PowerShell', 'confidence': .99, 'xyxy': [809, 503, 977, 519]},
+            {'text': '확인된 게시자: Microsoft Windows', 'confidence': .96, 'xyxy': [757, 552, 977, 569]},
+            {'text': 'Unrelated foreground text', 'confidence': .99, 'xyxy': [1350, 500, 1540, 520]},
+        ]
+        daemon = SimpleNamespace(request=lambda *args, **kwargs: {'lines': lines})
         with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
              patch('backends.library.replay.load', return_value=(metadata, actions)), \
              patch('backends.library.replay.VBox', return_value=driver), \
-             patch('backends.library.replay.inspect_elevation_screen', return_value=True):
+             patch.dict('sys.modules', {'model_daemon': daemon}):
             result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True})
             record = detail(result['run_id'])
         self.assertEqual(result['status'], 'operator_handoff')
         self.assertEqual(result['phase'], 'before_action')
         self.assertEqual(result['program_identity'], 'unverified')
+        self.assertEqual(result['program_name_ocr'], 'Windows PowerShell')
         self.assertEqual(result['replay_commit'], commit)
         self.assertEqual(driver.events, [])
         self.assertEqual(record['vm'], 'fixture-vm')
@@ -81,6 +89,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             'rpa_id': 'fixture-rpa', 'reason': 'uac_prompt_detected', 'actions_completed': 0,
             'policy': 'operator_confirmation_required', 'phase': 'before_action',
             'program_identity': 'unverified', 'replay_commit': commit,
+            'program_name_ocr': 'Windows PowerShell',
         })
 
     async def test_virtualbox_uac_after_final_action_precedes_outcome_ocr(self):
