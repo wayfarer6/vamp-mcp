@@ -70,6 +70,22 @@ PY
     bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/06-validation" --validate
     confirm_stage '7/8 Prepare the disconnected scratch guest and its OCR, modal and CSV checks. Authorize the scratch test and promotion on success.'
     bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/07-repair" --commit
+    "$python" - "$reports/07-repair" "$VAMP_RPA_REGISTRY" <<'PY'
+import json
+from pathlib import Path
+import subprocess
+import sys
+from uuid import UUID
+
+reports, registry = map(Path, sys.argv[1:])
+result = json.loads((reports / 'repair.json').read_text(encoding='utf-8'))
+if result.get('head_verified') is not True or result.get('committed') is not True:
+    raise SystemExit('The promoted revision must be verified before exporting its diff.')
+catalog = registry / str(UUID(result['id']))
+diff = subprocess.check_output(['git', '-C', str(catalog), 'diff', '--no-ext-diff',
+                                result['head_before'], result['head_after'], '--', 'source.py'])
+(reports / 'source.diff').write_bytes(diff)
+PY
     VAMP_DEMO_EXPECTED_SOURCE_SHA256=$("$python" -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source_sha256"])' "$reports/07-repair/repair.json")
 
     confirm_stage '8/8 Review the promoted RPA in the library. Confirm the v2 rerun and use a fresh CSV output path.'
