@@ -100,7 +100,7 @@ VAMP MCP prepares its default OmniParser YOLO icon weights in the background at 
 
 ### 5. 📦 Guest bootstrapping
 
-Packer guests fetch post-install resources from their build host, not from a universal address. VirtualBox keeps its existing NAT path. Hyper-V uses the selected virtual switch's host IPv4; QEMU's default build NAT reaches the host at `10.0.2.2`, distinct from the deployed libvirt network. See [VM MCP](docs/VM_MCP.md) for setup and troubleshooting.
+VirtualBox fetches post-install resources over its build NAT. Hyper-V Windows uses the selected switch's host IPv4, while Hyper-V Debian reads offline answer media and uses a static network profile after installation. QEMU's default build NAT reaches the host at `10.0.2.2`, independently of the deployed libvirt network. [VM MCP setup and troubleshooting](docs/VM_MCP.md)
 
 ---
 

@@ -102,7 +102,7 @@ VAMP MCP는 시작할 때 기본 OmniParser YOLO 아이콘 가중치를 백그�
 
 ### 5. 📦 게스트 초기 설정
 
-Packer 게스트는 사후 설정 파일을 빌드 호스트에서 받습니다. VirtualBox는 기존 NAT 경로를 유지합니다. Hyper-V는 선택한 가상 스위치의 호스트 IPv4를 사용합니다. QEMU 기본 빌드 NAT의 호스트 주소는 `10.0.2.2`이며, 배포된 libvirt VM의 네트워크와는 별개입니다. 설정과 오류 진단은 [VM MCP 문서](docs/VM_MCP.md)를 참고하세요.
+VirtualBox는 빌드 NAT에서 사후 설정 파일을 받습니다. Hyper-V의 Windows 게스트는 선택한 가상 스위치의 호스트 IPv4를 사용하고, Debian 게스트는 오프라인 응답 미디어로 설치한 뒤 고정 네트워크 프로필을 사용합니다. QEMU 기본 빌드 NAT의 호스트 주소는 `10.0.2.2`이며, 배포된 libvirt VM의 네트워크와는 별개입니다. [VM MCP 설정 및 오류 진단](docs/VM_MCP.md)
 
 ---
 
