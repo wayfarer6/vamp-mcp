@@ -100,7 +100,7 @@ and `confirm: true`.
 
 This prerelease adds a narrow source implementation for **native Linux, same-user rootless Podman, `local-linux` only**. WSL and SSH targets, including an engine in a remote Debian VM, are unavailable for this attachment flow. A Debian VM can use it only when VAMP and rootless Podman both run locally inside that native Linux guest. Engine connection, mounted-volume identity, desktop readiness and real application read/write are separate checks.
 
-Unlock and mount the intended VeraCrypt volume yourself using an approved local procedure before checking it. VAMP does **not** unlock a volume, request a password, store a key, create a host mount or substitute an empty directory for a missing mount. Keep the image, credentials and task workspace separate. Never put a KDBX database, private key, whole vault, host display socket or Podman socket in the workload scope.
+Before checking the workspace, mount the intended VeraCrypt volume locally or use `podman_workspace_unlock` with its configured Vault credential and approve the request in VS Code. Keep the image, credentials and task workspace separate. Keep databases, keys, host display sockets and the Podman socket outside the workload scope.
 
 ### Owner-controlled configuration
 
@@ -112,13 +112,14 @@ The file has exactly these fields; use real, verified local paths rather than co
 
 | Field | Required value |
 | --- | --- |
-| `veracryptPath` | Absolute path to the installed VeraCrypt executable used for read-only mount inspection |
-| `volumePath` | Absolute path identifying the already-unlocked VeraCrypt volume |
+| `veracryptPath` | Absolute path to the installed VeraCrypt executable used for mount inspection and cleanup |
+| `volumePath` | Absolute path to the managed VeraCrypt volume |
 | `mountPoint` | Existing absolute mount point of that exact volume |
 | `directory` | Existing dedicated task subdirectory strictly below `mountPoint`, not the volume root |
 | `workloadId` | 1–48 lowercase letters, digits or hyphens; first character must be a letter or digit |
 | `imageId` | Already-installed, independently trusted immutable image ID: 64 lowercase hexadecimal characters, without `sha256:`; also present in `vamp.podman.desktopImageIds` or `VAMP_DESKTOP_IMAGE_IDS` |
 | `protectedPaths` | Nonempty array of existing absolute paths to protected material outside the task scope; neither ancestors nor descendants of `directory` |
+| `credentialEntry` | Optional `VeraCrypt/<entry>` reference required by `podman_workspace_unlock` |
 
 The checks reject ambiguous paths, unsafe ownership/permissions, unexpected volume or folder identity, and overlapping protected material. Do not broaden the scope or remove protected paths just to pass a failed check. No image is downloaded by attachment.
 
@@ -133,14 +134,9 @@ The writer check covers the same user's Podman containers, **not every host proc
 
 ### Finish before dismounting
 
-For MCP, save and close applications, confirm the exact managed container,
-then call `podman_workspace_detach` with its full ID and checked connection
-binding. A successful response verifies that the container and overlapping
-same-user Podman mounts are absent. Then confirm `podman_workspace_lock`
-to dismount. It rechecks same-user Podman mounts across the entire volume
-and any disk attachments registered by Vault before calling VeraCrypt.
+Save and close applications, confirm the exact managed container, and call `podman_workspace_detach` with its full ID and connection binding. With `workspace_cleanup: "unmounted"`, VAMP has verified that the container is gone, checked overlapping same-user Podman mounts and Vault disk attachments, and confirmed that VeraCrypt removed the mount. Files saved in `/workspace` remain in the encrypted volume.
 
-Save and close applications, stop the newly created workload, then refresh and verify that it is gone and the attachment is released **before manually dismounting VeraCrypt**. The workload is disposable; stopping it does not delete files saved in the approved task directory. Do not dismount while a workload might still write. If attachment fails or its state is uncertain, inspect the local container inventory before retrying or dismounting; do not assume rollback completed.
+If the container exits outside VAMP, the local MCP server checks the saved attachment about every 15 seconds. A restarted server can resume from that record within the Linux user session. Use `podman_workspace_cleanup_status` to see the last check. `waiting_for_shutdown` means the container is still present. `pending` means an active consumer or an unverified state is blocking cleanup. Resolve the reported condition and let the server retry, or explicitly confirm `podman_workspace_lock` to retry from MCP. Inspect the container inventory before considering a manual dismount.
 
 **Existing VAMP Vault unmount operations are not guarded by this workspace flow.** It does not intercept Vault or manual dismounts, unlock secrets, or change credential handling. Use only explicitly approved dummy volumes and non-secret files for integration tests; no real secrets or personal work documents.
 
