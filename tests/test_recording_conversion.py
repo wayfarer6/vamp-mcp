@@ -44,15 +44,18 @@ time.sleep(1.5)
 
     def test_generate_keeps_typed_text_out_of_public_scaffold(self):
         with tempfile.TemporaryDirectory() as directory:
-            root=Path(directory);source=root/'source'
+            root=Path(directory);source=root/'녹화 🧪.py'
             source.write_text("import pyautogui\npyautogui.write('PRIVATE_RECORDING_VALUE')\n")
             result=generate(source,'example',package_root=root/'rpas')
             package=Path(result['package_path'])
+            conversion=json.loads((package/'conversion.json').read_text(encoding='ascii'))
+            self.assertEqual(conversion['source_name'],source.name)
+            self.assertIn(source.name,(package/'README.md').read_text(encoding='utf-8'))
             self.assertIn('PRIVATE_RECORDING_VALUE',(package/'recording.local.json').read_text())
             if os.name == 'posix':
                 self.assertEqual((package/'recording.local.json').stat().st_mode & 0o777,0o600)
             for name in ['workflow.py','run.robot','conversion.json','README.md','manifest.json']:
-                self.assertNotIn('PRIVATE_RECORDING_VALUE',(package/name).read_text())
+                self.assertNotIn('PRIVATE_RECORDING_VALUE',(package/name).read_text(encoding='utf-8'))
             with self.assertRaises(ValueError):generate(source,'example',package_root=root/'rpas')
             self.assertEqual(source.read_text(),"import pyautogui\npyautogui.write('PRIVATE_RECORDING_VALUE')\n")
 

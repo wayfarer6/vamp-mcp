@@ -178,7 +178,7 @@ def generate(source_path,package_id,guest_os='windows11',width=1920,height=1080,
     target.mkdir(parents=True)
     for name,data in [('manifest.json',manifest),('conversion.json',report),
       ('recording.local.json',{'format_version':1,'guest_os':guest_os,'resolution':[width,height],'actions':actions})]:
-        path=target/name;path.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n')
+        path=target/name;path.write_text(json.dumps(data,indent=2)+'\n', encoding='ascii')
         if name=='recording.local.json':path.chmod(0o600)
     (target/'workflow.py').write_text('''"""Generated adapter: keep detailed input and coordinates in Python/local data."""
 from pathlib import Path
@@ -214,7 +214,7 @@ class Workflow(RecordedWorkflow):
       '    Should Not Be Equal    ${result}[status]    verification_failed','','*** Keywords ***','End Recorded Task',
       '    Run Keyword And Continue On Failure    Workflow.Release Recorded Inputs','    Finish RPA Task',''])
     (target/'run.robot').write_text('\n'.join(lines))
-    (target/'README.md').write_text(f'''# {package_id}\n\nGenerated from `{source_path.name}` without executing source code.\n\n- Guest: `{guest_os}`, {width}×{height}; source space: `{coordinate_space}`.\n- Review `conversion.json` and the private `recording.local.json` before replay.\n- `run.robot` controls the order; `workflow.py` and `recording_runtime.py` execute guest input.\n- Default run returns `needs_review` without connecting to the VM.\n- Explicit replay: `.venv/bin/python scripts/run_rpa.py {package_id} --var ALLOW_REPLAY:True --var SPICE_URI:<actual-guest-uri>`\n- For VirtualBox, pass `--var VIRTUALBOX_VM:<running-vm-uuid>` instead of `SPICE_URI` and use a host Python with the VirtualBox SDK.\n- No application success is claimed unless an expected OCR text is configured; otherwise result is `replayed_unverified`.\n- `recording.local.json` is excluded from Git because recorded keystrokes can contain credentials. Regenerate from a local source on a new checkout.\n- See [conversion guide](../../docs/RECORDING_CONVERSION.md) for refinement and credential replacement.\n''')
+    (target/'README.md').write_text(f'''# {package_id}\n\nGenerated from `{source_path.name}` without executing source code.\n\n- Guest: `{guest_os}`, {width}×{height}; source space: `{coordinate_space}`.\n- Review `conversion.json` and the private `recording.local.json` before replay.\n- `run.robot` controls the order; `workflow.py` and `recording_runtime.py` execute guest input.\n- Default run returns `needs_review` without connecting to the VM.\n- Explicit replay: `.venv/bin/python scripts/run_rpa.py {package_id} --var ALLOW_REPLAY:True --var SPICE_URI:<actual-guest-uri>`\n- For VirtualBox, pass `--var VIRTUALBOX_VM:<running-vm-uuid>` instead of `SPICE_URI` and use a host Python with the VirtualBox SDK.\n- No application success is claimed unless an expected OCR text is configured; otherwise result is `replayed_unverified`.\n- `recording.local.json` is excluded from Git because recorded keystrokes can contain credentials. Regenerate from a local source on a new checkout.\n- See [conversion guide](../../docs/RECORDING_CONVERSION.md) for refinement and credential replacement.\n''', encoding='utf-8')
     return {'status':'generated_needs_review','rpa_id':package_id,'package_path':str(target.resolve()),
             'action_count':len(actions),'initial_win_r':starts_launcher,'report':str((target/'conversion.json').resolve())}
 
@@ -230,7 +230,7 @@ def main():
     args=parser.parse_args()
     try:result=generate(args.source,args.id,args.guest_os,args.width,args.height,args.coordinate_space,args.viewport)
     except (ValueError,OSError,SyntaxError) as error:parser.error(str(error))
-    print(json.dumps(result,ensure_ascii=False,indent=2))
+    print(json.dumps(result,indent=2))
 
 
 if __name__ == '__main__':
