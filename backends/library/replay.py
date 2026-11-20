@@ -287,7 +287,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
     except TimeoutError as error:
         raise ElevationHandoff(completed, 'uac_resume_not_verified', phase, program_name, observed_at) from error
     if on_resume is not None:
-        on_resume(completed, phase, program_name)
+        on_resume(completed, phase, program_name, observed_at)
 
 
 async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
@@ -419,10 +419,10 @@ async def run(request, dialogue=False):
             or (resume_text is not None and not wait_seconds)):
         raise ValueError('UAC resume requires VirtualBox, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
     resume_events = []
-    def record_resume(completed, phase, program_name):
+    def record_resume(completed, phase, program_name, observed_at):
         from backends.virtualbox.history import record_event_run
         payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'],
-                   'actions_completed': completed, 'phase': phase,
+                   'actions_completed': completed, 'phase': phase, 'prompt_observed_at': observed_at,
                    'policy': 'operator_wait_screen_verified', 'program_identity': 'unverified'}
         if program_name is not None:
             payload['program_name_ocr'] = program_name

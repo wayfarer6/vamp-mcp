@@ -130,8 +130,13 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
              patch('backends.library.replay.load', return_value=(metadata, actions)), \
              patch('backends.library.replay.VBox', return_value=driver), \
              patch('backends.library.replay.asyncio.sleep'), \
-             patch('backends.library.replay.inspect_elevation_screen', side_effect=[False, True, False, False, False, False]), \
+             patch('backends.library.replay.inspect_elevation_screen',
+                   side_effect=[False, SimpleNamespace(program_name='Fixture Setup'), False, False, False, False]), \
+             patch('backends.library.replay.datetime') as clock, \
              patch('backends.library.replay.verify_start', side_effect=[StartScreenBlocked('not ready'), None]) as verify:
+            observed = datetime(2026, 11, 20, 10, tzinfo=timezone.utc)
+            resumed = datetime(2026, 11, 20, 10, 0, 3, tzinfo=timezone.utc)
+            clock.now.side_effect = [observed, resumed]
             result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True, 'uac_wait_seconds': 10,
                                 'uac_resume_text': 'Installed'})
             run_id, = result['elevation_resume_run_ids']
@@ -141,7 +146,12 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(verify.await_count, 2)
         event, = record['events']
         self.assertEqual(event['kind'], 'elevation_resumed')
-        self.assertEqual(json.loads(event['payload_json'])['actions_completed'], 1)
+        self.assertEqual(event['created_at'], resumed.isoformat())
+        payload = json.loads(event['payload_json'])
+        self.assertEqual(payload['actions_completed'], 1)
+        self.assertEqual(payload['prompt_observed_at'], observed.isoformat())
+        self.assertEqual(payload['program_name_ocr'], 'Fixture Setup')
+        self.assertEqual(payload['policy'], 'operator_wait_screen_verified')
 
     async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
         driver = FixtureDriver()
