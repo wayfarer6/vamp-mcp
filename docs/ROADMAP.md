@@ -100,3 +100,16 @@ Rather than implementing complex, proprietary remote hypervisor network protocol
 1. **Host-Bound Key Custody:** Private keys, passwords, and PIM numbers are never transmitted over network pipes to the remote model.
 2. **Audit Logging:** Every remote MCP tool call (`rpa_run_saved`, `vm_screenshot`, `vault_mount_volume`) is recorded in the local SQLite run history (`vm_run_history`).
 3. **Fail-Closed Locking:** If an SSH connection drops, active VeraCrypt removable volumes are unmounted within `sessionCacheMinutes` expiration.
+
+## 5. Six-stage replay demonstration
+
+Use the same synthetic ERP order, browser, guest resolution and reset procedure for every run. Keep Windows UI capture within the retry tracked in [#19](https://github.com/wayfarer6/vamp-mcp/issues/19).
+
+1. Show the ERP and the AI chat beside the guest view. Reset the ERP and capture the initial order state.
+2. Complete the task once using screen-driven CUA, then capture the actions as PyAutoGUI source.
+3. Convert the source into a Robot Framework package and show the generated `run.robot`.
+4. Start the saved package through `rpa_run_saved` and retain its timing and run record.
+5. Verify the expected order state with local OCR and inspect the output CSV and Robot report. Change the ERP layout and show the failed check and targeted repair.
+6. Compare screen-driven CUA, a fixed recorded workflow, and VAMP replay. Report median elapsed time over equal runs, vision tokens from the provider's usage report, and success or safe stop after the UI change. Record repair runs separately from routine replays.
+
+Report the versions, sample size, timing boundaries and raw outcomes alongside any comparison. Record unavailable usage telemetry as unavailable.

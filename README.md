@@ -43,7 +43,7 @@ VirtualBox setup demos are available as QHD MP4s.
 
 Computer-Using AI agents (CUA) are powerful, but they suffer from two fundamental problems in the real world:
 
-1. **The Token Drain**: Every single interaction requires taking a high-resolution screenshot and feeding it into multimodal models. Repeating a routine 10-step login or data extraction task burns hundreds of thousands of tokens every single run.
+1. **Repeated screen analysis**. A screenshot-driven agent may send new frames to a vision model as it makes decisions. Repeating the same workflow can incur the same model calls again.
 2. **The Environment Wall**: Headless browsers and lightweight Docker containers fall flat when faced with native Windows desktop applications, enterprise ERPs, government portals, anti-bot software, and hardware security token checks.
 
 **VAMP introduces an elegant, token-efficient paradigm:**
@@ -67,7 +67,7 @@ By decoupling **execution logic** from **visual reasoning**, VAMP avoids expensi
 | Feature | Standard Multimodal CUA | Headless Browser / Docker | **VAMP Platform** |
 | :--- | :--- | :--- | :--- |
 | **Multimodal Vision Tokens** | High (captures full screen every action) | None (DOM/Text only) | **Avoided entirely** (Deterministic local RPA + concise text summaries) |
-| **Execution Latency** | High (5-15s per screen roundtrip) | Low (Scripted) | **Near-instant native execution** |
+| **Execution latency** | Includes model calls for screen-driven decisions | Includes scripted actions and waits | Includes guest input, waits and configured local checks |
 | **Application Support** | Limited to current host screen | Web only, Linux headless | **Full Windows 11 & Debian desktops** |
 | **Anti-Bot / DRM Bypass**| Easily flagged by OS hooks | Blocked immediately | **Hardware VM isolation (VT-x, USB pass-through)** |
 | **Credential Security** | Plaintext in prompt context | Environment variables | **KeePassXC / VeraCrypt vault via `stdin` (Zero leak)** |
