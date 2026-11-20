@@ -71,6 +71,11 @@ above. The offline installer reads its answer file from the attached ISO.
 Keep the golden export and live VM directories separate. When removing a
 failed or retired deployment, select the live VM in the VM manager and verify
 the golden image is still listed before cleaning up build files.
+For a retention check, record the golden export's VHDX SHA-256 with
+`Get-FileHash` and use `Get-VMHardDiskDrive` to verify that the live VM points
+to its own disk. Shut down and delete the live VM through VM Manager. Confirm
+that the live VM and its disk are gone and that the exported VHDX still has
+the original SHA-256.
 
 ### Standalone build
 
