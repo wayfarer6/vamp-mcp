@@ -186,6 +186,8 @@ Use this sequence for the [VirtualBox ERP showcase](https://github.com/wayfarer6
 
 Use the guided launcher from an interactive Bash terminal. Set `VAMP_RPA_REGISTRY` to an isolated demo catalog. Set `VAMP_DEMO_HOST_URL` if the standalone ERP uses a different local URL or port.
 
+On Windows, set `VAMP_DEMO_MCP_CLI` to the absolute path to the installed package's `vamp-mcp/bin/vamp-mcp.mjs` to use the CLI's administrator launch and approval flow. Use a package built from the revision being demonstrated. With the variable unset, launch the terminal as administrator to run the Library MCP directly from the checkout.
+
 ```bash
 bash scripts/demo_e2e_showcase.sh showcase ../vamp-demo-erp ./showcase-report \
   ./erp-recording.py erp_showcase ./erp-request.json ./erp-repair.json \

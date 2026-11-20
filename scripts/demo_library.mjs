@@ -24,15 +24,18 @@ try {
   if (step !== 'saved-replay' && (step !== 'repair' || !action))
     throw new Error('Select a saved replay or a repair mode.');
   if (!process.env.VAMP_RPA_REGISTRY) throw new Error('Set VAMP_RPA_REGISTRY to the reviewed demo catalog.');
+  const installedCli = process.env.VAMP_DEMO_MCP_CLI;
   const transport = new StdioClientTransport({
     command: process.execPath,
-    args: [fileURLToPath(new URL('../backends/library/server.mjs', import.meta.url))],
+    args: installedCli
+      ? [resolve(installedCli), 'library']
+      : [fileURLToPath(new URL('../backends/library/server.mjs', import.meta.url))],
     cwd: root,
     env: { ...process.env, RPA_REPLAY_PYTHON: process.env.VAMP_DEMO_PYTHON || process.env.RPA_REPLAY_PYTHON || 'python',
       RPA_HOST_PYTHON: process.env.VAMP_DEMO_PYTHON || process.env.RPA_HOST_PYTHON || 'python' },
     stderr: 'inherit',
   });
-  await client.connect(transport);
+  await client.connect(transport, installedCli ? { timeout: 150000 } : undefined);
   const call = async (name, args) => {
     const result = await client.callTool({ name, arguments: args }, undefined, { timeout: 620000 });
     if (result.isError) throw new Error(`MCP rejected ${name}.`);

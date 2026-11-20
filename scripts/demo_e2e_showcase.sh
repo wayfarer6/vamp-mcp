@@ -47,8 +47,8 @@ print(conversion['source_sha256'])
 PY
 )
     export VAMP_DEMO_EXPECTED_SOURCE_SHA256
-    confirm_stage '4/8 Register and review this source in the demo RPA Library. Save the request with the authorized guest UUID and confirm v1 replay.'
     "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/04-baseline.json"
+    confirm_stage '4/8 Register and review this source in the demo RPA Library. Save the request with the authorized guest UUID, reload Orders with Ctrl+F5, and confirm that v1 is visible.'
     bash "$repo/scripts/demo_e2e_showcase.sh" verified-replay "$saved_request" "$demo" "$csv_v1" "$reports/04-v1" --confirm
 
     confirm_stage '5/8 Confirm that the original RPA should be tested on the same guest after the ERP switches to v2.'
