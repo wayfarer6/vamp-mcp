@@ -45,7 +45,12 @@ class SavedRPATests(unittest.TestCase):
         saved = registry.register(root, {**self.request, 'backend': 'virtualbox',
                                          'width': 1920, 'height': 1080, 'inputs': [], 'start_text': 'QA-042'})
         request = {'registry': str(root), 'id': saved['definition']['id'],
-                   'vm_id': '01234567-89ab-cdef-0123-456789abcdef', 'confirmed': True}
+                   'vm_id': '01234567-89ab-cdef-0123-456789abcdef', 'confirmed': True,
+                   'expected_source_sha256': saved['definition']['source_sha256']}
+        with patch.object(replay, 'VBox') as connect:
+            with self.assertRaisesRegex(ValueError, 'expected SHA-256'):
+                asyncio.run(replay.run({**request, 'expected_source_sha256': '0' * 64}))
+            connect.assert_not_called()
         for text in ('QA-999', 'Dashboard', 'QA-042 QA-042', 'QA-042'):
             with self.subTest(text=text):
                 driver = FixtureDriver()

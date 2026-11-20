@@ -36,6 +36,17 @@ if [[ ${1:-} == showcase ]]; then
 
     echo '3/8 Convert the reviewed recording to Robot Framework.'
     bash "$repo/scripts/demo_e2e_showcase.sh" package "$recording" "$package_id" "$reports/03-package"
+    VAMP_DEMO_EXPECTED_SOURCE_SHA256=$("$python" - "$reports/03-package/conversion-result.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+report = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+conversion = json.loads(Path(report['report']).read_text(encoding='utf-8'))
+print(conversion['source_sha256'])
+PY
+)
+    export VAMP_DEMO_EXPECTED_SOURCE_SHA256
     confirm_stage '4/8 Register and review this source in the demo RPA Library. Save the request with the authorized guest UUID and confirm v1 replay.'
     "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/04-baseline.json"
     bash "$repo/scripts/demo_e2e_showcase.sh" verified-replay "$saved_request" "$demo" "$csv_v1" "$reports/04-v1" --confirm
@@ -59,6 +70,7 @@ PY
     bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/06-validation" --validate
     confirm_stage '7/8 Prepare the disconnected scratch guest and its OCR, modal and CSV checks. Authorize the scratch test and promotion on success.'
     bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/07-repair" --commit
+    VAMP_DEMO_EXPECTED_SOURCE_SHA256=$("$python" -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["source_sha256"])' "$reports/07-repair/repair.json")
 
     confirm_stage '8/8 Review the promoted RPA in the library. Confirm the v2 rerun and use a fresh CSV output path.'
     "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/08-baseline.json"

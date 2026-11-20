@@ -69,8 +69,9 @@ try {
   } else {
     const dry_run = mode === '--dryrun';
     const expectBlocked = mode === '--confirm-expect-blocked';
+    const expected_source_sha256 = process.env.VAMP_DEMO_EXPECTED_SOURCE_SHA256;
     const started = performance.now();
-    const result = await call('rpa_run_saved', { id, vm_id, inputs, dry_run, confirmed: !dry_run });
+    const result = await call('rpa_run_saved', { id, vm_id, inputs, dry_run, confirmed: !dry_run, expected_source_sha256 });
     const { status, actions_completed } = result;
     console.log(JSON.stringify({ id, vm_id, dry_run, status, actions_completed,
       ...(expectBlocked ? { expected_status: 'starting_screen_blocked', expected_actions_completed: 0 } : {}),

@@ -73,6 +73,9 @@ def load(request):
     committed_source = committed_bytes('source.py')
     # The catalog hashes recorder bytes before Git's Windows CRLF conversion.
     source_hash = metadata['source_sha256']
+    expected_hash = request.get('expected_source_sha256')
+    if expected_hash is not None and expected_hash != source_hash:
+        raise ValueError('The reviewed RPA source does not match the expected SHA-256.')
     if (source.replace(b'\r\n', b'\n') != committed_source.replace(b'\r\n', b'\n')
             or source_hash not in {hashlib.sha256(source).hexdigest(), hashlib.sha256(committed_source).hexdigest()}):
         raise ValueError('RPA source changed; recreate and review it before running')
