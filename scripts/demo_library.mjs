@@ -14,8 +14,9 @@ try {
   const { id, vm_id, inputs = {} } = request;
   const uuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
   if (!uuid.test(id)) throw new Error('Supply a saved RPA UUID.');
-  if (step === 'saved-replay' && (!uuid.test(vm_id) || !['--dryrun', '--confirm'].includes(mode)))
-    throw new Error('Supply a VirtualBox VM UUID and choose --dryrun or --confirm.');
+  if (step === 'saved-replay' && (!uuid.test(vm_id) ||
+      !['--dryrun', '--confirm', '--confirm-expect-blocked'].includes(mode)))
+    throw new Error('Supply a VirtualBox VM UUID and choose --dryrun, --confirm, or --confirm-expect-blocked.');
   const repairActions = { '--validate': 'validate', '--test': 'test', '--commit': 'test-and-commit' };
   const action = repairActions[mode];
   if (step !== 'saved-replay' && (step !== 'repair' || !action))
@@ -67,12 +68,18 @@ try {
     if (status !== expected[action] || !head_verified) process.exitCode = 1;
   } else {
     const dry_run = mode === '--dryrun';
+    const expectBlocked = mode === '--confirm-expect-blocked';
     const started = performance.now();
     const result = await call('rpa_run_saved', { id, vm_id, inputs, dry_run, confirmed: !dry_run });
     const { status, actions_completed } = result;
     console.log(JSON.stringify({ id, vm_id, dry_run, status, actions_completed,
+      ...(expectBlocked ? { expected_status: 'starting_screen_blocked', expected_actions_completed: 0 } : {}),
       elapsed_seconds: Number(((performance.now() - started) / 1000).toFixed(3)) }, null, 2));
-    if (status !== (dry_run ? 'validated' : 'completed_unverified')) process.exitCode = 1;
+    if (expectBlocked) {
+      if (status !== 'starting_screen_blocked' || actions_completed !== 0) process.exitCode = 1;
+    } else if (status !== (dry_run ? 'validated' : 'completed_unverified')) {
+      process.exitCode = 1;
+    }
   }
 } catch (error) {
   console.error(error.message);

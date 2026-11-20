@@ -7,7 +7,7 @@ python=${VAMP_DEMO_PYTHON:-python}
 usage() {
     echo "Usage: $0 replay <vamp-demo-erp checkout> <new report directory> [--dryrun]" >&2
     echo "       $0 package <guest recording.py> <package ID> <new report directory>" >&2
-    echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm]" >&2
+    echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm|--confirm-expect-blocked]" >&2
     echo "       $0 verified-replay <request.json> <ERP checkout> <fresh CSV path> <new report directory> --confirm" >&2
     echo "       $0 repair <request.json> <new report directory> [--validate|--test|--commit]" >&2
     exit 2
@@ -38,7 +38,7 @@ if [[ ${1:-} == saved-replay || ${1:-} == repair ]]; then
         [[ $mode == --validate || $mode == --test || $mode == --commit ]] || usage
     else
         mode=${4:---dryrun}
-        [[ $mode == --dryrun || $mode == --confirm ]] || usage
+        [[ $mode == --dryrun || $mode == --confirm || $mode == --confirm-expect-blocked ]] || usage
     fi
     [[ -f $2 ]] || { echo "The demo request is missing." >&2; exit 2; }
     mkdir -- "$3"
