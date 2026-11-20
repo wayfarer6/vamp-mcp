@@ -125,6 +125,13 @@ For Windows host PowerShell policy and separate Hyper-V/CIM permission checks, s
 
 After installing, check the VAMP entries with `code --list-extensions --show-versions`. The versions should match the two downloaded file names. If a bundled Marketplace version appears, reinstall the corresponding VSIX separately.
 
+### Record, replay, and repair a task
+
+1. Set up the guest and use the same guest resolution for recording and replay. The Windows VirtualBox setup uses 1920×1080 after initialization.
+2. In **RPA Library**, search for a reviewed workflow first. To create a new one, record the task in the guest, review the captured actions, and remove sensitive input before saving. For a standalone Robot Framework package, use the [PyAutoGUI conversion guide](docs/RECORDING_CONVERSION.md).
+3. Replay the reviewed workflow on the selected guest. Check the expected screen or output file before treating it as successful.
+4. If the screen changed, inspect the affected area and propose a targeted repair. Test the repair in a separate VirtualBox guest, then review the verified revision before using it again. See the [recording and repair workflow](docs/WORKFLOWS.md).
+
 ---
 
 ## 🏗️ Architecture Overview

@@ -125,6 +125,13 @@ npm install -g ./vamp-mcp-0.3.10.tgz ./vamp-mcp-vault-0.1.13.tgz
 
 Windows 호스트 PowerShell 실행 정책 및 별도의 Hyper-V/CIM 권한 확인은 [Windows 호스트 안내](docs/INSTALL.md#windows-powershell-host)를 참고하세요.
 
+### 작업 기록, 재생, 수정
+
+1. 게스트 초기 설정을 마치고 기록과 재생에 같은 게스트 해상도를 사용합니다. Windows VirtualBox 설치는 초기 설정 후 1920×1080을 사용합니다.
+2. **RPA Library**에서 검토된 워크플로를 먼저 찾습니다. 새로 만들려면 게스트에서 작업을 기록하고, 동작을 검토해 민감한 입력을 제거한 뒤 저장합니다. 독립 Robot Framework 패키지는 [PyAutoGUI 변환 가이드](docs/RECORDING_CONVERSION.md)를 참고하세요.
+3. 선택한 게스트에서 검토된 작업을 재생합니다. 기대 화면이나 결과 파일을 확인한 뒤 성공 여부를 판단합니다.
+4. 화면이 달라졌다면 관련 영역을 확인하고 필요한 동작만 수정합니다. 별도 VirtualBox 게스트에서 수정본을 시험한 뒤 검증된 버전을 검토하고 다시 사용합니다. [기록 및 수정 흐름](docs/WORKFLOWS.md)을 참고하세요.
+
 ---
 
 ## 🏗️ 아키텍처 개요
