@@ -33,6 +33,7 @@ export async function runWithVault(python,script,request,{ socketPath,token,time
   try { bridge=await BridgeClient.connect({socketPath,token}); }
   catch { return unavailable; }
   const childEnv=Object.fromEntries(Object.entries(process.env).filter(([name])=>!/^VAULT_/i.test(name)));
+  childEnv.PYTHONIOENCODING='utf-8';
   const child=spawn(python,[script,'--vault-dialogue'],{stdio:['pipe','pipe','ignore'],windowsHide:true,env:childEnv});
   child.stdin.on('error',()=>{});
   child.on('error',()=>{});

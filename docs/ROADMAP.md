@@ -189,4 +189,6 @@ Use this sequence for the [VirtualBox ERP showcase](https://github.com/wayfarer6
 
 The launcher runs the packaging, replay, and repair commands in the table. Keep the live AI authoring, guest inspection, and review confirmations visible during filming. Use separate Korean and English recordings, with the guest at 1920×1080 and video output at 2560×1440. Track installed VSIX UI capture in [#19](https://github.com/wayfarer6/vamp-mcp/issues/19).
 
+Stage 5 was rerun on a 1920×1080 Windows VirtualBox guest with the v2 Orders page open. The launcher exited successfully after reporting `starting_screen_blocked` and zero completed actions in 11.937 seconds. The RPA catalog was in a Korean-named host folder.
+
 For the matched benchmark, record every trial before calculating medians. The [ERP benchmark guide](https://github.com/wayfarer6/vamp-demo-erp#compare-replay-methods) documents the observation fields and the `python benchmark.py observations.json` command. Keep the observations and aggregate output alongside the Robot and MCP reports.
