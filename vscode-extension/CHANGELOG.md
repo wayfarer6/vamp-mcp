@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.11
+
+- Require an administrator token for Windows MCP startup and keep elevated OCR workers separate.
+- Preserve UTF-8 RPA manifests and Robot failure summaries on Windows.
+- Record VirtualBox UAC prompt kind, initial detection time, and resumption time in replay history.
+- Check Debian preseed dependencies and the system libvirt network before allocating KVM disks.
+- Document Windows and Linux host support and link the bilingual VirtualBox setup and replay videos.
+
 ## 0.3.10
 
 - Fix unattended Debian VirtualBox setup when GNOME reports inactive VMSVGA outputs. Verify and persist the active 1920x1080 display configuration.

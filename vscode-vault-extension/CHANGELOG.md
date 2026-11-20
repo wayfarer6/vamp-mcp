@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.15
+
+- Require administrator privileges for Windows Vault MCP and its remote proxy.
+- Export a decrypted copy of a single file from a verified local VeraCrypt mount, with preview and explicit approval.
+- Verify local and SSH encrypted export and document elevated Windows test setup.
+
 ## 0.1.14
 
 - Export encrypted KeePassXC databases and VeraCrypt containers to a chosen local folder from VS Code or MCP, including configured SSH vaults.
