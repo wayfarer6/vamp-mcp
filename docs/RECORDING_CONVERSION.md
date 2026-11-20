@@ -77,10 +77,10 @@ VirtualBox에서는 VAMP 호스트 Python에 VirtualBox SDK를 설치하고, 192
 
 ```powershell
 $vmUuid = '01234567-89ab-cdef-0123-456789abcdef'
-python scripts/run_rpa.py windows_notepad_recorded --var ALLOW_REPLAY:True --var "VIRTUALBOX_VM:$vmUuid" --var EXPECTED_TEXT:Notepad
+python scripts/run_rpa.py windows_notepad_recorded --var ALLOW_REPLAY:True --var "VIRTUALBOX_VM:$vmUuid" --var 'EXPECTED_TEXT:Windows (CRLF)'
 ```
 
-예제 UUID를 실제 값으로 바꾸세요. Robot은 호스트 OCR로 `Notepad`가 한 번 표시되는지 확인합니다. `VIRTUALBOX_VM`을 지정하지 않으면 아래의 SPICE 또는 VNC 경로를 사용합니다.
+예제 UUID를 실제 값으로 바꾸고 기존 메모장 창을 닫은 상태에서 시작하세요. Robot은 호스트 OCR로 메모장 상태 표시줄의 `Windows (CRLF)`가 한 번 표시되는지 확인합니다. 상태 표시줄이나 언어 설정이 다르면 해당 게스트에서 보이는 결과 문구를 사용하세요. `VIRTUALBOX_VM`을 지정하지 않으면 아래의 SPICE 또는 VNC 경로를 사용합니다.
 
 ```bash
 .venv/bin/python scripts/run_rpa.py windows_notepad_recorded --dryrun
