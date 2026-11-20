@@ -69,9 +69,11 @@ def load(request):
     if metadata.get('reviewed') is not True or (request.get('dry_run') is not True and request.get('confirmed') is not True):
         raise ValueError('Review this RPA in the library and explicitly confirm execution first')
     source = (folder/'source.py').read_bytes()
+    committed_source = committed_bytes('source.py')
     # The catalog hashes recorder bytes before Git's Windows CRLF conversion.
-    if (hashlib.sha256(source).hexdigest() != metadata['source_sha256']
-            or source.replace(b'\r\n', b'\n') != committed_bytes('source.py').replace(b'\r\n', b'\n')):
+    source_hash = metadata['source_sha256']
+    if (source.replace(b'\r\n', b'\n') != committed_source.replace(b'\r\n', b'\n')
+            or source_hash not in {hashlib.sha256(source).hexdigest(), hashlib.sha256(committed_source).hexdigest()}):
         raise ValueError('RPA source changed; recreate and review it before running')
     raw=committed_bytes('actions.json')
     if hashlib.sha256(raw).hexdigest()!=metadata['actions_sha256']:raise ValueError('RPA actions changed; recreate and review it before running')

@@ -182,10 +182,13 @@ def register(root,request):
         (folder/'rpa.json').write_text(json.dumps(definition,ensure_ascii=False,indent=2)+'\n',encoding='utf8')
         (folder/'README.md').write_text(f'# {title}\n\n{description}\n\n## When to use\n\n{definition["when_to_use"]}\n\n## Expected result\n\n{definition["expected_result"]}\n\nVersion: {version}. Backend: {backend}. Recorded resolution: {width}×{height}.\n\nParsed without executing source. Agent replay needs review and explicit confirmation. Inputs use ${{name}} placeholders. completed_unverified requires application-result verification. This folder has independent local Git history; exports include the latest committed files without .git.\n',encoding='utf8')
         (folder/'.gitignore').write_text('.rpa-save.lock\n*.part\n',encoding='utf8')
+        # These digests cover the exact verified bytes. Preserve them on checkout
+        # even when the host enables CRLF conversion for ordinary text files.
+        (folder/'.gitattributes').write_bytes(b'/source.py -text\n/actions.json -text\n')
         for file in folder.iterdir():
             if file.is_file():file.chmod(0o600)
         if not(folder/'.git').is_dir():git(folder,'init','--quiet')
-        git(folder,'add','--','source.py','actions.json','rpa.json','README.md','.gitignore')
+        git(folder,'add','--','source.py','actions.json','rpa.json','README.md','.gitignore','.gitattributes')
         message=str(request.get('commit_message') or f'{"Update" if previous else "Create"} {title} v{version}')[:200]
         git(folder,'-c','user.name=VAMP','-c','user.email=vamp@localhost','commit','--quiet','-m',message)
         return {'status':'registered','definition':definition,'folder':str(folder),'commit':git(folder,'rev-parse','HEAD')}

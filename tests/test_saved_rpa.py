@@ -86,10 +86,11 @@ class SavedRPATests(unittest.TestCase):
         request = {**self.request, 'backend': 'virtualbox'}
         original = registry.register(root, request)
         folder = Path(original['folder'])
+        registry.git(folder, 'config', 'core.autocrlf', 'true')
         vm = '01234567-89ab-cdef-0123-456789abcdef'
         request.update(id=original['definition']['id'], expected_commit=original['commit'],
                        scratch_vm=vm, outcome_text='Export complete', test_inputs={'query': 'fixture'})
-        self.source.write_text("import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
+        self.source.write_bytes(b"import pyautogui\npyautogui.write('${query}')\npyautogui.press('tab')\n")
         baseline, expected = 'a' * 64, 'b' * 64
         artifact = ('/tmp/fixture.csv', 'fixture', self.root / 'fixture-password', baseline, expected)
         modal = (str(self.root / 'modal.pt'), 'blocking_dialog')
