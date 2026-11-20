@@ -47,22 +47,10 @@ flowchart LR
 
 Windows VM 안에서 Recorder를 실행하고 프로그램을 Win+R로 여는 것부터 기록하세요. 기록 당시 게스트 해상도, Windows 배율, 브라우저 확대율을 메모하고 재생 시에도 유지합니다. 기록 파일을 호스트로 복사합니다. 확장자가 없어도 Python 코드이면 읽습니다.
 
-아래 예제는 Windows 실행 창에서 메모장을 여는 기록입니다. `notepad_recording.py`로 저장합니다. 변환 단계에서는 PyAutoGUI 설치나 VM 연결이 필요하지 않습니다.
-
-```python
-import pyautogui
-
-pyautogui.hotkey("win", "r")
-pyautogui.sleep(1)
-pyautogui.write("notepad")
-pyautogui.press("enter")
-pyautogui.sleep(2)
-```
+[`examples/notepad_recording.py`](../examples/notepad_recording.py)는 Windows 실행 창에서 메모장을 여는 예제입니다. 저장소 루트에서 아래 명령을 실행하면 파일을 정적으로 변환합니다. 변환 단계에서는 PyAutoGUI 설치나 VM 연결이 필요하지 않습니다.
 
 ```bash
-python recording_converter.py notepad_recording.py \
-  --id windows_notepad_recorded \
-  --guest-os windows11 --coordinate-space guest --width 1920 --height 1080
+python recording_converter.py examples/notepad_recording.py --id windows_notepad_recorded --guest-os windows11 --coordinate-space guest --width 1920 --height 1080
 ```
 
 출력의 `generated_needs_review` 상태와 `action_count: 5`를 확인합니다. 다시 변환할 때는 새 ID를 사용하세요. 원본과 기존 패키지는 그대로 보존됩니다.
