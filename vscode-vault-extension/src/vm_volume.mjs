@@ -30,9 +30,15 @@ async function workspaceDisk(cli, {operation,vm,volume,mountPoint,disk,wsl=false
   if (wsl && !/^[A-Za-z0-9][A-Za-z0-9_. -]{0,63}$/.test(distro ?? '')) throw new Error('Configure a WSL distribution first.');
   const hostRoot = wsl ? '\\\\wsl.localhost\\'+distro+root.replaceAll('/','\\') : root;
   const medium = path.join(hostRoot,disk);
+  const matchesMount = item => {
+    if (item.volume !== source) return false;
+    if (item.mount_point === root) return true;
+    return !wsl && process.platform === 'win32' && /^[a-z]:$/i.test(item.mount_point)
+      && item.mount_point.toUpperCase() + '\\' === root.toUpperCase();
+  };
   const inspectMount = async () => {
     const listing=wsl ? {available:true,mounted:await cli.listWslVolumes()} : await cli.listVolumes();
-    if (!listing.available || listing.mounted.filter(item=>item.volume===source && item.mount_point===root).length !== 1) {
+    if (!listing.available || listing.mounted.filter(matchesMount).length !== 1) {
       throw new Error('The requested VeraCrypt mount could not be verified.');
     }
     const [mount,file]=await Promise.all([stat(hostRoot),lstat(medium)]).catch(error=>{

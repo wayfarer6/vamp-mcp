@@ -411,9 +411,10 @@ The local Vault MCP also checks managed VirtualBox attachments periodically.
 After observing the VM run and then power off, it verifies the recorded
 slot and detaches the VHD. A guest-only encrypted VHD needs no host dismount.
 On native Linux, a matching configured Podman workspace can release the host
-mount once other consumers are clear. Windows lists VeraCrypt drive
-mappings without the backing container path, so the automatic check reports
-host cleanup as pending on Windows. Verify the exact volume and dismount it
+mount once other consumers are clear. On Windows, Vault reads backing paths
+for local file containers from the VeraCrypt 1.26 driver. With other driver
+versions it can fall back to showing drive letters. Windows host dismount
+remains pending after automatic VHD detach. Verify the exact volume and dismount it
 through the host's VeraCrypt workflow after the disk is detached.
 
 For KVM, use `backend: "kvm"`, a secondary virtio target such as `vdb`,

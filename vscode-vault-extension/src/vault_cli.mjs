@@ -10,6 +10,7 @@ import { createReadStream } from 'node:fs';
 import { access, chmod, copyFile, mkdir, mkdtemp, realpath, rename, rm, stat } from 'node:fs/promises';
 import { cleanError, probeCli, run } from './downloader.mjs';
 import { renameGroupProgram } from './group_rename.mjs';
+import { readWindowsVeraCryptMounts } from './windows_veracrypt_mounts.mjs';
 
 /** keepassxc-cli wants one password per line on stdin. */
 const lines = values => values.filter(value => value !== undefined && value !== null).map(value => `${value}\n`).join('');
@@ -644,6 +645,8 @@ export class VaultCli {
   async listVolumes({ probeNative = false } = {}) {
     if (!this.veracryptCli && !(probeNative && this.platform === 'win32')) return { available: false, mounted: [], slots: [] };
     if (this.platform === 'win32') {
+      const verified = await readWindowsVeraCryptMounts(this.env).catch(() => null);
+      if (verified) return { available: true, mounted: verified, slots: verified.map(item => item.slot) };
       const script = `Add-Type -TypeDefinition 'using System; using System.Text; using System.Runtime.InteropServices; public static class VAMPDrive { [DllImport("kernel32.dll", CharSet=CharSet.Unicode, SetLastError=true)] public static extern uint QueryDosDevice(string name, StringBuilder target, int length); }';
         $items=@(foreach($drive in [IO.DriveInfo]::GetDrives()) { $name=$drive.Name.Substring(0,2); $buffer=[Text.StringBuilder]::new(4096); if([VAMPDrive]::QueryDosDevice($name,$buffer,4096) -and $buffer.ToString() -match '^\\\\Device\\\\(?:VeraCrypt|TrueCrypt)Volume') { @{mount_point=$name;device=$buffer.ToString();volume=$null;slot=[int][char]$name[0]-64} } });
         ConvertTo-Json -InputObject $items -Compress`;
