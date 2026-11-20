@@ -213,15 +213,17 @@ class ElevationPrompt:
 def elevation_program_name(lines):
     """Read only the label immediately above a localized UAC publisher row."""
     publisher_labels = ('verified publisher:', 'publisher:', '확인된 게시자:', '게시자:')
-    boxed = [(item['text'].strip(), item['xyxy']) for item in lines
+    boxed = [(item['text'].strip(), item['xyxy'], item.get('language')) for item in lines
              if float(item['confidence']) >= 0.8 and isinstance(item.get('xyxy'), list)
              and len(item['xyxy']) == 4]
     names = set()
-    for publisher, (left, top, _, _) in boxed:
+    for publisher, (left, top, _, _), language in boxed:
         if not normalized_text(publisher).startswith(publisher_labels):
             continue
-        candidates = [(top - box[3], text) for text, box in boxed
-                      if 0 < top - box[3] <= 64 and left - 16 <= box[0] <= left + 120
+        # A second OCR language can identify the same box but truncate the label.
+        candidates = [(top - box[3], text) for text, box, candidate_language in boxed
+                      if candidate_language == language and 0 < top - box[3] <= 64
+                      and left - 16 <= box[0] <= left + 120
                       and 1 <= len(text) <= 96 and any(char.isalpha() for char in text)
                       and all(char.isalnum() or char in ' ._()-' for char in text)]
         if candidates:

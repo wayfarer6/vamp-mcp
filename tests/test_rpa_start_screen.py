@@ -62,8 +62,9 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
         lines = [
             {'text': '사용자 계정 컨트롤', 'confidence': .96, 'xyxy': [756, 371, 865, 385]},
-            {'text': 'Windows PowerShell', 'confidence': .99, 'xyxy': [809, 503, 977, 519]},
-            {'text': '확인된 게시자: Microsoft Windows', 'confidence': .96, 'xyxy': [757, 552, 977, 569]},
+            {'text': 'Windows', 'confidence': .93, 'xyxy': [809, 503, 977, 519], 'language': 'en'},
+            {'text': 'Windows PowerShell', 'confidence': .99, 'xyxy': [809, 503, 977, 519], 'language': 'ko'},
+            {'text': '확인된 게시자: Microsoft Windows', 'confidence': .96, 'xyxy': [757, 552, 977, 569], 'language': 'ko'},
             {'text': 'Unrelated foreground text', 'confidence': .99, 'xyxy': [1350, 500, 1540, 520]},
         ]
         daemon = SimpleNamespace(request=lambda *args, **kwargs: {'lines': lines})
