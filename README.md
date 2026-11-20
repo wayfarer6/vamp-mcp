@@ -83,7 +83,13 @@ By decoupling **execution logic** from **visual reasoning**, VAMP avoids expensi
 | Execution latency | Includes screen-driven model calls | Includes scripted inputs and waits | Includes guest inputs, waits, and configured local checks |
 | After a layout change | Can inspect the new screen before acting | Requires explicit starting-screen and outcome checks to detect a mismatch | Can stop before input on a configured starting-screen mismatch and hand off for targeted repair |
 
-The measured VirtualBox ERP scenario took **239.05 seconds** for one Robot Framework test case covering both layouts, local OCR, two CSV checks, and a stale replay that stopped before input. The matched three-way benchmark is pending. [Measurement scope and comparison procedure](docs/ROADMAP.md#observed-erp-run)
+| Windows VirtualBox ERP check | Elapsed time | Verified outcome |
+| --- | ---: | --- |
+| Saved replay on the original layout | 35.97 s | 17 actions and a fresh CSV with all three expected orders |
+| Saved replay after scratch verification and review | 54.44 s | 30 actions and a fresh CSV with the expected SHA-256 |
+| Robot Framework scenario across both layouts | 239.05 s | Two matching CSVs and zero inputs from the stale replay |
+
+These single-run measurements cover different portions of the workflow. The matched comparison of screen-driven CUA, a fixed recording, and VAMP saved replay still needs latency, provider vision token, and layout-change results under the same conditions. [Measurement scope and comparison procedure](docs/ROADMAP.md#observed-erp-run)
 
 ---
 
