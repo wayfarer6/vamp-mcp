@@ -77,7 +77,7 @@ class SavedRPATests(unittest.TestCase):
              patch('backends.library.replay.replay', new_callable=AsyncMock) as run:
             run.return_value = 2
             result = registry.test_revision(request)
-            check.assert_called_once_with(vm)
+            self.assertEqual(check.call_count, 2)
             driver.assert_called_once_with(vm)
             args = run.await_args
             self.assertEqual(args.args[1][0]['text'], 'fixture')
@@ -85,6 +85,13 @@ class SavedRPATests(unittest.TestCase):
         self.assertEqual(result['status'], 'scratch_screen_verified')
         self.assertFalse(result['artifact_verified'])
         self.assertFalse(result['committed'])
+        with patch('backends.library.scratch.require_virtualbox_scratch',
+                   side_effect=[vm, ValueError('The repair VM gained a shared folder.')]), \
+             patch('backends.library.replay.VBox'), \
+             patch('backends.library.replay.replay', new_callable=AsyncMock, return_value=2):
+            with self.assertRaisesRegex(ValueError, 'gained a shared folder') as failure:
+                registry.test_revision(request)
+        self.assertEqual(failure.exception.scratch_stage, 'screen_replay')
 
     def test_virtualbox_scratch_promotion_preserves_head_on_failure_and_advances_on_success(self):
         root = self.root / 'catalog'

@@ -128,6 +128,8 @@ def test_revision(request):
         ), timeout=600)
     with scratch_stage('screen_replay'):
         completed = asyncio.run(run())
+        if not artifact:
+            require_virtualbox_scratch(vm)
     if artifact:
         with scratch_stage('result_artifact'):
             require_virtualbox_scratch(vm)
