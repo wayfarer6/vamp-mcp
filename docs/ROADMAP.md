@@ -204,6 +204,20 @@ After scratch promotion, inspect the promoted revision with `rpa_revision read-s
 
 The launcher checks that the v1 and stale-layout replays use the source SHA-256 from packaging. The final v2 replay must use the source verified in scratch. A mismatch stops playback before any guest input.
 
+To repeat just the final installed-MCP check on Windows, use a PowerShell window opened with **Run as administrator** and verify that the target guest is on the reset v2 screen. Set the following paths to your installed CLI and reviewed catalog, and use the SHA-256 returned by the scratch verification. The guest browser must be configured to save to a fresh CSV destination.
+
+```powershell
+$env:VAMP_DEMO_MCP_CLI = 'C:/path/to/vamp-mcp/bin/vamp-mcp.mjs'
+$env:VAMP_RPA_REGISTRY = 'C:/path/to/reviewed-demo-catalog'
+$env:VAMP_DEMO_EXPECTED_SOURCE_SHA256 = '<scratch-verified source SHA-256>'
+node scripts/demo_library.mjs saved-replay ./reviewed-v2-request.json --dryrun
+if ($LASTEXITCODE -eq 0) {
+    node scripts/demo_library.mjs saved-replay ./reviewed-v2-request.json --confirm
+}
+```
+
+The request must contain the reviewed RPA ID and the target guest UUID. The MCP reports `completed_unverified` after dispatching the saved actions. Verify the fresh CSV independently with `python scenario.py verify-csv <path-to-fresh-orders.csv>` from the ERP checkout before recording a pass.
+
 Save each synthetic ERP CSV to its designated shared download path. After verifying the order contents in both runs, the launcher compares the files byte for byte using SHA-256 and writes both hashes to `08-csv-comparison.json`. Different hashes fail the showcase.
 
 For the keyboard repair rehearsal, start each v2 replay with the first pending order's **Actions** disclosure expanded and focused. Use the visible **Fulfillment** label as the starting-screen check. Prepare the same state in the disconnected scratch guest and the target guest. The ERP fixture displays **All orders shipped** once all seeded orders are shipped. Use that text for the scratch OCR outcome alongside the fresh CSV and the configured modal check. [ERP scratch fixture setup](https://github.com/wayfarer6/vamp-demo-erp#erp-fixture-inside-the-isolated-repair-guest)
