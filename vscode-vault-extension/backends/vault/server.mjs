@@ -1082,6 +1082,7 @@ tool('vault_export_mounted_file', {
     relative_path: z.string().min(1).max(4096),
     destination_folder: z.string().min(1).max(4096),
     source_revision: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+    destination_revision: z.string().regex(/^[a-f0-9]{64}$/).optional(),
     expected_destination_path: z.string().min(1).max(4096).optional(),
     confirm: z.boolean().default(false),
   },
@@ -1092,7 +1093,8 @@ tool('vault_export_mounted_file', {
       destinationFolder: args.destination_folder, signal: extra?.signal };
     const preview = await exportMountedFile(options);
     if (!args.confirm) return text(preview);
-    if (args.source_revision !== preview.source_revision || args.expected_destination_path !== preview.destination_path) {
+    if (args.source_revision !== preview.source_revision || args.destination_revision !== preview.destination_revision ||
+        args.expected_destination_path !== preview.destination_path) {
       throw new Error('Preview the current source and destination before confirming the decrypted export.');
     }
     if (settings.bridgeSocket) {

@@ -123,7 +123,7 @@ VS Code extension host            remote proxy (Node, stdio)        SSH        r
 | `vault_delete_credential` | Move an entry to the KeePassXC recycle bin after approval. | `status: deleted`, `recyclable` |
 | `vault_list_credentials` | Entry and group paths, no passwords. | `entries`, `groups`, `count` |
 | `vault_export_encrypted` | Preview `kind: "kdbx"` or `"volume"` and an absolute existing local `destination_folder`. Use `confirm: true` after approval. SSH mode uses the configured, previously trusted host. | Encrypted copy path, byte count and SHA-256 |
-| `vault_export_mounted_file` | Preview with `relative_path` inside the configured local VeraCrypt mount and an absolute existing local `destination_folder`. After approval, repeat with `confirm: true`, the returned `source_revision`, and the returned `destination_path` as `expected_destination_path`. | Decrypted copy path, byte count and SHA-256 |
+| `vault_export_mounted_file` | Preview with `relative_path` inside the configured local VeraCrypt mount and an absolute existing local `destination_folder`. After approval, repeat with `confirm: true`, the returned `source_revision` and `destination_revision`, and the returned `destination_path` as `expected_destination_path`. | Decrypted copy path, byte count and SHA-256 |
 | `vault_mount_volume` | Mount a VeraCrypt volume (PIM, key files, read-only, slot supported). | `status: mounted`, mount point |
 | `vault_unmount_volume` | Unmount one volume or all of them. | `status: unmounted` |
 | `vault_status` | CLI paths and versions, database presence, lock state, mounted volumes, cache window. Reads nothing secret. | Structured status plus `next_action` |

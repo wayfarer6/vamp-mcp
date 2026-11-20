@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtemp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Readable } from 'node:stream';
@@ -36,6 +36,11 @@ test('mounted-file export binds approval to the source and rejects traversal and
   device = 'fixture-device';
   await writeFile(source, 'replacement content');
   await assert.rejects(confirm(preview), /changed after confirmation/);
+  const beforeFolderChange = await exportMountedFile(options);
+  await rename(destinationFolder, destinationFolder + '.previous');
+  await mkdir(destinationFolder);
+  await assert.rejects(confirm(beforeFolderChange), /folder changed after confirmation/);
+  assert.deepEqual(await readdir(destinationFolder), []);
   const reviewed = await exportMountedFile(options);
   probesBeforeRemount = 3;
   await assert.rejects(confirm(reviewed), /changed during export/);

@@ -107,13 +107,19 @@ export async function exportEncryptedFile(options) {
   return copyVaultFile(options);
 }
 
-async function copyVaultFile({ kind, sourcePath, destinationFolder, expectedDestinationPath, confirmed = false, openSource, verifySource, signal }) {
+async function copyVaultFile({ kind, sourcePath, destinationFolder, expectedDestinationPath, expectedDestinationRevision, confirmed = false, openSource, verifySource, signal }) {
   signal?.throwIfAborted();
   if (!validPath(sourcePath) || (!openSource && !path.isAbsolute(sourcePath))) throw new Error('Configure the encrypted source file first.');
   if (!validPath(destinationFolder) || !path.isAbsolute(destinationFolder)) throw new Error('Choose an existing absolute local destination folder.');
   const folder = await realpath(destinationFolder);
   const folderInfo = await lstat(folder, { bigint: true });
   if (!folderInfo.isDirectory()) throw new Error('The local export destination must be a folder.');
+  const destinationRevision = kind === 'mounted-file'
+    ? createHash('sha256').update([folder, folderInfo.dev, folderInfo.ino, folderInfo.birthtimeNs].join('\0')).digest('hex')
+    : undefined;
+  if (confirmed && kind === 'mounted-file' && expectedDestinationRevision !== destinationRevision) {
+    throw new Error('The local export folder changed after confirmation.');
+  }
   const name = (openSource && kind !== 'mounted-file' ? path.posix : path).basename(sourcePath);
   if (!name || /[. ]$|[<>:"/\\|?*]|^(?:CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(name)) {
     throw new Error('The configured encrypted file name cannot be used at the export destination.');
@@ -123,6 +129,7 @@ async function copyVaultFile({ kind, sourcePath, destinationFolder, expectedDest
   await assertAbsent(destinationPath);
   if (!openSource) assertRegularFile(await lstat(sourcePath));
   const summary = { kind, source_path: sourcePath, destination_path: destinationPath };
+  if (destinationRevision) summary.destination_revision = destinationRevision;
   if (!confirmed) return { status: 'approval_required', ...summary };
 
   const staging = await mkdtemp(path.join(folder, '.vamp-export-'));
@@ -214,7 +221,8 @@ export async function exportMountedFile({ cli, volumePath, relativePath, expecte
     }
   };
   const result = await copyVaultFile({ ...options, kind: 'mounted-file', sourcePath,
-    expectedDestinationPath: expectedPreview?.destination_path, verifySource,
+    expectedDestinationPath: expectedPreview?.destination_path,
+    expectedDestinationRevision: expectedPreview?.destination_revision, verifySource,
     openSource: async () => { await verifySource(); return openLocal(sourcePath, info); },
   });
   return { ...result, encrypted: false, source_revision: sourceRevision };
