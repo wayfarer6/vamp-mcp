@@ -204,6 +204,8 @@ The launcher checks that the v1 and stale-layout replays use the source SHA-256 
 
 Save each synthetic ERP CSV to its designated shared download path. After verifying the order contents in both runs, the launcher compares the files byte for byte using SHA-256 and writes both hashes to `08-csv-comparison.json`. Different hashes fail the showcase.
 
+For the keyboard repair rehearsal, start each v2 replay with the first pending order's **Actions** disclosure expanded and focused. Use the visible **Fulfillment** label as the starting-screen check. Prepare the same state in the disconnected scratch guest and the target guest. The ERP fixture displays **All orders shipped** once all seeded orders are shipped. Use that text for the scratch OCR outcome alongside the fresh CSV and the configured modal check. [ERP scratch fixture setup](https://github.com/wayfarer6/vamp-demo-erp#erp-fixture-inside-the-isolated-repair-guest)
+
 | Stage | Action | Evidence to retain |
 | --- | --- | --- |
 | 1. Start infrastructure | Boot the disposable VirtualBox guest and launch the standalone ERP fixture. Open its Orders page in the guest. | Guest UUID, 1920×1080 desktop, ERP checkout revision, and initial order state. |
