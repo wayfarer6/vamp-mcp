@@ -228,3 +228,7 @@ def main():
     try:result=generate(args.source,args.id,args.guest_os,args.width,args.height,args.coordinate_space,args.viewport)
     except (ValueError,OSError,SyntaxError) as error:parser.error(str(error))
     print(json.dumps(result,ensure_ascii=False,indent=2))
+
+
+if __name__ == '__main__':
+    main()

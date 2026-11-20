@@ -5,7 +5,7 @@
 <h1 align="center">VAMP · Virtual Agent Machine Platform</h1>
 
 <p align="center">
-  <strong>화면 캡처와 멀티모달 호출을 최대한 회피하고, 격리된 가상머신(VM)과 결정론적 RPA로 비용과 지연을 아끼는 오픈소스 플랫폼</strong>
+  <strong>내 하드웨어의 가상머신(VM)에서 AI 컴퓨터 유즈 에이전트를 실행하세요.</strong>
 </p>
 
 <p align="center">
@@ -25,6 +25,8 @@
 
 ## How to use
 
+호스트 PC를 계속 사용하면서 게스트에서 GUI 자동화를 실행할 수 있습니다. 저장된 RPA는 화면과 결과 파일을 로컬에서 확인할 수 있으며, 탐색이나 예외 대응 중 외부 에이전트의 클라이언트가 화면을 요청하면 그 데이터가 전달될 수 있습니다. Vault의 비밀값은 승인된 게스트 연결을 통해 전달할 수 있습니다.
+
 VirtualBox 설치 데모를 QHD MP4로 볼 수 있습니다.
 
 | 운영체제 | MCP | VS Code |
@@ -34,6 +36,7 @@ VirtualBox 설치 데모를 QHD MP4로 볼 수 있습니다.
 
 - [Podman · Debian / VirtualBox 구성 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD.mp4)
 - [Robot Framework 코드 및 QA 결과](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-v0.3.10-demo-source-and-qa.zip)
+- [PyAutoGUI 기록을 Robot Framework로 변환](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
 
 ## 💡 왜 VAMP인가요?
 

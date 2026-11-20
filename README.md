@@ -5,7 +5,7 @@
 <h1 align="center">VAMP · Virtual Agent Machine Platform</h1>
 
 <p align="center">
-  <strong>Avoid expensive multimodal tokens with VM-isolated GUI RPA and encrypted zero-trust credential vaults.</strong>
+  <strong>Run AI computer-use agents in VMs on your own hardware.</strong>
 </p>
 
 <p align="center">
@@ -23,6 +23,8 @@
 
 ## How to use
 
+Run GUI automation inside a guest while you keep using your host desktop. With saved RPA, local replay can check the screen and output files without sending frames to a model. An external agent can receive screen data if its client requests it during exploration or targeted fallback. Vault-managed secrets can be delivered through the approved guest connection.
+
 VirtualBox setup demos are available as QHD MP4s.
 
 | Guest OS | MCP | VS Code |
@@ -32,6 +34,7 @@ VirtualBox setup demos are available as QHD MP4s.
 
 - [Podman · Debian / VirtualBox setup video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD.mp4)
 - [Robot Framework sources and QA results](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-v0.3.10-demo-source-and-qa.zip)
+- [Convert a PyAutoGUI recording to Robot Framework](docs/RECORDING_CONVERSION.md#b-게스트-안에서-기록한-pyautogui-코드-변환)
 
 ## 💡 Why VAMP?
 

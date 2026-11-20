@@ -1,7 +1,7 @@
 {
   "name": "vamp-mcp-tools",
-  "displayName": "VAMP MCP Tools \u2014 VM Automation & Vault",
-  "description": "Packer-powered VM setup, post-install automation and golden image management over MCP. Includes VM GUI automation and VAMP Vault.",
+  "displayName": "VAMP – Run AI Computer-Use Agents in VMs",
+  "description": "Run AI computer-use agents in VMs on your own hardware. Isolated desktop automation, saved RPA replay, and Vault integration over MCP.",
   "version": "0.3.10",
   "publisher": "wayfarer6",
   "license": "MIT",

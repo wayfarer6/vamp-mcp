@@ -45,20 +45,30 @@ flowchart LR
 
 Windows VM 안에서 Recorder를 실행하고 프로그램을 Win+R로 여는 것부터 기록하세요. 기록 당시 게스트 해상도, Windows 배율, 브라우저 확대율을 메모하고 재생 시에도 유지합니다. 기록 파일을 호스트로 복사합니다. 확장자가 없어도 Python 코드이면 읽습니다.
 
-개발 때 사용한 기록은 `/home/ssh1032007/naver_login_rpa`입니다. 다음 명령으로 Windows 네이버 로그인 화면 도달 예시를 만들었습니다.
+아래 예제는 Windows 실행 창에서 메모장을 여는 기록입니다. `notepad_recording.py`로 저장합니다. 변환 단계에서는 PyAutoGUI 설치나 VM 연결이 필요하지 않습니다.
+
+```python
+import pyautogui
+
+pyautogui.hotkey("win", "r")
+pyautogui.sleep(1)
+pyautogui.write("notepad")
+pyautogui.press("enter")
+pyautogui.sleep(2)
+```
 
 ```bash
-.venv/bin/python scripts/convert_recording.py ~/naver_login_rpa \
-  --id windows_naver_recorded \
+python recording_converter.py notepad_recording.py \
+  --id windows_notepad_recorded \
   --guest-os windows11 --coordinate-space guest --width 1920 --height 1080
 ```
 
-이 패키지는 이미 생성되어 있습니다. 다시 변환하려면 `--id windows_naver_recorded_v2`처럼 새 이름을 사용하세요. 원본과 기존 수동 수정 파일은 덮어쓰지 않습니다.
+출력의 `generated_needs_review` 상태와 `action_count: 5`를 확인합니다. 다시 변환할 때는 새 ID를 사용하세요. 원본과 기존 패키지는 그대로 보존됩니다.
 
 ### 생성 결과
 
 ```text
-rpas/windows_naver_recorded/
+rpas/windows_notepad_recorded/
 ├── manifest.json
 ├── run.robot                  # Robot 순서·반복·정리·성공 확인
 ├── workflow.py                # Python 실행/검증 어댑터
@@ -67,30 +77,30 @@ rpas/windows_naver_recorded/
 └── README.md
 ```
 
-변환기는 원본을 import·실행·eval하지 않고 AST와 리터럴 인자만 해석합니다. 80개 동작을 변환했고 `cmd` → Windows/Super, `shift_r` → 오른쪽 Shift로 정규화했습니다. 원본의 Win+R 시작도 확인했습니다. 기록 끝에 해제되지 않은 키 1개가 있어 정리 단계에서 남은 키를 해제하도록 했습니다. 좌표는 게스트 원본 픽셀 그대로 유지했습니다.
+변환기는 AST와 리터럴 인자만 해석합니다. 키 이름을 정규화하고, 기록에 남아 있는 키 입력은 Robot 정리 단계에서 해제합니다. 게스트 좌표는 원본 픽셀을 유지합니다.
 
 지원: `keyDown`, `keyUp`, `press`, `hotkey`, ASCII `write`/`typewrite`, 명시적 x/y의 클릭·더블/오른쪽/가운데 클릭, `moveTo`, `scroll`, `time.sleep`/`pyautogui.sleep`. 모듈 별칭과 단순 `__main__` 가드도 지원합니다. 동적 인자·임의 Python문·루프·함수 호출·드래그·시간을 지정한 마우스 이동 등은 현재 자동 변환하지 않고 중단합니다. 지원하지 않는 동작을 조용히 버리지 않습니다.
 
 ### 먼저 확인하고 재생하기
 
 ```bash
-.venv/bin/python scripts/run_rpa.py windows_naver_recorded --dryrun
+.venv/bin/python scripts/run_rpa.py windows_notepad_recorded --dryrun
 # 기본 실행: needs_review + SKIP, VM에 연결하지 않음
-.venv/bin/python scripts/run_rpa.py windows_naver_recorded
+.venv/bin/python scripts/run_rpa.py windows_notepad_recorded
 
 # 실제 주소 확인: VM이 실행 중이어야 함
 virsh -c qemu:///system domdisplay windows-RPA
 
 # 내용을 검토한 뒤 명시적으로 활성화. 아래 포트는 실제 조회 결과로 대체
-.venv/bin/python scripts/run_rpa.py windows_naver_recorded \
-  --var ALLOW_REPLAY:True --var SPICE_URI:spice://127.0.0.1:5900
+.venv/bin/python scripts/run_rpa.py windows_notepad_recorded \
+  --var ALLOW_REPLAY:True --var SPICE_URI:spice://127.0.0.1:5900 --var EXPECTED_TEXT:Notepad
 ```
 
 해상도가 기록과 다르거나 절대 좌표를 보낼 CLIENT 모드가 아니면 입력 전에 중단합니다. 해상도 일치만으로 Windows/Debian 구분이나 배율 일치를 보장하지 않으므로 VM 주소와 화면 상태도 확인하세요. 재생 중에는 VM을 직접 조작하지 마세요.
 
 일반 변환 패키지는 입력만 끝나면 `replayed_unverified`를 반환합니다. `EXPECTED_TEXT`를 지정하면 임시 화면의 OCR로 기본 확인을 할 수 있지만, 한 단어가 보이는 것만으로 모든 업무 성공을 보장하지는 않습니다.
 
-이번 `windows_naver_recorded`에는 **네이버 로그인 화면 도달** 전용 검증을 별도로 추가했습니다. YOLO 영역과 OCR을 결합해 ID·비밀번호·로그인 문구의 위치 관계, 브라우저의 `nid.naver.com`, 해당 대상 중 최소 하나의 YOLO 영역을 함께 확인합니다. 홈페이지에도 로그인 버튼이 있으므로 버튼 하나만으로 성공 처리하지 않습니다. `login_submitted: false`이며 실제 계정 로그인 성공을 뜻하지 않습니다. CAPTCHA 문구가 검출되면 사용자 인계로 멈춥니다.
+예제의 `Notepad`는 영문 Windows에서 기대하는 OCR 문자열입니다. 게스트 언어에 맞게 기대 문자열과 OCR 언어를 설정하세요. 업무용 RPA는 결과 파일이나 화면 상태처럼 작업에 맞는 성공 조건을 추가합니다.
 
 ### 조금 손볼 곳
 
