@@ -7,8 +7,20 @@ python=${VAMP_DEMO_PYTHON:-python}
 usage() {
     echo "Usage: $0 replay <vamp-demo-erp checkout> <new report directory> [--dryrun]" >&2
     echo "       $0 package <guest recording.py> <package ID> <new report directory>" >&2
+    echo "       $0 saved-replay <request.json> <new report directory> [--dryrun|--confirm]" >&2
     exit 2
 }
+
+if [[ ${1:-} == saved-replay ]]; then
+    [[ $# -eq 3 || $# -eq 4 ]] || usage
+    mode=${4:---dryrun}
+    [[ $mode == --dryrun || $mode == --confirm ]] || usage
+    [[ -f $2 ]] || { echo "The saved replay request is missing." >&2; exit 2; }
+    mkdir -- "$3"
+    export VAMP_DEMO_PYTHON="$python"
+    node "$repo/scripts/demo_saved_replay.mjs" "$2" "$mode" | tee "$3/saved-replay.json"
+    exit
+fi
 
 if [[ ${1:-} == package ]]; then
     [[ $# -eq 4 ]] || usage

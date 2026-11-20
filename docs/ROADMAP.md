@@ -132,6 +132,14 @@ bash scripts/demo_e2e_showcase.sh package ./guest_recording.py erp_recorded ./er
 
 The command creates `rpas/erp_recorded/run.robot`, captures the converter result, and runs a Robot dry run without guest input. Review the package before enabling replay and keep `recording.local.json` private.
 
+For the stored replay stage, set `VAMP_RPA_REGISTRY` to the reviewed demo catalog. Put the saved RPA UUID (`id`), the test guest UUID (`vm_id`), and its declared `inputs` in a local JSON file. The launcher uses the local library MCP server and defaults to validation without input.
+
+```bash
+bash scripts/demo_e2e_showcase.sh saved-replay ./erp-request.json ./erp-saved-qa --dryrun
+```
+
+Use `--confirm` with a new report directory when the operator has authorized replay on that guest. The report records action count, status, and call duration. A `completed_unverified` result still requires the ERP CSV and screen checks.
+
 One full scripted ERP run took **239.05 seconds** in Robot Framework 7.5.1. The measurement starts at the Robot test case, after the ERP and guest browser are ready. It includes both layouts, local OCR, two CSV checks, and the stale-replay check. Both CSVs matched and the stale v1 action completed zero inputs against v2. The setup used a Windows VirtualBox browser guest at 1920×1080 and rootless Podman in a Debian VirtualBox guest. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/de856ab)
 
 A repeat with CSV baseline verification took **248.54 seconds** in the same two-guest setup. The v1 CSV verification took 90.03 seconds, the reset and stale-replay check on v2 took 24.75 seconds, and the v2 CSV verification took 121.26 seconds. The two downloads matched by SHA-256 and the stale action completed zero inputs. The test case also includes startup and preflight. [Runner revision](https://github.com/wayfarer6/vamp-demo-erp/commit/cdd925e)
