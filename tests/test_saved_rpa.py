@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import AsyncMock, patch
 
 ROOT=Path(__file__).resolve().parents[1]
 def module(name):
@@ -33,6 +34,26 @@ class SavedRPATests(unittest.TestCase):
         self.assertEqual((folder / 'source.py').read_bytes(), original)
         self.assertEqual(registry.git(folder, 'rev-parse', 'HEAD'), saved['commit'])
         self.assertEqual(registry.git(folder, 'status', '--porcelain'), '')
+
+    def test_virtualbox_scratch_revision_replays_synthetic_actions_without_saving(self):
+        vm = '01234567-89ab-cdef-0123-456789abcdef'
+        request = {
+            **self.request, 'backend': 'virtualbox', 'scratch_vm': vm,
+            'test_inputs': {'query': 'fixture'}, 'outcome_text': 'Export complete',
+        }
+        with patch('backends.library.scratch.require_virtualbox_scratch', return_value=vm) as check, \
+             patch('backends.library.replay.VBox') as driver, \
+             patch('backends.library.replay.replay', new_callable=AsyncMock) as run:
+            run.return_value = 2
+            result = registry.test_revision(request)
+            check.assert_called_once_with(vm)
+            driver.assert_called_once_with(vm)
+            args = run.await_args
+            self.assertEqual(args.args[1][0]['text'], 'fixture')
+            self.assertEqual(args.kwargs['outcome_text'], 'Export complete')
+        self.assertEqual(result['status'], 'scratch_screen_verified')
+        self.assertFalse(result['artifact_verified'])
+        self.assertFalse(result['committed'])
     def test_registers_title_description_contract_without_executing_source(self):
         saved=registry.register(self.root/'catalog',self.request)
         self.assertEqual(saved['definition']['name'],'Search invoice');self.assertFalse(saved['definition']['source_executed']);self.assertEqual(saved['definition']['action_count'],2)

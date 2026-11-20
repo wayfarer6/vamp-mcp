@@ -47,6 +47,35 @@ def validate_revision(request):
     }
 
 
+def test_revision(request):
+    import asyncio
+
+    from backends.library.replay import VBox, replay, substitute_inputs, vault_references
+    from backends.library.scratch import require_virtualbox_scratch
+
+    _, _, backend, width, height, raw, actions, names = validate_recording_request(request)
+    if not actions or backend != 'virtualbox':
+        raise ValueError('Scratch replay requires a nonempty VirtualBox recording.')
+    outcome = request.get('outcome_text')
+    if not isinstance(outcome, str) or not 1 <= len(outcome.strip()) <= 240:
+        raise ValueError('Supply the exact expected outcome text.')
+    substitute_inputs(actions, names, request.get('test_inputs', {}))
+    if vault_references(actions):
+        raise ValueError('Scratch replay accepts synthetic inputs without Vault references.')
+    vm = require_virtualbox_scratch(request.get('scratch_vm'))
+    async def run():
+        return await asyncio.wait_for(replay(
+            VBox(vm), actions, [width, height],
+            start_text=request.get('start_text') or None, outcome_text=outcome.strip(),
+        ), timeout=600)
+    completed = asyncio.run(run())
+    return {
+        'status': 'scratch_screen_verified', 'actions_completed': completed,
+        'source_sha256': hashlib.sha256(raw).hexdigest(),
+        'guest_verified': True, 'artifact_verified': False, 'committed': False,
+    }
+
+
 def register(root,request):
     title,description,backend,width,height,raw,actions,names=validate_recording_request(request)
     root=Path(root).resolve();root.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -99,6 +128,11 @@ if __name__=='__main__':
     try:
         request=json.load(sys.stdin)
         root=request.pop('registry')
-        result=validate_revision(request) if request.pop('validate_only',False) else register(root,request)
+        if request.pop('test_only',False):
+            result=test_revision(request)
+        elif request.pop('validate_only',False):
+            result=validate_revision(request)
+        else:
+            result=register(root,request)
         print(json.dumps(result,ensure_ascii=False))
     except Exception as error:print(json.dumps({'status':'error','message':str(error)}));sys.exit(1)

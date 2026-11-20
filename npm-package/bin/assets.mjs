@@ -11,6 +11,7 @@ const required = [
   'backends/hyperv/scripts/Manage-Desktop.ps1',
   'backends/library/registry.py',
   'backends/library/replay.py',
+  'backends/library/scratch.py',
   'backends/packer/debian_answer_iso.py',
   'backends/packer/debian-hyperv/debian.pkr.hcl',
   'backends/packer/debian-hyperv/prepare.py',

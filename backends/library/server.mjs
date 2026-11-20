@@ -40,8 +40,10 @@ server.tool('rpa_run_saved','Replay one reviewed saved skill on guest devices. E
   child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));
  }));
 });
-server.tool('rpa_revision','Inspect a saved skill’s local Git history, read its latest committed source, statically validate a proposed repair without saving it, or commit an authorized repair. Static validation does not execute guest actions. Committed repairs require review.',{
- id:identifier,action:z.enum(['status','read-source','validate','update']).default('status'),source:z.string().max(64000).optional(),expected_commit:z.string().regex(/^[a-f0-9]{40}$/).optional(),commit_message:z.string().max(200).optional(),confirmed:z.boolean().default(false)
+server.tool('rpa_revision','Inspect, statically validate, test in a configured VirtualBox scratch guest, or commit an authorized RPA repair. Scratch tests check the resulting screen and leave the saved revision unchanged. Committed repairs require review.',{
+ id:identifier,action:z.enum(['status','read-source','validate','test','update']).default('status'),source:z.string().max(64000).optional(),expected_commit:z.string().regex(/^[a-f0-9]{40}$/).optional(),commit_message:z.string().max(200).optional(),confirmed:z.boolean().default(false),
+ scratch_vm:identifier.optional(),outcome_text:z.string().trim().min(1).max(240).optional(),
+ test_inputs:z.record(z.string().max(10000)).optional(),
 },{readOnlyHint:false,destructiveHint:true},async request=>{
  const item=await definition(request.id),folder=path.join(root,request.id);
  const latest=(await runGit('git',['-C',folder,'rev-parse','HEAD'],{timeout:15000})).stdout.trim();
@@ -50,15 +52,20 @@ server.tool('rpa_revision','Inspect a saved skill’s local Git history, read it
   return result({id:item.id,version:item.version,latest_commit:latest,history:history.split('\n')});
  }
  if(request.action==='read-source')return result({id:item.id,version:item.version,commit:latest,source:(await runGit('git',['-C',folder,'show','HEAD:source.py'],{timeout:15000,maxBuffer:5*1024*1024})).stdout,requires_review:true});
- if((request.action==='update'&&!request.confirmed)||!request.source||!request.expected_commit)return result({status:'needs_authorized_revision',message:'Read the latest source/commit first and provide source and expected_commit. Committing requires confirmed:true.'});
+ const testing=request.action==='test';
+ if(((request.action==='update'||testing)&&!request.confirmed)||!request.source||!request.expected_commit)return result({status:'needs_authorized_revision',message:'Provide source and expected_commit. Testing or committing requires confirmed:true.'});
+ if(testing&&(item.backend!=='virtualbox'||!request.scratch_vm||!request.outcome_text))return result({status:'needs_scratch_setup',message:'Provide the configured VirtualBox scratch VM UUID and exact expected outcome text.'});
+ const python=testing ? process.env.RPA_REPLAY_PYTHON||process.env.RPA_HOST_PYTHON : process.env.RPA_HOST_PYTHON||'python3';
+ if(!python)return result({status:'needs_setup',message:'Configure the VirtualBox replay Python first.'});
  if(latest!==request.expected_commit)return result({status:'revision_conflict',message:'Read the new latest revision before editing.'});
  if((await runGit('git',['-C',folder,'status','--porcelain','--untracked-files=no'],{timeout:15000})).stdout.trim())return result({status:'uncommitted_changes',message:'Preserve or commit the user’s working changes before an AI repair.'});
  const temporary=await mkdtemp(path.join(os.tmpdir(),'vamp-repair-'));
  try{
   const source=path.join(temporary,'source.py');await writeFile(source,request.source,{mode:0o600});
   const payload={registry:root,id:item.id,source_path:source,title:item.name,description:item.description,when_to_use:item.when_to_use,expected_result:item.expected_result,start_text:item.start_text||'',tags:item.tags,inputs:item.inputs,backend:item.backend,width:item.resolution[0],height:item.resolution[1],reviewed:false,expected_commit:request.expected_commit,commit_message:request.commit_message||'AI repair: '+item.name,validate_only:request.action==='validate'};
+  if(testing)Object.assign(payload,{test_only:true,scratch_vm:request.scratch_vm,outcome_text:request.outcome_text,test_inputs:request.test_inputs});
   const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/registry.py');
-  const repaired=await new Promise(resolve=>{const child=execFile(process.env.RPA_HOST_PYTHON||'python3',[script],{windowsHide:true,timeout:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
+  const repaired=await new Promise(resolve=>{const child=execFile(python,[script],{windowsHide:true,timeout:testing?620000:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
   return result(repaired.status==='registered'?{status:'committed_needs_review',id:item.id,version:repaired.definition.version,commit:repaired.commit,reviewed:false}:repaired);
  }finally{await rm(temporary,{recursive:true,force:true});}
 });

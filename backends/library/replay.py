@@ -57,14 +57,17 @@ def load(request):
     if hashlib.sha256((folder/'source.py').read_bytes()).hexdigest()!=metadata['source_sha256']:raise ValueError('RPA source changed; recreate and review it before running')
     raw=(folder/'actions.json').read_bytes()
     if hashlib.sha256(raw).hexdigest()!=metadata['actions_sha256']:raise ValueError('RPA actions changed; recreate and review it before running')
-    values=request.get('inputs',{})
-    if not isinstance(values,dict) or set(values)!=set(metadata['inputs']) or any(not isinstance(v,str) or len(v)>10000 for v in values.values()):raise ValueError('Supply exactly the declared input names as strings')
     actions=json.loads(raw)
+    substitute_inputs(actions, metadata['inputs'], request.get('inputs',{}))
+    uuid.UUID(request['vm_id'])
+    return metadata,actions
+
+
+def substitute_inputs(actions, names, values):
+    if not isinstance(values,dict) or set(values)!=set(names) or any(not isinstance(v,str) or len(v)>10000 for v in values.values()):raise ValueError('Supply exactly the declared input names as strings')
     for action in actions:
         if action.get('op')=='write':
             action['text']=re.sub(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}',lambda m:values[m[1]] if m[1] in values else m[0],action['text'])
-    uuid.UUID(request['vm_id'])
-    return metadata,actions
 
 class VBox:
     def __init__(self,vm):

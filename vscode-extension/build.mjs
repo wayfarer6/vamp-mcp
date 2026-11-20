@@ -38,6 +38,7 @@ for(const name of ['backends/packer','backends/common/packer.cjs','backends/comm
   await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__')});
 }
 // A VSIX/npm runtime built on Windows must also execute on Linux/macOS.
+await copyFile(path.join(root,'backends/library/scratch.py'),path.join(runtime,'backends/library/scratch.py'));
 for(const name of ['vamp-ui-cleanup','vamp-ui-validation','vamp-rpa-ui-checks','vamp-podman']) {
   await cp(path.join(root,'.agents/skills',name),path.join(runtime,'skills',name),{recursive:true});
 }
