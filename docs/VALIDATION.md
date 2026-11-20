@@ -91,6 +91,12 @@ Fresh, local receipts are collected with `scripts/collect_nested_evidence.py` in
 
 - npm publication follow-up: `vamp-mcp@0.1.9` is public with the `latest` tag and `vamp-mcp-vault@0.1.6` is public. Both were installed directly from the registry in temporary directories and passed MCP initialization/tool discovery. The VAMP registry SHA-512 integrity matches the tested release tarball.
 
+## KVM installation on Ubuntu WSL2 — 2026-11-20
+
+- Debian 13.7 amd64 netinst completed through VAMP's local KVM preseed provisioner. After the installer wrote its completion marker, the VM booted from its installed disk. The live VNC framebuffer measured 1920×1080. Input through VAMP's VNC replay displayed the Debian version and confirmed the installed guest marker.
+- KVM on this host needed an active libvirt `default` network for `qemu:///system` and `cpio` for Debian initrd injection. Both are checked before disk allocation.
+- Windows 11 Pro attempts with 5 GiB and 4 GiB, OVMF Secure Boot and TPM 2.0 read the install DVD, then QEMU reported `KVM: entry failed, hardware error 0xffffffff` during SMM and paused the guest. The symptom matches an [AMD WSL2 SMM report](https://github.com/microsoft/WSL/issues/41709). Windows setup and desktop operation remain unverified on this host.
+
 ## Keystroke bootstrap and Vault winget install — 2026-11-17
 
 - This host is Ubuntu without VirtualBox, a running guest, `keepassxc-cli`, winget or a Windows host. Nothing below was executed against a real Windows or Debian desktop, and the UAC prompt and winget install were exercised only through a stand-in command runner.
