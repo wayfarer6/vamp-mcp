@@ -23,6 +23,20 @@
 
 ---
 
+## 처음이라면 AI에게 설치를 부탁해 보세요
+
+내 PC에서 명령을 실행할 수 있는 **Claude Code 또는 Codex**에 아래 문장을 붙여 넣으세요.
+
+```text
+https://github.com/wayfarer6/vamp-mcp
+내 Windows PC에 최신 공식 릴리스로 VAMP MCP를 설치해 줘. 파일 해시를 확인하고
+지금 쓰는 AI에 연결한 뒤, VirtualBox 가상머신 목록을 조회해서 연결됐는지 보여 줘.
+```
+
+[![한국어 영상 내려받기 · AI에게 VAMP 설치 부탁하기](docs/media/vamp-first-run-ko.jpg)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4)
+
+[한국어 영상 내려받기 · 3분 51초](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [웹 채팅용 프롬프트, 설치 명령, 주문 CSV 실습](docs/FIRST_RUN.ko.md)
+
 ## How to use
 
 **지원 호스트:** Windows와 Linux입니다. macOS는 지원 대상에서 제외합니다.
