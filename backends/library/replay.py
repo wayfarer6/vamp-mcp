@@ -478,7 +478,8 @@ async def run(request, dialogue=False):
         recorded_at = datetime.now(timezone.utc).isoformat() if error.reason == 'uac_resume_not_verified' else None
         return record_elevation_handoff(request['vm_id'], metadata['id'], error.reason, error.completed,
                                         error.observed_at, error.phase, metadata['replay_commit'],
-                                        error.program_name, error.prompt_kind, recorded_at=recorded_at)
+                                        error.program_name, error.prompt_kind, recorded_at=recorded_at,
+                                        backend=metadata['backend'])
 
     def record_wait(error):
         try:
@@ -496,7 +497,7 @@ async def run(request, dialogue=False):
 
     def record_resume(completed, phase, program_name, observed_at, prompt_kind):
         from backends.virtualbox.history import record_event_run
-        payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'],
+        payload = {'rpa_id': metadata['id'], 'replay_commit': metadata['replay_commit'], 'backend': metadata['backend'],
                    'actions_completed': completed, 'phase': phase, 'prompt_observed_at': observed_at,
                    'policy': 'operator_wait_screen_verified', 'program_identity': 'unverified'}
         if program_name is not None:

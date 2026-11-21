@@ -74,6 +74,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             result = await run(request)
             if not wait_seconds:
                 event, = detail(result['run_id'])['events']
+            else:
+                resume_event, = detail(result['elevation_resume_run_ids'][0])['events']
         adapter.assert_called_once_with(client)
         self.assertTrue(driver.closed)
         if not wait_seconds:
@@ -83,7 +85,9 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(result['reason'], 'uac_prompt_detected')
             self.assertEqual(result['actions_completed'], 0)
             self.assertEqual(event['kind'], 'elevation_handoff')
+            self.assertEqual(json.loads(event['payload_json'])['backend'], 'kvm')
             return
+        self.assertEqual(json.loads(resume_event['payload_json'])['backend'], 'kvm')
         self.assertEqual([call.args[1] for call in inspect.call_args_list],
                          [None, 'Installed', 'Installed', None])
         self.assertEqual(driver.events, ['move', 'left'])
@@ -148,6 +152,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
             'rpa_id': 'fixture-rpa', 'reason': 'uac_prompt_detected', 'actions_completed': 0,
             'policy': 'operator_confirmation_required', 'phase': 'before_action',
             'program_identity': 'unverified', 'replay_commit': commit,
+            'backend': 'virtualbox',
             'program_name_ocr': 'Windows PowerShell',
             'prompt_kind': 'credential',
         })

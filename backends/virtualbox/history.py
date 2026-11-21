@@ -50,10 +50,12 @@ def record_event_run(vm, status, kind, payload, observed_at):
 
 
 def record_elevation_handoff(vm, rpa_id, reason, actions_completed, observed_at, phase, replay_commit,
-                             program_name=None, prompt_kind=None, *, recorded_at=None):
+                             program_name=None, prompt_kind=None, *, recorded_at=None, backend=None):
     payload = {'rpa_id': rpa_id, 'reason': reason, 'actions_completed': actions_completed,
                'policy': 'operator_confirmation_required', 'phase': phase,
                'program_identity': 'unverified', 'replay_commit': replay_commit}
+    if backend is not None:
+        payload['backend'] = backend
     if program_name is not None:
         payload['program_name_ocr'] = program_name
     if prompt_kind is not None:
