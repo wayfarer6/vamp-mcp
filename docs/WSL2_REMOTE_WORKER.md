@@ -34,6 +34,14 @@ Create an OpenSSH client alias named `vamp-wsl` with the host address, user and 
 }
 ```
 
+For Codex, you can also register the same command with:
+
+```bash
+codex mcp add vamp-wsl -- ssh -T -o BatchMode=yes -o StrictHostKeyChecking=yes vamp-wsl 'exec ~/.local/share/vamp-wsl-worker/worker.sh serve'
+```
+
+Allow up to 120 seconds for NVIDIA warm-up by setting `startup_timeout_sec = 120` in the client's `[mcp_servers.vamp-wsl]` configuration. The client may require approval for MCP calls.
+
 If the administrator sets a forced SSH command to start the worker, omit the last argument. In AI chat, ask for `worker_status` first. Then authorize `worker_run` with `scenario: "headless_gui_smoke"` and `confirmed: true`. Verify the artifact digest before saving the decoded file. Reconnect when SSH returns after sleep or a network failure. Check the previous result before authorizing a retry.
 
 ## WSL2에서 설치하고 AI에 연결하기
