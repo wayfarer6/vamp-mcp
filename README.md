@@ -32,6 +32,32 @@ From the VAMP VS Code extension, open a VirtualBox guest and verify that its Deb
 
 [English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
 
+## Build the automation today. Tomorrow, just change the order number.
+
+Today, work with a large model to export an order from your ERP to CSV. Save the steps along with a check that the new file contains the requested order number. Tomorrow, ask a smaller model to **“export order 1042 the same way.”** It finds the workflow in the RPA Library and passes the new order number through MCP. VAMP runs the saved steps on your device and checks the CSV.
+
+**You can share a reviewed workflow with a colleague.** Export a specific version of a GUI RPA as a source ZIP. Your colleague can inspect the code and inputs, then reuse it in a compatible environment on their device with their own order number. Leave passwords and real order data out of the package. Reusing the steps can lower model costs on repeat runs because a large model no longer has to plan each click or command anew.
+
+**GUI RPA is available today. CLI workflows are in the design stage.** GUI RPA replays actions in the application. The CLI proposal describes how to share a reviewed command-line script so a recipient can approve that version and run it in their own workspace. [GUI RPA guide](docs/WORKFLOWS.md) · [CLI workflow proposal (Korean)](docs/CLI_WORKFLOW_DESIGN.ko.md)
+
+```mermaid
+flowchart TD
+    A["Define steps and success checks with a large model"] --> G["GUI RPA · available today"]
+    A --> C["CLI workflow · proposed"]
+    G --> L["Review and save a version on your device"]
+    C --> L
+    L --> M["Your small model calls it with its ID and inputs"]
+    L --> P["Share a reviewed version"]
+    P --> T["Colleague reviews and sets it up on their device"]
+    T --> N["Their small model calls it with their own inputs"]
+    M --> R["VAMP runs and verifies the task on each device"]
+    N --> R
+```
+
+If an AI provider raises its API prices or discontinues its service, you can keep using the saved workflow by maintaining its execution environment and connecting another small model that supports MCP. You decide how to edit the script and whom to share it with.
+
+**Even if you switch models, the workflows you’ve built stay on your device.**
+
 ## Ask your AI to install VAMP
 
 In Claude Code or Codex with terminal access to your Windows PC, paste this request:
