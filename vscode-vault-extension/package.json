@@ -2,7 +2,7 @@
   "name": "vamp-vault",
   "displayName": "VAMP Vault \u2014 Credential and Encrypted Workspace Management",
   "description": "Local & remote (SSH) encrypted vault isolation (KeePassXC & VeraCrypt) with strict per-host credential boundaries for AI agents",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -385,6 +385,14 @@
           "default": "",
           "description": "Default VeraCrypt volume (container file or device) used by the mount tools. Empty means 'vault.hc' inside this extension's global storage."
         },
+        "vampVault.volumeCredentialEntry": {
+          "type": "string", "default": "", "scope": "machine",
+          "description": "Saved KeePassXC entry for your default encrypted volume, such as VeraCrypt/Workspace. VAMP checks the volume file binding before using its key."
+        },
+        "vampVault.veracryptWslMountPoint": {
+          "type": "string", "default": "", "scope": "machine",
+          "description": "Existing empty canonical directory in the configured WSL distribution for unattended Windows mounts, such as /home/me/vault-mount."
+        },
         "vampVault.mountPoint": {
           "type": "string",
           "default": "",
@@ -487,7 +495,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out vamp-vault-0.1.15.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out vamp-vault-0.1.16.vsix",
     "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs && node test/remote.mjs && node --test test/browser.cjs test/encrypted-export.mjs test/remote-export.mjs",
     "vscode:prepublish": "npm run build"
   },

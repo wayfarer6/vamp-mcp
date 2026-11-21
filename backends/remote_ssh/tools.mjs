@@ -3,6 +3,7 @@
 // through the local CLI (virsh / VBoxManage). Callers reach these tools over
 // SSH stdio, so no hypervisor port is exposed to the network.
 import fs from 'node:fs/promises';
+import clickSettings from '../library/click-settings.cjs';
 import hostSupport from '../common/host-support.cjs';
 import packerModule from '../common/packer.cjs';
 import {remoteReplayEndpoint,runWithVault} from '../library/vault-replay.mjs';
@@ -363,7 +364,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     return {status:'ok',vm:target,x:fx,y:fy,action:'move',note:'Input dispatched; observe the guest to verify.'};
   }
 
-  async function rpaRun({ registry, id, vm_id, inputs = {}, confirmed = false, dry_run = false, timeout_ms, vault_destination }) {
+  async function rpaRun({ registry, id, vm_id, inputs = {}, confirmed = false, dry_run = false, timeout_ms, vault_destination, click_minimum_percent, click_setting_user_requested }) {
     const registryPath = String(registry || config.registry || '');
     if (!config.repo) throw new Error('The VAMP repository path is not configured on the remote host (remoteRepo). Run remote_env_setup or set vamp.remote.remoteRepo.');
     if (!UUID_PATTERN.test(String(id || ''))) throw new Error('A saved RPA UUID is required.');
@@ -377,6 +378,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     if (vault_destination !== undefined && (typeof vault_destination !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(vault_destination))) {
       throw new Error('Provide a valid destination name from the remote Vault host.');
     }
+    if (click_minimum_percent !== undefined && !click_setting_user_requested) return {status:'ask_user',message:'Ask before changing click verification.'};
     const needsVault = Boolean(vault_destination) && dry_run !== true;
     const vaultBridge = !needsVault ? null : process.env.VAULT_RPA_BRIDGE_SOCKET && process.env.VAULT_RPA_BRIDGE_TOKEN
       ? {socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN}
@@ -391,6 +393,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
       confirmed: dry_run !== true,
       dry_run: dry_run === true,
       registry: registryPath,
+      click_minimum_percent: await clickSettings.forRun(registryPath, click_minimum_percent, click_setting_user_requested),
       libvirt_uri: config.libvirtUri,
       ...(vaultBridge && {vault_destination}),
     };
@@ -778,6 +781,8 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
           vm_id: { type: 'string', description: 'Target VM UUID.' },
           inputs: { type: 'object', description: 'Exact declared input values.', additionalProperties: { type: 'string' } },
           registry: { type: 'string', description: 'Optional RPA registry folder on the remote host.' },
+          click_minimum_percent: {type:'integer',minimum:0,maximum:100,description:'Override only when requested by the user. Zero disables click verification for this run.'},
+          click_setting_user_requested: {type:'boolean',description:'True only if the user explicitly requested this setting.'},
           confirmed: { type: 'boolean', description: 'True only after the user authorized this run.', default: false },
           dry_run: { type: 'boolean', description: 'Check reviewed Vault references on the remote host without starting replay.', default: false },
           vault_destination: { type:'string', description:'Destination name in the Vault configured on the remote RPA host.', pattern:'^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$' },

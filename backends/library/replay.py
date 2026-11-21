@@ -16,6 +16,7 @@ import uuid
 import xml.etree.ElementTree as ET
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from guest_keys import SCANCODES,SHIFTED
+from backends.library.click_guard import ClickBlocked, verify_click
 
 VNC_KEYS={'ctrl':'Ctrl','ctrlright':'Ctrl_R','alt':'Alt','altright':'Alt_R','shift':'Shift','shiftright':'Shift_R','super':'Super_L','superright':'Super_R','enter':'Return','esc':'Escape','space':'space','backspace':'BackSpace','delete':'Delete','tab':'Tab','left':'Left','right':'Right','up':'Up','down':'Down','home':'Home','end':'End','pageup':'Page_Up','pagedown':'Page_Down','insert':'Insert','capslock':'Caps_Lock'}
 EXTRA={'shiftright':54,'ctrlright':0x11d,'altright':0x138,'superright':0x15c,'home':0x147,'end':0x14f,'pageup':0x149,'pagedown':0x151,'insert':0x152,'capslock':58}
@@ -399,12 +400,18 @@ async def verify_outcome_screen(driver, resolution, expected, forbidden_modal=No
 
 async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
                  require_new_outcome=False,forbidden_modal=None,pause_on_uac=False,
-                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None,on_uac_wait=None):
+                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None,on_uac_wait=None,click_summary=None,click_minimum_percent=90):
     completed=0
+    async def position(x, y):
+        driver.move(x, y)
+        await driver.drain()
+
     async def check_uac(phase):
         await check_elevation_boundary(driver, resolution, completed, phase, uac_wait_seconds,
                                        uac_resume_text, on_uac_resume, on_uac_wait)
     try:
+        if type(click_minimum_percent) is not int or not 0 <= click_minimum_percent <= 100:
+            raise ValueError('Click verification must be a whole percentage between 0 and 100.')
         if pause_on_uac and resolution != [1920, 1080]:
             raise ValueError('Guest UAC replay requires a 1920x1080 recording and guest display.')
         actual = driver.geometry()
@@ -452,10 +459,25 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                 for _ in range(a['presses']):
                     for key in a['keys']:driver.down(key);driver.up(key)
                     await asyncio.sleep(a['interval'])
-            elif op in ('move','click'):
+            elif op=='move':
                 driver.move(a['x'],a['y'])
-                if op=='click':
-                    for _ in range(a['clicks']):driver.click(a['button']);await driver.drain();await asyncio.sleep(a['interval'])
+            elif op=='click':
+                for press in range(a['clicks']):
+                    try:
+                        if click_minimum_percent:
+                            _, evidence = await verify_click(a, resolution, driver.capture, driver.geometry, position,
+                                                             click_minimum_percent / 100)
+                        else:
+                            await position(a['x'], a['y'])
+                    except ClickBlocked as error:
+                        error.completed, error.presses = completed, press
+                        raise
+                    driver.click(a['button'])
+                    if click_minimum_percent and click_summary is not None:
+                        click_summary['verified_presses'] += 1
+                        click_summary['lowest_score'] = min(click_summary.get('lowest_score', 1), evidence['score'])
+                    await driver.drain()
+                    await asyncio.sleep(a['interval'])
             elif op=='scroll':
                 if 'x' in a:driver.move(a['x'],a['y'])
                 driver.scroll(a['clicks'])
@@ -532,10 +554,14 @@ async def run(request, dialogue=False):
     vault_steps={item['action_index']:item for item in references}
     if dialogue and references:
         vault_dialogue({'vault':'preflight','references':references})
+    click_percent = request.get('click_minimum_percent', 90)
+    if type(click_percent) is not int or not 0 <= click_percent <= 100:
+        raise ValueError('Invalid click verification percentage.')
+    click_summary = {'minimum_percent': click_percent, 'enabled': click_percent > 0, 'verified_presses': 0}
     async def replay_on(driver):
         return await replay(driver, actions, metadata['resolution'], vault_steps, start_text=start_text,
                             pause_on_uac=request.get('pause_on_uac') is True, uac_wait_seconds=wait_seconds,
-                            uac_resume_text=resume_text, on_uac_resume=record_resume, on_uac_wait=record_wait)
+                            uac_resume_text=resume_text, on_uac_resume=record_resume, on_uac_wait=record_wait, click_summary=click_summary, click_minimum_percent=click_percent)
 
     try:
         if metadata['backend'] == 'virtualbox':
@@ -556,6 +582,13 @@ async def run(request, dialogue=False):
             async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
                 completed = await replay_on(VNC(client))
         else:raise ValueError('This backend has no recorded desktop replay adapter')
+    except ClickBlocked as error:
+        result = {'status': 'click_target_blocked', 'reason': error.reason, 'rpa_id': metadata['id'],
+                  'actions_completed': error.completed, 'presses_in_action': error.presses,
+                  'observed_score': error.score, 'attempts': error.attempts, 'click_verification': click_summary,
+                  'next_step': 'Ask the user whether to review the target or explicitly change click verification before starting another run.'}
+        attach_elevation_history(result)
+        return result
     except ElevationHandoff as error:
         observed_at=error.observed_at
         result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
@@ -573,6 +606,8 @@ async def run(request, dialogue=False):
         attach_elevation_history(result)
         return result
     result = {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
+    if click_summary['verified_presses'] or click_percent == 0:
+        result['click_verification'] = click_summary
     attach_elevation_history(result)
     return result
 

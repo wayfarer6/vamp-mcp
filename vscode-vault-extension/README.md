@@ -241,7 +241,7 @@ guest passkey setup follow-up below.
 
 ## Limitations
 
-- Windows VeraCrypt uses its native password dialog for mounting; the Unix `--stdin` switches are not sent to the Windows executable. Creating a new Windows encrypted volume opens the native creation wizard and returns `interactive_setup_required` until the user completes it. Windows volume enumeration checks the actual VeraCrypt device mappings. KeePassXC database operations remain available through MCP.
+- For repeated Windows MCP mounts, set **Default Volume Path**, **Volume Credential Entry** (such as `VeraCrypt/Work`), **VeraCrypt WSL Distribution** and **VeraCrypt WSL Mount Point** (an existing, empty Linux directory). Open or unlock KeePassXC through VAMP Vault once. On each approved mount, VAMP checks the saved entry’s file URL, reads its volume key locally and sends it through stdin to the WSL VeraCrypt CLI. Open the result from Windows Explorer under `\\wsl.localhost\<distribution>`. An unconfigured Windows mount returns setup instructions. Standalone MCP uses `VAULT_VOLUME`, `VAULT_VOLUME_CREDENTIAL_ENTRY`, `VAULT_VERACRYPT_WSL_DISTRO` and `VAULT_VERACRYPT_WSL_MOUNT_POINT`. Native volume creation still uses its own wizard.
 - Mounting needs the VeraCrypt driver on Windows, and FUSE plus mount permission on Linux. A container or a locked-down host will report `failed` with the reason rather than silently succeed.
 - `keepassxc-cli` has no solver for hidden-volume protection, passkey writes, or entry attributes beyond the standard set; those are done in the KeePassXC application.
 - One master password per database is remembered at a time by the dialog flow; several databases work, each with its own stored password.

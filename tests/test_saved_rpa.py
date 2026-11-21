@@ -46,7 +46,7 @@ class SavedRPATests(unittest.TestCase):
                                          'width': 1920, 'height': 1080, 'inputs': [], 'start_text': 'QA-042'})
         request = {'registry': str(root), 'id': saved['definition']['id'],
                    'vm_id': '01234567-89ab-cdef-0123-456789abcdef', 'confirmed': True,
-                   'expected_source_sha256': saved['definition']['source_sha256']}
+                   'expected_source_sha256': saved['definition']['source_sha256'], 'click_minimum_percent': 0}
         with patch.object(replay, 'VBox') as connect:
             with self.assertRaisesRegex(ValueError, 'expected SHA-256'):
                 asyncio.run(replay.run({**request, 'expected_source_sha256': '0' * 64}))

@@ -665,6 +665,10 @@ function activate(context) {
       };
       if (config().get('keepassxcCliPath')) environment.VAULT_KEEPASSXC_CLI = config().get('keepassxcCliPath');
       if (config().get('veracryptCliPath')) environment.VAULT_VERACRYPT_CLI = config().get('veracryptCliPath');
+      const entry = config().get('volumeCredentialEntry');
+      const wslMount = config().get('veracryptWslMountPoint');
+      if (entry) environment.VAULT_VOLUME_CREDENTIAL_ENTRY = entry;
+      if (wslMount) environment.VAULT_VERACRYPT_WSL_MOUNT_POINT = wslMount;
       const distribution = config().get('veracryptWslDistribution');
       if (process.platform === 'win32' && distribution) environment.VAULT_VERACRYPT_WSL_DISTRO = distribution;
       const podman=vscode.workspace.getConfiguration('vamp');

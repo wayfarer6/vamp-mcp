@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.14
+
+- Verify each recorded button press with a fresh guest screenshot and its reviewed OCR label or YOLO class. Replay pauses on ambiguous, missing or low-scoring targets.
+- Adjust or disable click verification from RPA Library or MCP. Agents ask before changing the catalog default or making a one-run override.
+
 ## 0.3.13
 
 - Prepare environment selects a supported host accelerator and installs the separate YOLO and OCR runtimes and model weights.

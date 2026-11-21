@@ -13,7 +13,7 @@ import threading
 from datetime import datetime,timezone
 import time
 import tkinter as tk
-from tkinter import ttk,messagebox
+from tkinter import ttk,messagebox,simpledialog
 from pynput import keyboard,mouse
 
 
@@ -133,6 +133,15 @@ class Recorder:
         lines=['import pyautogui','import time','']
         for delay,code in self.events:
             if delay>0.001:lines.append(f'time.sleep({delay:.5f})')
+            if code.startswith('pyautogui.click('):
+                label = simpledialog.askstring('Review recorded click', code + '\n\nEnter the visible button text, or yolo: followed by its specific detector class.\nLeave blank to save a draft that stops before this click.', parent=self.root)
+                if label and label.strip():
+                    value = label.strip()
+                    target = {'yolo': value[5:].strip()} if value.startswith('yolo:') else {'ocr': value}
+                    if not 1 <= len(next(iter(target.values()))) <= 120:
+                        messagebox.showerror('Invalid target', 'Enter 1 to 120 characters. Recording is still available.')
+                        return
+                    code += '  # vamp-target ' + json.dumps(target, ensure_ascii=True)
             lines.append(code)
         try:
             path.write_text('\n'.join(lines)+'\n',encoding='utf-8');self.last_saved=path

@@ -32,6 +32,10 @@ From the VAMP VS Code extension, open a VirtualBox guest and verify that its Deb
 
 [English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
 
+### Verify a recorded click
+
+When saving a recording, enter the text on each button or its specific YOLO class. Replay checks the guest before each press. The default minimum score is 90%. In **RPA Library → Recorded click verification**, set 1–100% or turn verification off. You can also tell your agent “Use 95% for this run only.” [Recognition, fallback and MCP examples](docs/RECORDED_CLICKS.md)
+
 ## Ask your AI to install VAMP
 
 In Claude Code or Codex with terminal access to your Windows PC, paste this request:

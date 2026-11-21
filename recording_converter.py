@@ -39,6 +39,7 @@ def parse_recording(source,width=1920,height=1080,coordinate_space='guest',viewp
         raise ValueError('Guest resolution must be positive')
     if coordinate_space=='host' and (not viewport or len(viewport)!=4 or not all(math.isfinite(v) for v in viewport) or viewport[2]<=0 or viewport[3]<=0):
         raise ValueError('Host recordings require --viewport LEFT TOP WIDTH HEIGHT in recorded coordinate units')
+    source_lines = source.splitlines()
     modules={}; functions={}; actions=[]
     def point(x,y):
         x,y=number(x),number(y)
@@ -128,6 +129,16 @@ def parse_recording(source,width=1920,height=1080,coordinate_space='guest',viewp
                     interval=number(kwargs.get('interval',.1))
                     if button not in ('left','middle','right') or type(clicks)!=int or clicks<1 or interval<0:raise ValueError('Invalid click arguments')
                     action.update(op='click',x=x,y=y,button=button,clicks=clicks,interval=interval)
+                    # AST columns are UTF-8 byte offsets. Read only this call's trailing comment.
+                    tail = source_lines[node.end_lineno-1].encode('utf8')[node.end_col_offset:].decode('utf8').strip()
+                    if tail.startswith('# vamp-target '):
+                        target = json.loads(tail[len('# vamp-target '):])
+                        if not isinstance(target, dict) or len(target) != 1 or not set(target) <= {'ocr', 'yolo'}:
+                            raise ValueError('Specify one OCR text or YOLO class in the click target')
+                        label = next(iter(target.values()))
+                        if not isinstance(label, str) or not 1 <= len(label.strip()) <= 120:
+                            raise ValueError('Invalid recorded click label')
+                        action['target'] = target
             elif module=='pyautogui' and name=='scroll':
                 allowed={'clicks','x','y'};max_args=3
                 clicks=take(0,'clicks')
