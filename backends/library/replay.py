@@ -315,7 +315,7 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
                 await asyncio.sleep(2)
                 try:
                     await require_clear_elevation_screen(driver, resolution, completed, phase, resume_text)
-                    await require_clear_elevation_screen(driver, resolution, completed, phase)
+                    await require_clear_elevation_screen(driver, resolution, completed, phase, resume_text)
                 except (ElevationHandoff, StartScreenBlocked):
                     continue
                 break

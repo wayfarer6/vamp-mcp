@@ -136,7 +136,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
              patch('backends.library.replay.asyncio.sleep'), \
              patch('backends.library.replay.inspect_elevation_screen',
                    side_effect=[False, SimpleNamespace(program_name='Fixture Setup', kind='consent'),
-                                StartScreenBlocked('not ready'), False, False, False]) as inspect, \
+                                False, StartScreenBlocked('app lost focus'), False, False, False]) as inspect, \
              patch('backends.library.replay.datetime') as clock:
             observed = datetime(2026, 11, 20, 10, tzinfo=timezone.utc)
             resumed = datetime(2026, 11, 20, 10, 0, 3, tzinfo=timezone.utc)
@@ -150,7 +150,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['actions_completed'], 2)
         self.assertEqual(driver.events, ['move', 'left', 'move', 'left'])
         self.assertEqual([call.args[1] for call in inspect.call_args_list],
-                         [None, None, 'Installed', 'Installed', None, None])
+                         [None, None, 'Installed', 'Installed', 'Installed', 'Installed', None])
         event, = record['events']
         self.assertEqual(event['kind'], 'elevation_resumed')
         self.assertEqual(event['created_at'], resumed.isoformat())
