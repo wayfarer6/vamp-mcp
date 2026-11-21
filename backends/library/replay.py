@@ -52,6 +52,8 @@ def load(request):
     replay_commit = revision.stdout.strip()
     if revision.returncode or not re.fullmatch(r'[0-9a-f]{40}', replay_commit):
         raise ValueError('Could not identify the reviewed RPA revision')
+    if request.get('expected_commit') is not None and request['expected_commit'] != replay_commit:
+        raise ValueError('The reviewed revision changed. Inspect the current RPA before replay.')
     reviewed_files = {'source.py', 'actions.json', 'rpa.json'}
     tracked = subprocess.run(['git', '-C', str(folder), 'ls-tree', '--name-only', replay_commit, '--', *sorted(reviewed_files)],
                              capture_output=True, text=True, timeout=15)
@@ -398,9 +400,27 @@ async def verify_outcome_screen(driver, resolution, expected, forbidden_modal=No
                                    expected_occurrences=1, observed_occurrences=matches)
 
 
+class StepBlocked(ValueError):
+    def __init__(self, step, phase, completed, cause):
+        super().__init__(f'{step}: {phase} check failed. {cause}')
+        self.step, self.phase, self.completed = step, phase, completed
+
+
+async def checkpoint(driver, resolution, action, field, completed):
+    for attempt in range(2):
+        try:
+            await verify_outcome_screen(driver, resolution, action[field])
+            return
+        except OutcomeScreenBlocked as error:
+            if field == 'exit_text' and attempt == 0 and error.observed_occurrences == 0:
+                await asyncio.sleep(.35)
+                continue
+            raise StepBlocked(action['step'], field, completed, error) from error
+
+
 async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,outcome_text=None,
                  require_new_outcome=False,forbidden_modal=None,pause_on_uac=False,
-                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None,on_uac_wait=None,click_summary=None,click_minimum_percent=90):
+                 uac_wait_seconds=0,uac_resume_text=None,on_uac_resume=None,on_uac_wait=None,click_summary=None,click_minimum_percent=90,step_progress=None):
     completed=0
     async def position(x, y):
         driver.move(x, y)
@@ -435,6 +455,10 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
         for a in actions:
             if pause_on_uac:
                 await check_uac('before_action')
+            if a.get('step') and step_progress is not None:
+                step_progress['current_step'] = a['step']
+            if 'enter_text' in a:
+                await checkpoint(driver, resolution, a, 'enter_text', completed)
             op=a['op']
             if op=='wait':await asyncio.sleep(a['seconds'])
             elif op=='key_down':driver.down(a['key'])
@@ -483,12 +507,26 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                 driver.scroll(a['clicks'])
             else:raise ValueError('Unsupported replay operation: '+op)
             await driver.drain();completed+=1;await asyncio.sleep(.01)
+            if 'exit_text' in a:
+                if pause_on_uac:
+                    await check_uac('before_step_completion')
+                await checkpoint(driver, resolution, a, 'exit_text', completed)
+                if step_progress is not None:
+                    step_progress['verified_steps'].append(a['step'])
+                    step_progress.pop('current_step', None)
         if pause_on_uac:
             await check_uac('after_last_action')
         if outcome_text is not None:
             await verify_outcome_screen(driver, resolution, outcome_text, forbidden_modal)
     except VaultDeliveryDenied as error:
         error.completed = completed
+        raise
+    except (StepBlocked, StartScreenBlocked, ClickBlocked, ElevationHandoff):
+        raise
+    except Exception as error:
+        if step_progress and step_progress.get('current_step'):
+            raise StepBlocked(step_progress['current_step'], 'action', completed,
+                              'Input may have been partially delivered. Inspect the guest state.') from error
         raise
     finally:driver.close()
     return completed
@@ -544,6 +582,16 @@ async def run(request, dialogue=False):
     start_text = metadata.get('start_text')
     if start_text is not None and (not isinstance(start_text, str) or not 1 <= len(start_text.strip()) <= 240):
         raise ValueError('Invalid reviewed starting-screen text')
+    step_progress = {'verified_steps': [], 'replay_commit': metadata['replay_commit']} if metadata.get('step_plan') else {}
+    from_step = request.get('from_step')
+    if from_step is not None:
+        if not (step_progress and request.get('expected_commit') and request.get('effects_reconciled') is True):
+            raise ValueError('Resuming requires a pinned step plan and confirmation of prior effects.')
+        index = next((i for i, a in enumerate(actions) if a.get('step') == from_step and 'enter_text' in a), None)
+        if index is None:
+            raise ValueError('Unknown resume checkpoint.')
+        actions = actions[index:]
+        start_text = None  # The chosen step checks its own entry before any input.
     references=vault_references(actions)
     unresolved=any(item['status']=='placeholder_unresolved' for item in references)
     if request.get('dry_run') is True or unresolved or (references and not dialogue):
@@ -561,7 +609,7 @@ async def run(request, dialogue=False):
     async def replay_on(driver):
         return await replay(driver, actions, metadata['resolution'], vault_steps, start_text=start_text,
                             pause_on_uac=request.get('pause_on_uac') is True, uac_wait_seconds=wait_seconds,
-                            uac_resume_text=resume_text, on_uac_resume=record_resume, on_uac_wait=record_wait, click_summary=click_summary, click_minimum_percent=click_percent)
+                            uac_resume_text=resume_text, on_uac_resume=record_resume, on_uac_wait=record_wait, click_summary=click_summary, click_minimum_percent=click_percent, step_progress=step_progress if step_progress else None)
 
     try:
         if metadata['backend'] == 'virtualbox':
@@ -582,8 +630,13 @@ async def run(request, dialogue=False):
             async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
                 completed = await replay_on(VNC(client))
         else:raise ValueError('This backend has no recorded desktop replay adapter')
+    except StepBlocked as error:
+        return {**step_progress, 'status': 'step_checkpoint_blocked', 'rpa_id': metadata['id'],
+                'current_step': error.step, 'phase': error.phase, 'actions_completed': error.completed,
+                'input_state': {'enter_text':'before_step_input','exit_text':'step_input_sent','action':'uncertain'}[error.phase],
+                'message': str(error), 'next_step': 'Inspect the current state and any prior effects before retrying.'}
     except ClickBlocked as error:
-        result = {'status': 'click_target_blocked', 'reason': error.reason, 'rpa_id': metadata['id'],
+        result = {**step_progress, 'status': 'click_target_blocked', 'reason': error.reason, 'rpa_id': metadata['id'],
                   'actions_completed': error.completed, 'presses_in_action': error.presses,
                   'observed_score': error.score, 'attempts': error.attempts, 'click_verification': click_summary,
                   'next_step': 'Ask the user whether to review the target or explicitly change click verification before starting another run.'}
@@ -591,7 +644,7 @@ async def run(request, dialogue=False):
         return result
     except ElevationHandoff as error:
         observed_at=error.observed_at
-        result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
+        result={**step_progress,'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
                 'actions_completed':error.completed,'phase':error.phase,
                 'program_identity':'unverified','replay_commit':metadata['replay_commit'],
                 'at':observed_at,'message':str(error)}
@@ -605,7 +658,7 @@ async def run(request, dialogue=False):
             result['history_status']='unavailable'
         attach_elevation_history(result)
         return result
-    result = {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
+    result = {**step_progress,'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
     if click_summary['verified_presses'] or click_percent == 0:
         result['click_verification'] = click_summary
     attach_elevation_history(result)

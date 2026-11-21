@@ -2,7 +2,7 @@
   "name": "vamp-mcp-tools",
   "displayName": "VAMP – Run AI Computer-Use Agents in VMs",
   "description": "Run AI computer-use agents in VMs on your own hardware. Isolated desktop automation, saved RPA replay, and Vault integration over MCP.",
-  "version": "0.3.17",
+  "version": "0.3.18",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -341,7 +341,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.17.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out ../artifacts/vamp-mcp-tools-0.3.18.vsix",
     "vscode:prepublish": "npm run build",
     "test:viewer": "node --test test/viewer-bridge.mjs",
     "test:manager": "node --test test/vm-manager.cjs test/script-server.cjs test/host-backends.cjs test/library-store.cjs test/rpa-author.cjs test/vagrant-backend.cjs test/vision-preload.cjs test/containers-panel.cjs test/podman-packaging.cjs",

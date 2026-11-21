@@ -12,7 +12,7 @@ const sources = ['mcp', 'vsix', 'remote'];
 const uuid = /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 const label = /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,63}$/;
 const outcomes = new Set(
-  'requested preview queued running verified completed_unverified failed error denied cancelled timed_out interrupted volume_missing setup_required vault_locked committed_needs_review completed rejected needs_review needs_setup needs_review_or_confirmation needs_confirmation invalid_inputs revision_conflict request_conflict workspace_unavailable awaiting_approval approval_required pending returned ok mounted unmounted delivered resolved copied revealed cached click_target_blocked starting_screen_blocked ask_user operator_handoff validated unsupported unknown'.split(
+  'requested preview queued running verified completed_unverified failed error denied cancelled timed_out interrupted volume_missing setup_required vault_locked committed_needs_review completed rejected needs_review needs_setup needs_review_or_confirmation needs_confirmation invalid_inputs revision_conflict request_conflict workspace_unavailable awaiting_approval approval_required pending returned ok mounted unmounted delivered resolved copied revealed cached click_target_blocked step_checkpoint_blocked starting_screen_blocked ask_user operator_handoff validated unsupported unknown'.split(
     ' '
   )
 );

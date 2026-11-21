@@ -5,6 +5,8 @@ description: Find and reuse reviewed saved RPA skills before repeating screen-by
 
 Use the VAMP RPA Library MCP provider when available.
 
+When deriving a variant or editing a GUI recording, keep paired `# vamp-step: ID` and `# vamp-end: ID` comments around each local block. Use the matching `section` in the step plan and pin reused blocks to the original commit. For existing recordings first preview the comment migration through `rpa_revision(action="annotate")`. [Authoring and review](../vamp-rpa-ui-checks/SKILL.md#mark-editable-steps-in-gui-recordings)
+
 1. Search with `rpa_search` using the user's task keywords. Titles, descriptions, use cases and tags are searchable; source and screenshots are not needed for discovery.
 2. Read `rpa_details` for the best candidate. Check backend, recorded guest resolution, declared input names, review state and expected result. A keyword match alone is not enough.
 3. Prefer a suitable reviewed RPA over another CUA/OCR/multimodal loop. Supply exactly the declared inputs and the explicit target VM UUID. Do not invent input values or automatically mark an RPA reviewed.

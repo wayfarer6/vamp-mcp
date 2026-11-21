@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.18
+
+- Open GUI scripts with Edit. Compose reviewed source ranges and pinned steps, verify screen checkpoints, and resume a reconciled run at a named step.
+
 ## 0.3.17
 
 - Capture guest button crops by request and generate a separate YOLO-checked draft after review. The recorder and RPA Library explain manual fallback behavior. MCP reports it in English or Korean.

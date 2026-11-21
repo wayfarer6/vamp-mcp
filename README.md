@@ -22,6 +22,34 @@
 
 ---
 
+## Reuse part of a GUI recording
+
+A pair of Python comments marks an editable step. Choose **Block between step comments** and enter its ID to keep the step attached to the code when lines move.
+
+```python
+# vamp-step: open-menu
+p.press('f2')
+# vamp-end: open-menu
+```
+
+For an existing recording, ask the agent to preview step comments with `rpa_revision(action="annotate")`. The preview includes the source and updated step plan. Applying it creates a revision that needs review.
+
+In **RPA Library**, select a Python recording and choose **Create GUI RPA → Reusable steps → Add step**. Give the step a name, select its first and last source lines, and enter visible text for its starting and finished screens. After review, a second RPA can select **Step from a reviewed revision** and append its own local steps. VAMP pins the original Git commit and saves the combined actions in the new RPA.
+
+```mermaid
+flowchart LR
+  A["Reviewed menu step at a fixed revision"] --> B["Check Inventory menu"]
+  B --> C["Warehouse report step"]
+  B --> D["Factory report step"]
+  D --> E{"Production balance visible?"}
+  E -->|Yes| F["Record checkpoint"]
+  E -->|No| G["Stop and inspect effects"]
+  G --> H["Edit report step and review"]
+  H --> I["Recheck entry and resume report"]
+```
+
+Select the script in the source preview and click **Edit** to open the file in VS Code. For a saved skill, use **Edit details and steps** to review and save the new revision. When a run stops, inspect the reported step and any changes already made. To resume in MCP, provide the reviewed `expected_commit`, `from_step`, and `effects_reconciled: true` with the usual target, inputs and confirmation. VAMP checks that step’s entry screen before sending input. [English demo](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-en.mp4) · [Captions](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-en.srt)
+
 ## See VAMP in 30 seconds
 
 **Try a warehouse close.** Ask “Close the warehouse for the month.” Codex finds a reviewed GUI recording and LibreOffice Calc writes an Excel workbook for four synthetic SKUs. The demo checks all 24 formulas and the closing value after saving. [English video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-workflow-en.mp4) · [Example and setup](examples/warehouse-close/README.md) · [Finished XLSX](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-12.xlsx)
