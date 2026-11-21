@@ -222,6 +222,9 @@ def register(root,request):
     try:
         os.close(fd)
         if previous:
+            previous=json.loads((folder/'rpa.json').read_text(encoding='utf8'))
+            if request.get('expected_version') is not None and request['expected_version'] != previous['version']:
+                raise ValueError('This RPA changed while the editor was open. Cancel the form, refresh the library, and reopen the latest revision.')
             git(folder,'status','--porcelain','--untracked-files=no')
         if request.get('expected_commit') and git(folder,'rev-parse','HEAD')!=request['expected_commit']:raise ValueError('RPA changed since it was read. Read the latest revision before repairing')
         if request.get('expected_commit') and git(folder,'status','--porcelain','--untracked-files=no'):

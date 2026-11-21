@@ -50,6 +50,8 @@ flowchart LR
 
 Select the script in the source preview and click **Edit** to open the file in VS Code. For a saved skill, use **Edit details and steps** to review and save the new revision. When a run stops, inspect the reported step and any changes already made. To resume in MCP, provide the reviewed `expected_commit`, `from_step`, and `effects_reconciled: true` with the usual target, inputs and confirmation. VAMP checks that step’s entry screen before sending input. [English demo](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-en.mp4) · [Captions](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-en.srt)
 
+After annotating a shared step, existing workflows still reference their original commit. Review the new shared revision, then update the pin in the workflows that should adopt it. [Watch the preview, review and pin update](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.19/review-and-repin-en.mp4) · [Captions](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.19/review-and-repin-en.srt)
+
 ## See VAMP in 30 seconds
 
 **Try a warehouse close.** Ask “Close the warehouse for the month.” Codex finds a reviewed GUI recording and LibreOffice Calc writes an Excel workbook for four synthetic SKUs. The demo checks all 24 formulas and the closing value after saving. [English video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-workflow-en.mp4) · [Example and setup](examples/warehouse-close/README.md) · [Finished XLSX](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-12.xlsx)
