@@ -8,7 +8,7 @@ Windows PC에서 Claude Code 또는 Codex에 VAMP를 연결하고, 연습용 주
 
 ## 이 문장을 AI에 붙여 넣으세요
 
-**내 PC에서 명령을 실행할 수 있는 Claude Code 또는 Codex**를 열고 아래 내용을 보내세요.
+**내 PC에서 실행하는 Claude Code나 Codex에는** 아래 문장을 그대로 보내세요.
 
 ```text
 https://github.com/wayfarer6/vamp-mcp
@@ -80,6 +80,21 @@ https://github.com/wayfarer6/vamp-mcp
    ```
 
 **성공 기준**은 새 CSV에 `ORD-1001`, `ORD-1002`, `ORD-1003`가 각각 한 번씩 있고 세 상태가 모두 `Shipped`인 것입니다. [영상에서 브라우저로 직접 내보낸 CSV](media/first-run-orders.csv)
+
+## 다음 영상 · VAMP MCP의 구조
+
+[한국어 구조 소개 영상 내려받기 (3분 04초)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-ko.mp4) · [한국어 자막](media/vamp-architecture-ko.srt)
+
+| 시간 | 영상 속 경로 |
+| --- | --- |
+| 0:15 | AI 클라이언트 → 호스트의 MCP 서버 → 게스트. 설정한 원격 SSH 연결과 별도 Vault 서버 |
+| 0:42 | VirtualBox의 VM 목록, Windows 게스트 주문 화면, 직접 입력할 때 여는 기본 창 |
+| 1:11 | Linux KVM/QEMU와 libvirt, 사용자·시스템 VM 목록, 로컬 VNC 화면 |
+| 1:44 | Windows Hyper-V의 VM Manager, VMConnect, 별도 Python VM MCP 서버 |
+| 2:20 | 검토된 RPA 재생과 새 결과 파일 검증 |
+| 2:44 | 세 환경의 관리 도구와 화면 경로 비교 |
+
+영상은 v0.3.13을 기준으로 합니다. VirtualBox 장면은 [게스트 원본 녹화](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/05-VirtualBox-ERP-Replay-QHD-ko.mp4)에서 가져왔고, KVM 장면은 [프로젝트의 VS Code 뷰어 캡처](media/vscode-vm-screen-kvm.png)입니다. Hyper-V 부분은 VMConnect 경로를 그린 구조도와 [중첩 Windows 랩의 파일 전송·인벤토리 검증 기록](VALIDATION.md)을 바탕으로 설명합니다. v0.3.13의 Hyper-V 데스크톱 RPA 재생은 미지원입니다. [MCP 등록 경로](MCP_REGISTRATION.md) · [백엔드별 VM 화면](USER_GUIDE.md) · [Python 서버의 Hyper-V 도구](VM_MCP.md)
 
 ## 시연 자료
 

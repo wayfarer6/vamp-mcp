@@ -37,6 +37,8 @@ https://github.com/wayfarer6/vamp-mcp
 
 [한국어 영상 내려받기 · 3분 51초](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [웹 채팅용 프롬프트, 설치 명령, 주문 CSV 실습](docs/FIRST_RUN.ko.md)
 
+다음 영상 · [VAMP MCP 구조 소개 (3분 04초)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-ko.mp4)에서 VirtualBox, KVM, Hyper-V의 VM 관리와 게스트 화면 경로를 비교합니다.
+
 ## How to use
 
 **지원 호스트:** Windows와 Linux입니다. macOS는 지원 대상에서 제외합니다.
