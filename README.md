@@ -32,6 +32,8 @@ From the VAMP VS Code extension, open a VirtualBox guest and verify that its Deb
 
 [English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
 
+See which Linux KVM calls were recorded automatically, how to read the two outcomes, and what a Vault credential lookup proves. [Audit log video · English, 1:51](docs/media/vamp-audit-log-en.mp4)
+
 ## Ask your AI to install VAMP
 
 In Claude Code or Codex with terminal access to your Windows PC, paste this request:

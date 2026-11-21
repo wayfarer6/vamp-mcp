@@ -34,6 +34,8 @@ VAMP VS Code 확장에서 VirtualBox 게스트를 열고 Debian 화면이 연결
 
 [한국어·영어 영상 모음](docs/VM_LAB.md)에서 30초 결과 데모, 설치와 AI 연결, 구조 소개, 실제 VM 생성과 게스트 화면 실습을 종류별로 볼 수 있습니다.
 
+Linux KVM에서 자동으로 남은 로그 두 줄을 열고, 호출 결과와 Vault 자격 증명 조회 기록을 해석하는 방법을 확인하세요. [감사 로그 영상 · 한국어 2:08](docs/media/vamp-audit-log-ko.mp4)
+
 ## 처음이라면 AI에게 설치를 부탁해 보세요
 
 내 PC에서 명령을 실행할 수 있는 **Claude Code 또는 Codex**에 아래 문장을 붙여 넣으세요.
