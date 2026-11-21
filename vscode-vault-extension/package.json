@@ -2,7 +2,7 @@
   "name": "vamp-vault",
   "displayName": "VAMP Vault \u2014 Credential and Encrypted Workspace Management",
   "description": "Local & remote (SSH) encrypted vault isolation (KeePassXC & VeraCrypt) with strict per-host credential boundaries for AI agents",
-  "version": "0.1.16",
+  "version": "0.1.17",
   "publisher": "wayfarer6",
   "license": "MIT",
   "repository": {
@@ -496,7 +496,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "package": "npm run build && vsce package --no-dependencies --out vamp-vault-0.1.16.vsix",
+    "package": "npm run build && vsce package --no-dependencies --out vamp-vault-0.1.17.vsix",
     "test": "node build.mjs && node test/smoke.mjs && node test/extension-host.mjs && node test/remote.mjs && node --test test/browser.cjs test/encrypted-export.mjs test/remote-export.mjs",
     "vscode:prepublish": "npm run build"
   },

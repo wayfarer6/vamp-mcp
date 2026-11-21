@@ -45,6 +45,8 @@ jobs:
           npm --prefix vscode-vault-extension run build
       - name: Check MCP registrations (no live backend)
         run: npm --prefix vscode-extension run test:mcp-registration
+      - name: Check workflow library and SQLite audit contracts
+        run: node --test backends/common/audit.test.cjs backends/library/cli-workflows.test.cjs
       - name: Check guest and Vault contracts
         run: >-
           node --test

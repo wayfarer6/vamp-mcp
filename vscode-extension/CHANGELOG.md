@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.15
+
+- Add reviewed Python and Playwright workflows for Linux VM workspaces and a profile-scoped SQLite audit panel with MCP search. Preserve click verification and catalog settings for GUI replay.
+
 ## 0.3.14
 
 - Verify each recorded button press with a fresh guest screenshot and its reviewed OCR label or YOLO class. Replay pauses on ambiguous, missing or low-scoring targets.

@@ -127,6 +127,16 @@ test('failed storage blocks dispatch and an interrupted CLI process is never red
   assert.equal(store.search({ run_id }).events[0].outcome, 'interrupted');
   assert.equal(store.search({ run_id }).events.length, 2);
 });
+test('a blocked recorded click keeps its outcome when queried by run ID', async (t) => {
+  const { store } = fixture(t);
+  const run_id = randomUUID();
+  await observe(store, { run_id, category: 'gui', source: 'mcp', action: 'replay' },
+    async () => ({ status: 'click_target_blocked' }));
+  const rows = store.search({ run_id, outcome: 'click_target_blocked' }).events;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].action, 'replay');
+});
+
 test('configured identity, client claims and generated process identity are distinguishable', (t) => {
   const value = process.env.VAMP_AGENT_ID;
   t.after(() => {

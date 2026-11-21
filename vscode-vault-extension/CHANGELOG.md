@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.17
+
+- Record Vault credential and volume operations in the shared SQLite audit store and expose filtered MCP queries and a VS Code audit view.
+
 ## 0.1.16
 
 - Configure a saved KeePassXC entry and WSL mount directory for the default volume. Approved Windows MCP mounts reuse the bound key over CLI stdin. Missing setup returns a setup result before opening a password dialog.
