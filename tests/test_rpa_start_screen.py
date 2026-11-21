@@ -38,6 +38,12 @@ class FixtureDriver:
 
 class StartScreenTest(unittest.IsolatedAsyncioTestCase):
     async def test_kvm_saved_replay_waits_for_verified_uac_resume(self):
+        await self.check_kvm_saved_uac_replay(wait_seconds=10)
+
+    async def test_kvm_saved_replay_hands_off_without_sending_input(self):
+        await self.check_kvm_saved_uac_replay(wait_seconds=0)
+
+    async def check_kvm_saved_uac_replay(self, wait_seconds):
         driver = FixtureDriver()
         metadata = {'id': 'fixture-rpa', 'backend': 'kvm', 'resolution': [1920, 1080],
                     'replay_commit': 'a' * 40, 'expected_result': 'Ready'}
@@ -46,6 +52,9 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         client = connect.return_value.__aenter__.return_value
         outputs = ['running', '<domain><devices><graphics type="vnc" port="5901"/></devices></domain>']
         prompt = SimpleNamespace(program_name='Fixture Setup', kind='consent')
+        request = {'vm_id': 'fixture-vm', 'pause_on_uac': True}
+        if wait_seconds:
+            request.update(uac_wait_seconds=wait_seconds, uac_resume_text='Installed')
         with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
              patch.dict('sys.modules', {'asyncvnc': SimpleNamespace(connect=connect)}), \
              patch('backends.library.replay.load', return_value=(metadata, actions)), \
@@ -55,9 +64,19 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
              patch('backends.library.replay.asyncio.sleep'), \
              patch('backends.library.replay.inspect_elevation_screen',
                    side_effect=[prompt, False, False, False]) as inspect:
-            result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True, 'uac_wait_seconds': 10,
-                                'uac_resume_text': 'Installed'})
+            result = await run(request)
+            if not wait_seconds:
+                event, = detail(result['run_id'])['events']
         adapter.assert_called_once_with(client)
+        self.assertTrue(driver.closed)
+        if not wait_seconds:
+            self.assertEqual(inspect.call_count, 1)
+            self.assertEqual(driver.events, [])
+            self.assertEqual(result['status'], 'operator_handoff')
+            self.assertEqual(result['reason'], 'uac_prompt_detected')
+            self.assertEqual(result['actions_completed'], 0)
+            self.assertEqual(event['kind'], 'elevation_handoff')
+            return
         self.assertEqual([call.args[1] for call in inspect.call_args_list],
                          [None, 'Installed', 'Installed', None])
         self.assertEqual(driver.events, ['move', 'left'])
