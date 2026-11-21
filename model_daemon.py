@@ -87,10 +87,17 @@ def model_interpreter(kind):
     python = 'Scripts/python.exe' if WINDOWS else 'bin/python'
     if configured:
         return Path(configured).expanduser().resolve()
+    vamp_home = Path(os.environ.get('VAMP_HOME', Path.home() / '.vamp')).expanduser().resolve()
+    try:
+        settings = json.loads((vamp_home / 'vision-environment.json').read_text(encoding='utf-8'))
+        managed = vamp_home / settings[kind]
+        if managed.parent.resolve().is_relative_to(vamp_home / 'vision') and managed.is_file():
+            return managed
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
     local = ROOT / directory / python
     if local.is_file():
         return local
-    vamp_home = Path(os.environ.get('VAMP_HOME', Path.home() / '.vamp')).expanduser()
     return vamp_home / f'{kind}-python' / python
 
 

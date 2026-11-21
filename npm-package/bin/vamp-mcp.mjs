@@ -32,10 +32,11 @@ Usage: vamp-mcp [unified|virtualbox|kvm|library|remote|podman] [remote options]
   podman-screen  Approved Podman desktop RFB stream over stdin/stdout for host RPA
   assets install <archive> [sha256]  Verify and install an offline provisioning archive
   assets download [sha256]           Verify and cache provisioning assets from this release
+  setup                             Detect hardware and install host YOLO and OCR runtimes
   --version    Package version
 Python: RPA_HOST_PYTHON (defaults to python3, or python on Windows).
 Remote controls the host running this process; use SSH to run it on another host.
-No VM, OS, hypervisor, Python environment or Vault is installed automatically.`);
+No VM, OS, hypervisor or Vault is installed automatically.`);
 } else if (command==='proxy' || command==='bootstrap') {
   try {
     const {values}=parseArgs({args,options:{
@@ -95,6 +96,28 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     console.error(`vamp-mcp podman-screen: ${error.message}`);
     process.exitCode=1;
   }
+} else if (command==='setup') {
+  try {
+    if (args.length) throw new Error('Usage: vamp-mcp setup');
+    const { installAssets } = await import('./assets.mjs');
+    const assets = await installAssets(readAssetManifest());
+    const { spawnSync } = await import('node:child_process');
+    const configured = process.env.VAMP_VISION_PYTHON || process.env.RPA_HOST_PYTHON;
+    const candidates = configured ? [[configured, []]]
+      : process.platform === 'win32' ? [['py', ['-3.12']], ['python', []]]
+        : [['python3.12', []], ['python3', []]];
+    const check = 'import sys; raise SystemExit(not (3, 11) <= sys.version_info[:2] <= (3, 13))';
+    const selected = candidates.find(([python, options]) =>
+      spawnSync(python, [...options, '-c', check], {windowsHide:true, stdio:'ignore'}).status === 0);
+    if (!selected) throw new Error('Install Python 3.12 or set VAMP_VISION_PYTHON to a compatible interpreter.');
+    const [python, options] = selected;
+    const result = spawnSync(python, [...options, path.join(assets,'scripts/setup_vision.py')],
+      {windowsHide:true, stdio:'inherit'});
+    if (result.error || result.status !== 0) throw new Error(result.error?.message || 'Host vision setup failed.');
+  } catch(error) {
+    console.error(`vamp-mcp setup: ${error.message}`);
+    process.exitCode=1;
+  }
 } else if (command==='assets') {
   try {
     const [operation, first, second]=args;
@@ -137,10 +160,13 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
     process.env.VAMP_REMOTE_PYTHON ||= process.env.RPA_HOST_PYTHON;
     if (existsSync(manifestPath)) {
       const manifest=readAssetManifest();
-      let pending;
+      const {installAssets}=await import('./assets.mjs');
+      const cached=await installAssets({...manifest,cacheOnly:true});
+      if(cached) process.env.VAMP_PROVISIONING_ASSETS=cached;
+      let pending=cached?Promise.resolve(cached):undefined;
       globalThis[Symbol.for('vamp.provisioningAssets')]=(cacheOnly=false) => {
-        if (cacheOnly) return import('./assets.mjs').then(({installAssets}) => installAssets({...manifest,cacheOnly}));
-        pending ??= import('./assets.mjs').then(async ({installAssets}) => {
+        if (cacheOnly) return pending ?? installAssets({...manifest,cacheOnly});
+        pending ??= (async () => {
           const assets=await installAssets(manifest);
           process.env.VAMP_PROVISIONING_ASSETS=assets;
           process.env.PYTHONDONTWRITEBYTECODE='1';
@@ -153,7 +179,7 @@ No VM, OS, hypervisor, Python environment or Vault is installed automatically.`)
             }
           }
           return assets;
-        }).catch(error => {
+        })().catch(error => {
           pending=undefined;
           throw error;
         });

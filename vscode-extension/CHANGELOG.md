@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.13
+
+- Prepare environment selects a supported host accelerator and installs the separate YOLO and OCR runtimes and model weights.
+- Starts the configured vision workers when MCP connects.
+
 ## 0.3.12
 
 - Pause reviewed Windows RPA on a detected guest UAC prompt on VirtualBox and local VNC-backed KVM.

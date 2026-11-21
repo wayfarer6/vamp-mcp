@@ -9,7 +9,7 @@ A unified stdio MCP server for virtual machines, RPA and Podman containers. Run 
 - The `remote` server runs on the host owning KVM/libvirt or VirtualBox. To operate a different machine, start it there over SSH. Linux KVM requires access to `virsh` and the selected libvirt URI. VM creation also needs `virt-install` and `qemu-img`. Debian automatic installation boots the stock ISO and injects a preseed into the initrd; `xorriso` is not used. Guest setup is served over HTTP from a host Python 3 server on port 8421.
 - Provide your own VMs, guest operating systems, licenses and Guest Additions when needed. Package installation does not create VMs or install system dependencies.
 - VAMP Vault MCP is a separate npm package, `vamp-mcp-vault`. The live viewer and graphical manager require the VS Code extensions; npm does not install them. Hyper-V is not included in this npm release.
-- Full SPICE/OCR/YOLO workflows still require the source repository and their documented environments.
+- Run `vamp-mcp setup` with Python 3.12 to automatically install host OCR and YOLO, select a supported accelerator, and download models. Full SPICE workflows still require the source repository.
 
 ## Install and run
 

@@ -29,6 +29,7 @@ const required = [
   'requirements-ocr.txt',
   'scripts/build_recorder_media.py',
   'scripts/script_server.py',
+  'scripts/setup_vision.py',
 ];
 const versionPattern = /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/;
 const marker = '.vamp-assets.json';

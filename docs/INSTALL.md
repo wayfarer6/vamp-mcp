@@ -4,6 +4,15 @@
 
 실제로 시험한 호스트는 Ubuntu 26.04.1 LTS와 NVIDIA GeForce RTX 3050 Laptop GPU입니다. AMD·Apple·NPU용 설정도 있지만 해당 장비에서는 설치와 전체 RPA를 검증하지 않았습니다.
 
+
+## Automatic host vision setup
+
+Use **Prepare environment** in the VAMP VS Code extension or run `vamp-mcp setup` for the standalone package. Install Python 3.12 and the hardware driver first. VAMP creates separate Python environments for PyTorch/YOLO and PaddleOCR, checks the selected devices, and downloads the model files. An MCP server then warms the installed models in the background and keeps them loaded for repeat calls.
+
+YOLO checks supported NPUs first, then NVIDIA CUDA or AMD ROCm, then CPU. Windows AMD support uses the official ROCm 7.2.1 wheels on supported Radeon cards with Python 3.12. PaddleOCR uses NVIDIA CUDA when verification passes and otherwise uses CPU. Explicit `VAMP_YOLO_PYTHON` and `VAMP_OCR_PYTHON` settings take precedence. See the [AMD Windows compatibility matrix](https://rocm.docs.amd.com/projects/radeon-ryzen/en/latest/docs/compatibility/compatibilityrad/windows/windows_compatibility.html).
+
+VS Code의 **Prepare environment** 또는 독립 MCP의 `vamp-mcp setup`을 실행하면 호스트에 맞는 PyTorch·YOLO와 PaddleOCR 패키지 및 모델을 자동으로 준비합니다. Python 3.12와 장치 드라이버는 먼저 설치하세요. MCP 서버가 시작되면 두 모델 워커를 백그라운드에서 예열해 재사용합니다.
+
 ## 호스트와 게스트 준비
 
 requirements는 VM을 제어하는 호스트에 설치합니다. SPICE 입력에는 게스트 RPA 에이전트가 필요하지 않습니다. GUI 동작을 기록하려면 [레코더](GUEST_RECORDER.md)를 게스트에 별도로 설치할 수 있습니다.

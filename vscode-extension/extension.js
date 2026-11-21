@@ -184,7 +184,21 @@ function activate(context) {
         changes.fire();
         const packer=require('./host-backends').preparePacker;
         if(packer)await packer({runtime,python:pythonPath},context.globalState?.get('vamp.manager.backend')||'virtualbox');
-        vscode.window.showInformationMessage('VAMP environment ready. HashiCorp Packer CLI and the selected official plugin were installed. Hypervisor software must be installed separately.');
+        progress.report({message:'Selecting and installing YOLO and OCR for the host hardware'});
+        const visionSetup=path.join(runtime,'scripts/setup_vision.py');
+        const visionCandidates=process.env.VAMP_VISION_PYTHON ? [[process.env.VAMP_VISION_PYTHON,[]]]
+          : [...(process.platform==='win32' ? [['py',['-3.12']]] : [['python3.12',[]]]), selected];
+        let visionPython;
+        for(const [command,args] of visionCandidates) {
+          try {
+            await run(command,[...args,'-c','import sys; raise SystemExit(not (3, 11) <= sys.version_info[:2] <= (3, 13))'],{timeout:15000});
+            visionPython=[command,args]; break;
+          } catch {}
+        }
+        if(!visionPython)throw new Error('Install Python 3.12 and rerun VAMP environment setup to install the vision runtimes.');
+        const vision=await run(visionPython[0],[...visionPython[1],visionSetup],{timeout:2700000,maxBuffer:8*1024*1024});
+        output.appendLine(vision.stdout); output.appendLine(vision.stderr);
+        vscode.window.showInformationMessage('VAMP environment ready. Packer and the host OCR and YOLO runtimes are installed. Install the hypervisor and device drivers separately.');
       });
       return true;
     } catch(error) { output.appendLine(String(error)); output.show(); vscode.window.showErrorMessage(`VAMP setup failed: ${error.message}`); return false; }

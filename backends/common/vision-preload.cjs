@@ -41,6 +41,7 @@ function python_for(env,platform){
 function ensureVisionServices({runtime,env=process.env,platform=process.platform,spawnProcess=spawn,logger}={}){
   const report={status:'skipped',reason:null,command:null,pid:null};
   if(!enabled(env)){report.reason='disabled_by_VAMP_PRELOAD_MODELS';return report;}
+  runtime=env.VAMP_PROVISIONING_ASSETS||runtime;
   const downloader=runtime&&path.join(runtime,'scripts/download_models.py');
   const canDownload=downloader&&!env.VAMP_YOLO_MODEL&&fs.existsSync(downloader)&&fs.existsSync(path.join(runtime,'models/manifest.json'));
   const lean=runtime&&fs.existsSync(path.join(runtime,'provisioning-assets.json'));
@@ -53,7 +54,8 @@ function ensureVisionServices({runtime,env=process.env,platform=process.platform
     const nativePython=platform==='win32'?'Scripts/python.exe':'bin/python';
     const hostHome=env.VAMP_HOME||path.join(os.homedir(),'.vamp');
     if(!['.venv','.venv-ocr'].some(folder=>fs.existsSync(path.join(runtime,folder,nativePython))) &&
-       !['ocr-python','yolo-python'].some(folder=>fs.existsSync(path.join(hostHome,folder,nativePython)))){
+       !['ocr-python','yolo-python'].some(folder=>fs.existsSync(path.join(hostHome,folder,nativePython))) &&
+       !fs.existsSync(path.join(hostHome,'vision-environment.json'))){
       report.reason='host_model_environment_missing';return report;
     }
   }
