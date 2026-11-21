@@ -37,6 +37,20 @@ class FixtureDriver:
 
 
 class StartScreenTest(unittest.IsolatedAsyncioTestCase):
+    async def test_uac_appearing_during_drain_blocks_vault_delivery(self):
+        driver = FixtureDriver()
+        prompt = SimpleNamespace(program_name=None, kind='credential')
+        actions = [{'op': 'write', 'text': 'fixture'}]
+        with patch('backends.library.replay.inspect_elevation_screen', side_effect=[None, prompt]), \
+             patch('backends.library.replay.vault_dialogue') as delivery:
+            with self.assertRaises(ElevationHandoff) as blocked:
+                await replay(driver, actions, [1920, 1080], {0: {}}, pause_on_uac=True)
+        self.assertEqual(blocked.exception.phase, 'before_vault_delivery')
+        self.assertEqual(blocked.exception.prompt_kind, 'credential')
+        self.assertEqual(blocked.exception.completed, 0)
+        self.assertEqual(driver.events, [])
+        delivery.assert_not_called()
+
     async def test_uac_replay_refuses_non_fhd_resolution(self):
         driver = FixtureDriver()
         with self.assertRaisesRegex(ValueError, '1920x1080'):

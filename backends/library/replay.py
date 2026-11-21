@@ -429,6 +429,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
                     if driver.held:
                         raise VaultDeliveryDenied
                     await driver.drain()
+                    if pause_on_uac:
+                        await check_uac('before_vault_delivery')
                     vault_dialogue({'vault':'deliver',**vault_steps[completed]})
                 else:
                     for character in a['text']:
