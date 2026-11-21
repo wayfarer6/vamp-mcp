@@ -202,6 +202,8 @@ For a terminal-only walkthrough, save the registration request as UTF-8 JSON and
 
 After scratch promotion, inspect the promoted revision with `rpa_revision read-source`. To record the operator's review in the terminal, submit a new registration request with the same `id`, the promoted `commit` as `expected_commit`, and the promoted `source_sha256` as `verified_source_hash`. Use the promoted catalog `source.py` as `source_path` and retain the definition's metadata, including the revised starting text. Set `reviewed: true` only after reviewing that exact source. The registry checks the commit and source bytes before saving the review.
 
+On Windows, perform terminal review from an administrator terminal when the catalog was written by an elevated MCP process. A non-elevated process can encounter access denied on the catalog or its Git index. The MCP `read-source` command can retrieve the committed bytes for inspection while the revision awaits operator review.
+
 The launcher checks that the v1 and stale-layout replays use the source SHA-256 from packaging. The final v2 replay must use the source verified in scratch. A mismatch stops playback before any guest input.
 
 To repeat just the final installed-MCP check on Windows, use a PowerShell window opened with **Run as administrator** and verify that the target guest is on the reset v2 screen. Set the following paths to your installed CLI and reviewed catalog, and use the SHA-256 returned by the scratch verification. The guest browser must be configured to save to a fresh CSV destination.
