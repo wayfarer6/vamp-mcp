@@ -54,6 +54,7 @@ VirtualBox 설치 녹화에 한국어와 영어 안내를 각각 넣은 QHD 영�
 - [Codex ERP Robot Framework 검증 자료](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/vamp-erp-codex-scratch-evidence.zip)에 검증 시나리오, 실행 보고서, 예제 CSV가 들어 있습니다.
 - ERP 화면 변경 후 설치형 MCP로 재생하는 장면 ([영어 화면](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/08-Installed-MCP-ERP-v2-QHD-en.mp4) · [한국어 화면](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/08-Installed-MCP-ERP-v2-QHD-ko.mp4)).
 - 테스트 모달 복구 5단계 시연 ([영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/09-Modal-Recovery-QHD-en.mp4) · [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/09-Modal-Recovery-QHD-ko.mp4)).
+- Codex 작성부터 설치형 MCP 재실행까지 담은 ERP 연속 시연 및 자막 ([영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/10-ERP-Continuous-QHD-en.mp4) · [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/10-ERP-Continuous-QHD-ko.mp4)).
 - [ERP 실행 결과와 비교 측정 방법](docs/ROADMAP.md#observed-erp-run)
 - [검토된 VirtualBox 시나리오를 실행하고 MCP 채팅에서 CSV 받기](docs/USER_GUIDE.md#채팅에서-erp-csv-받기) (현재 소스 빌드)
 - [Vault MCP 또는 VS Code에서 마운트된 VeraCrypt 컨테이너의 파일을 복호화된 사본으로 내보내기](vscode-vault-extension/README.md#export-a-file-from-a-mounted-container) (현재 소스 빌드)
