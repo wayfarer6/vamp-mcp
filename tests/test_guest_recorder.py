@@ -11,6 +11,21 @@ from recording_converter import parse_recording
 
 
 class GuestRecorderTests(unittest.TestCase):
+    def test_deferred_yolo_draft_matches_only_demonstrated_clicks(self):
+        script = Path(__file__).resolve().parents[1] / 'guest_setup/recorder/vamp-recorder.py'
+        with patch.dict(sys.modules, {'tkinter': Mock(), 'pynput': Mock()}):
+            helpers = runpy.run_path(str(script))
+        recording = "import pyautogui\npyautogui.click(x=100, y=60, button='left')\n"
+        source = "import pyautogui as pg\npg.click(100, 60)\npg.press('enter')\n"
+        draft = helpers['checked_source'](source, recording, {2: 'confirm-count'})
+        actions = parse_recording(draft)
+        self.assertEqual(actions[0]['target'], {'yolo': 'confirm-count'})
+        self.assertEqual(actions[1]['op'], 'press')
+        with self.assertRaises(ValueError):
+            helpers['checked_source'](source.replace('100', '101'), recording, {2: 'confirm-count'})
+        self.assertNotIn('vamp-target', recording)
+        self.assertEqual(helpers['checked_source'](source, recording, {}), source)
+
     def test_save_keeps_the_final_wait_after_input_without_adding_it_twice(self):
         script = Path(__file__).resolve().parents[1] / 'guest_setup/recorder/vamp-recorder.py'
         with patch.dict(sys.modules, {'tkinter': Mock(), 'pynput': Mock()}):

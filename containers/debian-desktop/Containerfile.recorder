@@ -1,7 +1,7 @@
 ARG VAMP_DESKTOP_BASE=localhost/vamp-debian-desktop:dev
 FROM ${VAMP_DESKTOP_BASE}
 USER 0:0
-RUN apt-get update && apt-get install -y --no-install-recommends python3-tk python3-pynput xdotool \
+RUN apt-get update && apt-get install -y --no-install-recommends python3-tk python3-pynput python3-pil xdotool \
     && rm -rf /var/lib/apt/lists/*
 COPY --from=recorder vamp-recorder.py RECORDER-LICENSE /opt/vamp-desktop/
 COPY --from=vault vamp-vault-receive /usr/local/bin/vamp-vault-receive

@@ -1,3 +1,4 @@
+import {manualRecordingNotice} from '../common/manual-recording.mjs';
 import path from 'node:path';
 import os from 'node:os';
 import packerModule from '../common/packer.cjs';
@@ -72,8 +73,9 @@ server.tool('vm_run_artifact','Inspect an artifact by SQLite id. Screenshot imag
 });
 server.tool('vm_recording_share','Prepare host recording share (no overwriting existing mappings) or read/list saved recording source without execution. Mounting in the guest must be verified.',{
   vm:z.string().min(1),action:z.enum(['prepare','inspect']).default('prepare'),
+  language:z.enum(['en','ko']).optional().describe('Language of the manual recording notice. Defaults to both.'),
   filename:z.string().optional(),offset:z.number().int().min(0).default(0),limit:z.number().int().min(1).max(8000).default(8000),
-},async ({vm,action,filename,offset,limit})=>{
+},async ({vm,action,filename,offset,limit,language})=>{
   const python=process.env.RPA_HOST_PYTHON || 'python';
   const script=await resolveVmScript('shares.py');
   const args=action==='prepare'?{vm,action}:{vm,action,filename,offset,limit};
@@ -81,7 +83,7 @@ server.tool('vm_recording_share','Prepare host recording share (no overwriting e
     const child=execFile(python,[script],{timeout:90000},(error,stdout,stderr)=>{
       if(error)reject(new Error(stdout || stderr || error.message));else resolve(stdout);
     });child.stdin.end(JSON.stringify(args));
-  });return result(JSON.parse(output));
+  });return result({...JSON.parse(output),...manualRecordingNotice(language)});
 });
 async function transferAction(action,values) {
   const script=await resolveVmScript('transfers.py');
