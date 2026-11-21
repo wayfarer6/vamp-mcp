@@ -21,6 +21,20 @@ Use bounded waits for observable state changes. After each consequential action,
 
 When installation must run automatically, observe its result without manually starting the installer. Separate diagnostics from setup. On ambiguous state, capture targeted evidence and stop dependent input; use the repair skill for a failed saved RPA. Respect user pauses immediately and do not create snapshots unless requested.
 
+## Mark editable steps in GUI recordings
+
+Surround each reusable local block with paired standalone Python comments. Choose a stable ID that describes the action. Keep the entry and completion text in the step plan.
+
+```python
+# vamp-step: open-menu
+p.press('f2')
+# vamp-end: open-menu
+```
+
+Use `{"name":"open-menu","section":"open-menu","entry":"Operations desk","exit":"Inventory menu"}` in the plan. Moving the block or adding comments above it preserves its identity. Mark whole actions and include both the press and release of a held key. Use each section ID once and keep the blocks unnested. Pinned steps retain their original RPA ID, commit and step.
+
+For an existing saved recording, call `rpa_revision` with `action="annotate"`, its ID and expected commit. Supply a step plan with inclusive source lines and screen checks if one is missing. Show the returned source and plan to the user. On an authorized update, submit that exact pair and expected commit through `rpa_revision` with `action="update"` and `confirmed=true`. Review the new revision in RPA Library before replay. Keep any existing `# vamp-target` annotations on the click lines.
+
 ## Save reusable evidence
 
 Store locator intent, timing bounds, coordinate mapping, expected outcome and failure condition with the RPA. Return compact status and artifact paths. Export only targeted failure crops or OCR excerpts when needed. Exclude passwords, tokens and private session data from recordings and shared skills. Report completed_unverified distinctly from verified success.

@@ -24,6 +24,34 @@
 
 ---
 
+## GUI 녹화의 일부를 다른 RPA에서 재사용하기
+
+Python 소스에서 주석 한 쌍으로 편집할 단계의 시작과 끝을 표시하세요. **Block between step comments**를 선택하고 주석 ID를 입력하면, 앞에 설명이나 코드를 추가해 줄 번호가 밀려도 같은 구간을 찾습니다.
+
+```python
+# vamp-step: open-menu
+p.press('f2')
+# vamp-end: open-menu
+```
+
+기존 녹화는 에이전트에 “`rpa_revision`의 `annotate`로 단계 주석 초안을 보여줘”라고 요청하세요. 변경된 소스와 단계 구성을 확인한 뒤 적용하고, 새 버전을 검토하면 됩니다.
+
+**RPA Library**에서 Python 녹화를 선택하고 **Create GUI RPA → Reusable steps → Add step**을 누르세요. 단계 이름, 가져올 첫 줄과 마지막 줄, 실행 전후 화면에 각각 한 번 보이는 문구를 지정합니다. 검토·저장한 뒤, 다른 RPA에서는 **Step from a reviewed revision**으로 그 단계를 고르고 필요한 로컬 단계만 이어 붙일 수 있습니다. 원본 Git 커밋과 조합된 동작이 새 RPA에 저장됩니다.
+
+```mermaid
+flowchart LR
+  A["검토한 버전의 메뉴 진입 단계"] --> B["재고 메뉴 확인"]
+  B --> C["창고 보고서 단계"]
+  B --> D["공장 보고서 단계"]
+  D --> E{"생산 현황 문구 확인?"}
+  E -->|성공| F["체크포인트 기록"]
+  E -->|실패| G["중단 후 처리 결과 확인"]
+  G --> H["보고서 단계 수정·검토"]
+  H --> I["진입 화면 재검사 후 보고서 재개"]
+```
+
+소스 미리보기에서 스크립트를 고르고 **Edit**를 누르면 해당 파일이 VS Code 편집기에 열립니다. 저장된 스킬은 **Edit details and steps**에서 수정본을 검토하고 새 버전으로 저장하세요. 실패 후에는 어느 단계까지 통과했는지와 저장·전송이 이미 처리됐는지 확인하세요. MCP 재개 시 기존 대상 VM·입력·실행 승인과 함께 검토한 `expected_commit`, 시작할 `from_step`, 처리 결과를 확인했다는 `effects_reconciled: true`를 보냅니다. VAMP가 현재 진입 화면을 다시 검사한 뒤에만 입력을 보냅니다. [한국어 데모](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-ko.mp4) · [자막](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-ko.srt)
+
 ## 30초 만에 보는 VAMP
 
 **“월말 창고 결산 해줘”로 실행해 보세요.** Codex가 검토된 GUI RPA를 찾으면 LibreOffice Calc가 가상 품목 네 개의 결산 엑셀을 만듭니다. 데모에서는 파일을 다시 열고 수식 24개와 기말 재고 금액을 확인합니다. [한국어 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-workflow-ko.mp4) · [실습·등록 방법](examples/warehouse-close/README.md) · [완성된 엑셀](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-11.xlsx)

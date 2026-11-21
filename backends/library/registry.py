@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 import uuid
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
 from recording_converter import parse_recording
+from backends.library.steps import annotate_sections, compile_plan
 
 
 def git(folder,*args,check=True):
@@ -19,6 +20,34 @@ def git(folder,*args,check=True):
     except FileNotFoundError:raise ValueError('Git is required for per-RPA version history. Install Git and try again') from None
     if check and p.returncode:raise ValueError('RPA Git operation failed: '+p.stderr.strip()[:300])
     return p.stdout.strip()
+
+
+def windows_catalog_access(folder, created):
+    # On Windows, mode 0700 can grant OWNER RIGHTS on descendants. Elevated
+    # Git creates new index/ref files owned by Administrators; an ordinary
+    # VS Code process for the same user then loses access to those files.
+    if os.name != 'nt':
+        return
+    script = """
+$ErrorActionPreference = 'Stop'
+$dir = $env:VAMP_SAVE_FOLDER
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User
+$acl = Get-Acl -LiteralPath $dir
+$owner = $acl.GetOwner([Security.Principal.SecurityIdentifier])
+if ($owner.Value -ne $sid.Value -and $env:VAMP_NEW_FOLDER -ne '1') { return }
+$inherit = [Security.AccessControl.InheritanceFlags]'ContainerInherit, ObjectInherit'
+$rights = [Security.AccessControl.FileSystemRights]::Modify
+foreach ($rule in $acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier])) {
+    if ($rule.IdentityReference -eq $sid -and $rule.AccessControlType -eq 'Allow' -and
+        ($rule.FileSystemRights -band $rights) -eq $rights -and
+        ($rule.InheritanceFlags -band $inherit) -eq $inherit) { return }
+}
+& icacls.exe $dir /grant ('*' + $sid.Value + ':(OI)(CI)M') /q
+exit $LASTEXITCODE
+"""
+    subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',script],
+                   env={**os.environ, 'VAMP_SAVE_FOLDER':str(folder),'VAMP_NEW_FOLDER':str(int(created))},
+                   capture_output=True, timeout=30, check=True)
 
 
 def validate_recording_request(request):
@@ -31,8 +60,14 @@ def validate_recording_request(request):
     source=Path(request['source_path']).resolve(strict=True)
     if source.suffix.lower()!='.py' or source.stat().st_size>5_000_000:raise ValueError('Choose a Python recorder script under 5 MB')
     raw=source.read_bytes();actions=parse_recording(raw.decode('utf-8-sig'),width,height)
+    if request.get('step_plan') is not None:
+        actions = compile_plan(request['step_plan'], actions, request['registry'], backend, [width, height], raw.decode('utf-8-sig'))
     names=request.get('inputs',[])
     if not isinstance(names,list) or len(names)>20 or any(not isinstance(n,str) or not re.fullmatch('[A-Za-z_][A-Za-z0-9_]{0,63}',n) for n in names):raise ValueError('Input names must contain only letters, digits and underscores')
+    if request.get('step_plan') is not None:
+        used = {name for a in actions for name in re.findall(r'\$\{([A-Za-z_][A-Za-z0-9_]*)\}', a.get('text', ''))}
+        if set(names) != used:
+            raise ValueError('Declare exactly the inputs used by the selected steps: ' + ', '.join(sorted(used)))
     for name in names:
         if not any('${'+name+'}' in a.get('text','') for a in actions):raise ValueError(f'Input {name} has no ${{{name}}} placeholder in the recorded text')
     if len(actions)>10000 or any(a.get('seconds',0)>60 or a.get('interval',0)>10 or a.get('presses',0)>1000 or a.get('clicks',0)>1000 for a in actions):raise ValueError('Split large recordings or long delays into smaller tasks')
@@ -48,6 +83,22 @@ def validate_revision(request):
         'inputs':names,'action_count':len(actions),'source_sha256':hashlib.sha256(raw).hexdigest(),
         'source_executed':False,'guest_verified':False,'committed':False,
     }
+
+
+def annotated_revision(request):
+    plan = request.get('step_plan')
+    if not plan:
+        raise ValueError('Define the local step ranges and screen checks first.')
+    _, _, backend, width, height, raw, original, _ = validate_recording_request(request)
+    source, updated = annotate_sections(raw.decode('utf-8-sig'), plan)
+    compiled = compile_plan(updated, parse_recording(source, width, height), request['registry'],
+                            backend, [width, height], source)
+    def semantics(actions):
+        return [{key: value for key, value in a.items() if key != 'line'} for a in actions]
+    if semantics(original) != semantics(compiled):
+        raise ValueError('Adding step comments would change the recorded actions.')
+    return {'status':'step_comments_preview', 'source':source, 'step_plan':updated,
+            'expected_commit':request['expected_commit'], 'committed':False, 'source_executed':False}
 
 
 @contextmanager
@@ -144,6 +195,7 @@ def test_revision(request):
 
 
 def register(root,request):
+    request = {'registry': str(root), **request}
     title,description,backend,width,height,raw,actions,names=validate_recording_request(request)
     source_hash=hashlib.sha256(raw).hexdigest()
     if request.get('verified_source_hash') and source_hash!=request['verified_source_hash']:
@@ -152,6 +204,8 @@ def register(root,request):
     git(root,'--version')
     identifier=str(uuid.UUID(request['id'])) if request.get('id') else str(uuid.uuid4())
     folder=root/identifier;previous=None
+    if folder.resolve().parent != root or folder.is_symlink():
+        raise ValueError('Use a catalog-owned RPA folder.')
     if request.get('id'):
         previous=json.loads((folder/'rpa.json').read_text(encoding='utf8'))
         if previous.get('format')!='vamp-saved-rpa':raise ValueError('Unknown editable definition')
@@ -161,11 +215,14 @@ def register(root,request):
     start_text = start_text.strip()
     if previous is None:folder.mkdir(mode=0o700)
     folder.chmod(0o700)
+    windows_catalog_access(folder, previous is None)
     lock=folder/'.rpa-save.lock'
     try:fd=os.open(lock,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
     except FileExistsError:raise ValueError('Another update is saving this RPA. Retry after it finishes') from None
     try:
         os.close(fd)
+        if previous:
+            git(folder,'status','--porcelain','--untracked-files=no')
         if request.get('expected_commit') and git(folder,'rev-parse','HEAD')!=request['expected_commit']:raise ValueError('RPA changed since it was read. Read the latest revision before repairing')
         if request.get('expected_commit') and git(folder,'status','--porcelain','--untracked-files=no'):
             raise ValueError('The RPA has uncommitted changes. Preserve them before repairing')
@@ -178,6 +235,10 @@ def register(root,request):
           'inputs':names,'backend':backend,'resolution':[width,height],'reviewed':request.get('reviewed') is True,
           'version':version,'entrypoints':[{'name':'run','file':'source.py'}],
           'source_sha256':source_hash,'action_count':len(actions),'source_executed':False}
+        if request.get('step_plan') is not None:
+            definition['step_plan'] = request['step_plan']
+        elif previous and previous.get('step_plan') and 'step_plan' not in request:
+            raise ValueError('Include the existing step plan when updating a composed workflow.')
         if start_text:
             definition['start_text'] = start_text
         encoded=(json.dumps(actions,ensure_ascii=False,indent=2)+'\n').encode();definition['actions_sha256']=hashlib.sha256(encoded).hexdigest()
@@ -237,8 +298,10 @@ def test_and_commit(root, request):
 if __name__=='__main__':
     try:
         request=json.load(sys.stdin)
-        root=request.pop('registry')
-        if request.pop('test_only',False):
+        root=request['registry']
+        if request.pop('annotate_only',False):
+            result=annotated_revision(request)
+        elif request.pop('test_only',False):
             result=test_and_commit(root,request) if request.get('commit_after_test') else test_revision(request)
         elif request.pop('validate_only',False):
             result=validate_revision(request)
