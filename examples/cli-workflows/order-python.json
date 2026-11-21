@@ -1,0 +1,23 @@
+{
+  "id": "f47ac10b-58cc-4372-a567-0e02b2c3d479",
+  "format": "vamp-cli-workflow",
+  "name": "Export a sample order",
+  "description": "Export one synthetic order to CSV.",
+  "when_to_use": "Export ORD-1042 or ORD-1043.",
+  "expected_result": "A new single-row CSV with the selected order.",
+  "tags": [
+    "order",
+    "csv"
+  ],
+  "inputs": [
+    "order_id",
+    "output_name"
+  ],
+  "runner": "python",
+  "output_input": "output_name",
+  "files": {
+    "main.py": "import csv, json, sys\nargs = json.load(sys.stdin)\norders = {\"ORD-1042\": 12, \"ORD-1043\": 24}\nwith open(args[\"output_name\"], \"x\", newline=\"\", encoding=\"utf8\") as f:\n    writer = csv.writer(f)\n    writer.writerow([\"order_id\", \"quantity\"])\n    writer.writerow([args[\"order_id\"], orders[args[\"order_id\"]]])\n",
+    "verify.py": "import csv, json, sys\nargs = json.load(sys.stdin)\nwith open(args[\"output_name\"], newline=\"\", encoding=\"utf8\") as f:\n    reader = csv.DictReader(f)\n    rows = list(reader)\nprint(json.dumps([\n    {\"name\": \"csv_header\", \"passed\": reader.fieldnames == [\"order_id\", \"quantity\"]},\n    {\"name\": \"row_count\", \"passed\": len(rows) == 1},\n    {\"name\": \"requested_order\", \"passed\": len(rows) == 1 and rows[0][\"order_id\"] == args[\"order_id\"]}\n]))\n",
+    "requirements.lock": ""
+  }
+}

@@ -40,12 +40,12 @@ VAMP VS Code 확장에서 VirtualBox 게스트를 열고 Debian 화면이 연결
 
 **동료에게는 검토한 워크플로를 공유할 수 있습니다.** GUI RPA의 특정 버전을 소스 ZIP으로 내보내면 동료도 코드와 입력 항목을 살펴보고 자기 기기의 호환 환경에서 자기 주문 번호로 재사용할 수 있습니다. 공유할 때는 비밀번호와 실제 주문 데이터를 제외하세요. 같은 작업을 할 때마다 대형 모델이 클릭 순서나 명령을 다시 계획하는 횟수가 줄어 반복 실행 비용을 아낄 수 있습니다.
 
-**현재 GUI RPA를 지원하며, CLI 워크플로는 설계 중입니다.** GUI RPA는 앱 화면에서 수행한 동작을 재생합니다. CLI 설계안은 검토한 명령줄 스크립트를 공유하고, 받는 사람이 자기 작업공간에서 해당 버전을 승인해 실행하는 흐름을 담고 있습니다. [GUI RPA 사용법](docs/WORKFLOWS.md) · [CLI 워크플로 설계안](docs/CLI_WORKFLOW_DESIGN.ko.md)
+**이 브랜치에서는 GUI 녹화와 함께 Python·Playwright 워크플로를 저장하고 실행할 수 있습니다.** RPA Library에서 주문 내보내기 예제를 가져와 내 VM에서 사용할 버전을 검토하세요. 이후 주문 번호만 바꿔 실행하면 생성된 CSV와 검증 결과를 확인할 수 있습니다. CLI 실행기는 VirtualBox·KVM·Hyper‑V의 Linux 게스트를 지원합니다. [GUI RPA 사용법](docs/WORKFLOWS.md) · [CLI 설치 및 주문 예제](docs/CLI_WORKFLOWS.md)
 
 ```mermaid
 flowchart TD
     A["대형 모델과 작업 절차·성공 조건 작성"] --> G["GUI RPA · 현재 지원"]
-    A --> C["CLI 워크플로 · 설계 단계"]
+    A --> C["Python 또는 Playwright 워크플로"]
     G --> L["내 기기에서 버전 검토·저장"]
     C --> L
     L --> M["내 소형 모델이 작업 ID와 입력값으로 호출"]

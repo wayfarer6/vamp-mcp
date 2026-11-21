@@ -1,6 +1,6 @@
 // Local-only inspection. Never return source, filenames or matched values to an AI.
 const crypto=require('node:crypto');
-const textTypes=new Set(['.py','.robot','.resource','.md','.json','.txt','.yaml','.yml','.toml']);
+const textTypes=new Set(['.py','.robot','.resource','.md','.json','.txt','.yaml','.yml','.toml','.cjs','.js','.lock']);
 const rules=[
  ['email',/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi],
  ['credential-assignment',/(?:password|passwd|pwd|secret|api[_-]?key|access[_-]?token|username|user_id|login_id|client_secret|비밀번호|아이디)\s*["']?\s*[:=]\s*["']?(\$\{[A-Za-z_][A-Za-z0-9_]*\}|[^\s"',;}]+)/gi],

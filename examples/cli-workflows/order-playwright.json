@@ -1,0 +1,23 @@
+{
+  "id": "cad30925-d895-4125-8fac-29e3d31871fc",
+  "format": "vamp-cli-workflow",
+  "name": "Export a sample order in the browser",
+  "description": "Export one synthetic order to CSV.",
+  "when_to_use": "Export ORD-1042 or ORD-1043.",
+  "expected_result": "A new single-row CSV with the selected order.",
+  "tags": [
+    "order",
+    "csv"
+  ],
+  "inputs": [
+    "order_id",
+    "output_name"
+  ],
+  "runner": "playwright",
+  "output_input": "output_name",
+  "files": {
+    "main.cjs": "const fs = require('node:fs/promises');\nconst {chromium} = require('playwright-core');\n(async () => {\n  const chunks = [];\n  for await (const chunk of process.stdin) chunks.push(chunk);\n  const input = JSON.parse(Buffer.concat(chunks));\n  const browser = await chromium.launch({executablePath:'/usr/bin/chromium'});\n  try {\n    const page = await browser.newPage();\n    await page.setContent('<label>Order<select><option>ORD-1042</option><option>ORD-1043</option></select></label><button>Export</button><output></output>');\n    await page.evaluate(() => {\n      document.querySelector('button').onclick = () => {\n        const id = document.querySelector('select').value;\n        const quantity = {'ORD-1042':12,'ORD-1043':24}[id];\n        document.querySelector('output').value = 'order_id,quantity\\n'+id+','+quantity+'\\n';\n      };\n    });\n    await page.getByLabel('Order').selectOption(input.order_id);\n    await page.getByText('Export',{exact:true}).click();\n    await fs.writeFile(input.output_name,await page.locator('output').textContent(),{flag:'wx'});\n  } finally { await browser.close(); }\n})().catch(error=>{console.error(error.message);process.exitCode=1;});\n",
+    "verify.py": "import csv, json, sys\nargs = json.load(sys.stdin)\nwith open(args[\"output_name\"], newline=\"\", encoding=\"utf8\") as f:\n    reader = csv.DictReader(f)\n    rows = list(reader)\nprint(json.dumps([\n    {\"name\": \"csv_header\", \"passed\": reader.fieldnames == [\"order_id\", \"quantity\"]},\n    {\"name\": \"row_count\", \"passed\": len(rows) == 1},\n    {\"name\": \"requested_order\", \"passed\": len(rows) == 1 and rows[0][\"order_id\"] == args[\"order_id\"]}\n]))\n",
+    "package-lock.json": "{\n  \"name\": \"vamp-local-orders\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"dependencies\": {\n        \"playwright-core\": \"1.56.1\"\n      }\n    },\n    \"node_modules/playwright-core\": {\n      \"version\": \"1.56.1\",\n      \"resolved\": \"https://registry.npmjs.org/playwright-core/-/playwright-core-1.56.1.tgz\",\n      \"integrity\": \"sha512-hutraynyn31F+Bifme+Ps9Vq59hKuUCz7H1kDOcBs+2oGguKkWTU50bBWrtz34OUWmIwpBTWDxaRPXrIXkgvmQ==\",\n      \"bin\": {\n        \"playwright-core\": \"cli.js\"\n      },\n      \"engines\": {\n        \"node\": \">=18\"\n      }\n    }\n  }\n}\n"
+  }
+}

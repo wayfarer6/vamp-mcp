@@ -38,12 +38,12 @@ Today, work with a large model to export an order from your ERP to CSV. Save the
 
 **You can share a reviewed workflow with a colleague.** Export a specific version of a GUI RPA as a source ZIP. Your colleague can inspect the code and inputs, then reuse it in a compatible environment on their device with their own order number. Leave passwords and real order data out of the package. Reusing the steps can lower model costs on repeat runs because a large model no longer has to plan each click or command anew.
 
-**GUI RPA is available today. CLI workflows are in the design stage.** GUI RPA replays actions in the application. The CLI proposal describes how to share a reviewed command-line script so a recipient can approve that version and run it in their own workspace. [GUI RPA guide](docs/WORKFLOWS.md) · [CLI workflow proposal (Korean)](docs/CLI_WORKFLOW_DESIGN.ko.md)
+**This branch adds saved Python and Playwright workflows alongside GUI recordings.** Open the RPA Library to import an order-export example, review its code for your VM and run it with a different order number. The CLI worker supports Linux guests on VirtualBox, KVM and Hyper-V. [GUI RPA guide](docs/WORKFLOWS.md) · [CLI setup and order example](docs/CLI_WORKFLOWS.md)
 
 ```mermaid
 flowchart TD
     A["Define steps and success checks with a large model"] --> G["GUI RPA · available today"]
-    A --> C["CLI workflow · proposed"]
+    A --> C["Python or Playwright workflow"]
     G --> L["Review and save a version on your device"]
     C --> L
     L --> M["Your small model calls it with its ID and inputs"]
