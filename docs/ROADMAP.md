@@ -217,7 +217,7 @@ if ($LASTEXITCODE -eq 0) {
 }
 ```
 
-The request must contain the reviewed RPA ID and the target guest UUID. The MCP reports `completed_unverified` after dispatching the saved actions. Verify the fresh CSV independently with `python scenario.py verify-csv <path-to-fresh-orders.csv>` from the ERP checkout before recording a pass.
+The request must contain the reviewed RPA ID and the target guest UUID. Run `node scripts/demo_library.mjs read-source ./reviewed-v2-request.json` to retrieve the exact committed source and its review state through MCP. The replay reports `completed_unverified` after dispatching the saved actions. Verify the fresh CSV independently with `python scenario.py verify-csv <path-to-fresh-orders.csv>` from the ERP checkout before recording a pass.
 
 Save each synthetic ERP CSV to its designated shared download path. After verifying the order contents in both runs, the launcher compares the files byte for byte using SHA-256 and writes both hashes to `08-csv-comparison.json`. Different hashes fail the showcase.
 

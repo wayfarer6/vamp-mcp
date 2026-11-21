@@ -21,7 +21,7 @@ try {
   const repairActions = { '--validate': 'validate', '--test': 'test', '--commit': 'test-and-commit',
     '--test-expect-rejected': 'test' };
   const action = repairActions[mode];
-  if (step !== 'saved-replay' && (step !== 'repair' || !action))
+  if (step !== 'saved-replay' && step !== 'read-source' && (step !== 'repair' || !action))
     throw new Error('Select a saved replay or a repair mode.');
   if (!process.env.VAMP_RPA_REGISTRY) throw new Error('Set VAMP_RPA_REGISTRY to the reviewed demo catalog.');
   const installedCli = process.env.VAMP_DEMO_MCP_CLI;
@@ -42,10 +42,13 @@ try {
     return JSON.parse(result.content[0].text);
   };
   const definition = await call('rpa_details', { id });
-  if (definition.backend !== 'virtualbox' || definition.reviewed !== true) {
+  if (definition.backend !== 'virtualbox' || (step !== 'read-source' && definition.reviewed !== true)) {
     throw new Error('Select a reviewed VirtualBox RPA from the demo catalog.');
   }
-  if (step === 'repair') {
+  if (step === 'read-source') {
+    const source = await call('rpa_revision', { id, action: 'read-source' });
+    console.log(JSON.stringify({ ...source, reviewed: definition.reviewed }, null, 2));
+  } else if (step === 'repair') {
     const { source_file, expected_commit, scratch_vm, outcome_text, test_inputs, start_text } = request;
     if (typeof source_file !== 'string' || !/^[0-9a-f]{40}$/.test(expected_commit)) {
       throw new Error('Supply source_file and the exact expected_commit.');
