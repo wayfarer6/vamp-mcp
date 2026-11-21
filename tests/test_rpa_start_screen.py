@@ -44,6 +44,18 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(driver.events, [])
         self.assertTrue(driver.closed)
 
+    async def test_uac_replay_stops_if_guest_resizes_during_ocr(self):
+        driver = FixtureDriver()
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        with patch.object(driver, 'geometry', side_effect=[[1920, 1080], [1920, 1080], [1280, 720]]), \
+             patch('backends.library.replay.inspect_elevation_screen', return_value=None):
+            with self.assertRaises(ElevationHandoff) as blocked:
+                await replay(driver, actions, [1920, 1080], pause_on_uac=True)
+        self.assertEqual(blocked.exception.reason, 'screen_unverified')
+        self.assertEqual(blocked.exception.completed, 0)
+        self.assertEqual(driver.events, [])
+        self.assertTrue(driver.closed)
+
     async def test_kvm_saved_replay_waits_for_verified_uac_resume(self):
         await self.check_kvm_saved_uac_replay(wait_seconds=10)
 
