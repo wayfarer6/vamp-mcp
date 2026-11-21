@@ -1,0 +1,11 @@
+1
+00:00:00,000 --> 00:00:10,000
+This Debian desktop is running inside a VirtualBox guest created through the VAMP release.
+
+2
+00:00:10,000 --> 00:00:20,000
+In the installed extension, find the VM by name and select Start or View Screen.
+
+3
+00:00:20,000 --> 00:00:30,000
+Look for both the connection indicator and the guest desktop. Now let’s repeat the steps.

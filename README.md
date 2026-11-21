@@ -21,6 +21,8 @@
 
 ---
 
+[English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
+
 ## Ask your AI to install VAMP
 
 In Claude Code or Codex with terminal access to your Windows PC, paste this request:
