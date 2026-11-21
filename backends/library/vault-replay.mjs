@@ -26,7 +26,7 @@ export async function remoteReplayEndpoint(directory = `/run/user/${process.getu
   } catch { return null; }
 }
 
-export async function runWithVault(python,script,request,{ socketPath,token,timeoutMs=610000 }={}) {
+export async function runWithVault(python,script,request,{ socketPath,token,timeoutMs=610000,auditContext }={}) {
   const unavailable={status:'approval_required',message:'The approved Vault replay bridge is unavailable.'};
   if (!socketPath || !token) return unavailable;
   let bridge;
@@ -61,7 +61,7 @@ export async function runWithVault(python,script,request,{ socketPath,token,time
         let delivered=false;
         if (expected && expected.action_index===message.action_index && expected.entry===message.entry && expected.field===message.field) {
           try {
-            delivered=(await bridge.request('deliver-credential',{...target,entry:expected.entry,field:expected.field})).status==='delivered';
+            delivered=(await bridge.request('deliver-credential',{...target,entry:expected.entry,field:expected.field,...(auditContext&&{auditContext})})).status==='delivered';
           } catch {}
         }
         if(delivered)next++;

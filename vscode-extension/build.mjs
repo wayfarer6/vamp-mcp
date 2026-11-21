@@ -91,6 +91,11 @@ const containerViewerBrowser=await build({metafile:true,entryPoints:[path.join(h
   outfile:path.join(here,'dist/webview/container_viewer.js'),bundle:true,platform:'browser',format:'esm',target:'es2022',minify:true});
 Object.assign(built.metafile.inputs,libraryServer.metafile.inputs,podmanServer.metafile.inputs,unifiedServer.metafile.inputs,remoteServer.metafile.inputs,remoteClient.metafile.inputs,libraryStore.metafile.inputs,viewerHost.metafile.inputs,viewerBrowser.metafile.inputs,browsableContainer.metafile.inputs,containerViewerHost.metafile.inputs,containerViewerBrowser.metafile.inputs);
 
+const auditSource=path.resolve(here,'../backends/common');
+await build({entryPoints:[path.join(auditSource,'audit-panel.cjs')],outfile:path.join(here,'dist/audit-panel.cjs'),bundle:true,platform:'node',format:'cjs',external:['vscode']});
+await copyFile(path.join(auditSource,'audit-panel.html'),path.join(here,'dist/audit-panel.html'));
+await build({entryPoints:[path.join(root,'backends/library/cli-runs.cjs')],outfile:path.join(here,'dist/cli_library.cjs'),bundle:true,platform:'node',format:'cjs',target:'node22'});
+for(const name of ['cli_worker.py','install_cli_worker.py'])await copyFile(path.join(root,'backends/library',name),path.join(runtime,'backends/library',name));
 // Preserve licenses of dependencies included by the bundler.
 const packages=new Map();
 for(const input of Object.keys(built.metafile.inputs)) {

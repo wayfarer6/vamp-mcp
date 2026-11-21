@@ -1,0 +1,47 @@
+1
+00:00:00,000 --> 00:00:02,929
+Open Audit log in the installed extension.
+
+2
+00:00:02,929 --> 00:00:06,786
+This list shows records written during a real test run.
+
+3
+00:00:06,786 --> 00:00:11,000
+You can see when a script ran and which agent requested it.
+
+4
+00:00:11,000 --> 00:00:16,824
+Enter Export a sample order as the script name and orders-qa as the agent.
+
+5
+00:00:16,824 --> 00:00:18,180
+Apply the filters.
+
+6
+00:00:18,180 --> 00:00:22,250
+You can also set a time range to narrow the search.
+
+7
+00:00:22,250 --> 00:00:23,819
+Open the verified row.
+
+8
+00:00:23,819 --> 00:00:28,599
+The same run ID connects the queued event to the verified result.
+
+9
+00:00:28,599 --> 00:00:34,500
+In this test we also checked the order number and quantity in the exported CSV.
+
+10
+00:00:34,500 --> 00:00:38,641
+Searching for a different agent returns an empty list.
+
+11
+00:00:38,641 --> 00:00:41,688
+Reset the filters to see the runs again.
+
+12
+00:00:41,688 --> 00:00:47,000
+An AI client can query these same records by time, script and agent.

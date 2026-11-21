@@ -34,6 +34,46 @@ VAMP VS Code 확장에서 VirtualBox 게스트를 열고 Debian 화면이 연결
 
 [한국어·영어 영상 모음](docs/VM_LAB.md)에서 30초 결과 데모, 설치와 AI 연결, 구조 소개, 실제 VM 생성과 게스트 화면 실습을 종류별로 볼 수 있습니다.
 
+Linux KVM에서 자동으로 남은 로그 두 줄을 열고, 호출 결과와 Vault 자격 증명 조회 기록을 해석하는 방법을 확인하세요. [감사 로그 영상 · 한국어 2:08](docs/media/vamp-audit-log-ko.mp4)
+
+VS Code에서 스크립트와 에이전트로 실행을 찾고, 한 실행의 대기·검증 완료 기록을 여는 과정입니다. [SQLite 감사 화면 실습 · 한국어, 1:00](docs/media/vamp-sqlite-audit-ko.mp4) · [GUI·CLI 라이브러리 분리 설계안](docs/WORKFLOW_LIBRARY_DESIGN.md)
+
+## 오늘 만든 자동화를, 내일은 주문 번호만 바꿔 쓰세요
+
+오늘은 대형 모델과 함께 ERP에서 주문을 CSV로 내보내는 절차를 만들고, 결과 파일에 요청한 주문 번호가 들어 있는지 확인하는 방법까지 저장합니다. 내일은 소형 모델에 **“주문 1042도 같은 방식으로 내보내 줘”**라고 요청하세요. 소형 모델이 RPA Library에서 작업을 찾아 MCP로 새 주문 번호를 전달하면, VAMP가 내 기기에서 절차를 실행하고 CSV를 확인합니다.
+
+**동료에게는 검토한 워크플로를 공유할 수 있습니다.** GUI RPA의 특정 버전을 소스 ZIP으로 내보내면 동료도 코드와 입력 항목을 살펴보고 자기 기기의 호환 환경에서 자기 주문 번호로 재사용할 수 있습니다. 공유할 때는 비밀번호와 실제 주문 데이터를 제외하세요. 같은 작업을 할 때마다 대형 모델이 클릭 순서나 명령을 다시 계획하는 횟수가 줄어 반복 실행 비용을 아낄 수 있습니다.
+
+**VAMP 0.3.15에서는 GUI 녹화와 함께 Python·Playwright 워크플로를 저장하고 실행할 수 있습니다.** RPA Library에서 주문 내보내기 예제를 가져와 내 VM에서 사용할 버전을 검토하세요. 이후 주문 번호만 바꿔 실행하면 생성된 CSV와 검증 결과를 확인할 수 있습니다. CLI 실행기는 VirtualBox·KVM·Hyper‑V의 Linux 게스트를 지원합니다. [GUI RPA 사용법](docs/WORKFLOWS.md) · [CLI 설치 및 주문 예제](docs/CLI_WORKFLOWS.md)
+
+```mermaid
+flowchart TD
+    A["대형 모델과 작업 절차·성공 조건 작성"] --> G["GUI RPA · 현재 지원"]
+    A --> C["Python 또는 Playwright 워크플로"]
+    G --> L["내 기기에서 버전 검토·저장"]
+    C --> L
+    L --> M["내 소형 모델이 작업 ID와 입력값으로 호출"]
+    L --> P["검토한 버전 공유"]
+    P --> T["동료가 자기 기기에서 검토·설정"]
+    T --> N["동료의 소형 모델이 자기 입력값으로 호출"]
+    M --> R["각 기기의 VAMP가 실행하고 결과 검증"]
+    N --> R
+    R --> DB["현재 프로필의 SQLite 감사 기록"]
+    V["Vault 자격 증명 조회·전달 및 마운트"] --> DB
+    DB --> Q["MCP 조회 · 시간 / 스크립트 / 에이전트"]
+    DB --> U["VS Code 감사 화면 · 실행 상세"]
+```
+
+AI 서비스의 API 요금이 오르거나 서비스가 종료되어도, 실행 환경을 유지하고 MCP를 지원하는 다른 소형 모델을 연결하면 저장한 작업을 이어갈 수 있습니다. 스크립트를 어떻게 고치고 누구와 공유할지는 사용자가 결정합니다.
+
+**모델을 바꿔도, 만들어 둔 업무 절차는 내 기기에 남습니다.**
+
+## 어떤 에이전트가 어떤 스크립트를 실행했나요?
+
+**VAMP: Open Audit Log**를 열면 최근 24시간의 기록을 실행별로 볼 수 있습니다. 기간, 스크립트 이름·UUID, 에이전트 ID, 활동 종류를 조합해 조회하고 행을 선택해 개별 사건을 확인하세요. 한 화면의 시간 입력은 현지 시간이며 MCP는 시간대가 포함된 ISO 시각을 받습니다.
+
+AI에게 “오늘 오전 9시부터 10시까지 `orders-agent`가 주문 내보내기 스크립트를 실행한 기록과 검증 결과를 찾아줘”라고 요청하세요. 모델은 `audit_search`로 찾고 `audit_run_details`로 상세를 엽니다. 같은 에이전트를 재시작 후에도 추적하려면 전용 MCP 서버의 환경 변수 `VAMP_AGENT_ID=orders-agent`를 지정하세요. 별도 설정이 없으면 MCP 서버 프로세스에 세션 ID를 자동 부여합니다. [SQLite 위치·프로필·조회 예제](docs/AUDIT_LOG.md)
+
 ### 녹화한 버튼을 클릭 전에 확인하기
 
 녹화를 저장할 때 클릭한 버튼의 글자 또는 YOLO 전용 클래스 이름을 입력하세요. 재생할 때는 매 클릭 직전에 게스트 화면을 확인하며, 기본 인식 점수는 90%입니다. **RPA Library → Recorded click verification**에서 1~100%로 바꾸거나 검사를 끌 수 있습니다. AI에게 “이번 실행만 95%로 해줘”라고 해도 됩니다. [인식 실패 시 동작과 MCP 사용 예](docs/RECORDED_CLICKS.md)
@@ -99,24 +139,7 @@ WSL2 원격 MCP 설치·사용 영상 ([English](https://github.com/wayfarer6/va
 
 ## 💡 왜 VAMP인가요?
 
-화면을 직접 보고 컴퓨터를 조작하는 AI 에이전트(Computer-Using Agent, CUA)는 강력하지만, 실제 환경에서는 두 가지 치명적인 한계에 부딪힙니다:
-
-1. **반복되는 화면 분석**. 화면 기반 에이전트는 다음 동작을 결정할 때 새 화면을 비전 모델에 보낼 수 있습니다. 같은 작업을 반복하면 모델 호출도 반복될 수 있습니다.
-2. **실제 환경의 벽**: 헤드리스 브라우저나 도커(Docker) 컨테이너는 윈도우 네이티브 프로그램, 기업용 ERP, 공공 포털, 안티 매크로/보안 모듈, 하드웨어 토큰 검증 앞에서 무력하게 차단됩니다.
-
-**VAMP는 이 문제를 단순하고 확실한 루프로 해결합니다:**
-
-```
-[1. 최초 1회 녹화]      사람이나 CUA가 깨끗한 가상머신(VM)에서 작업을 1회 수행합니다.
-        │
-[2. RPA 패키지화]       VAMP가 이를 검증된 결정론적 Robot Framework / Python 스크립트로 묶습니다.
-        │
-[3. Universal SSH]      에이전트는 화면 좌표를 다시 찍을 필요 없이, SSH로 매개변수만 넘겨 실행합니다.
-        │
-[4. 무토큰 로컬 검증]   VM 내부의 로컬 YOLO & OCR 데몬이 성공 여부를 검증하고 요약 결과만 LLM에 반환합니다.
-```
-
-**실행(로컬 RPA)**과 **시각 판단(멀티모달 LLM)**을 분리함으로써, VAMP는 반복 작업에서 무거운 화면 캡처 전송을 원천 회피하고 완벽한 하드웨어 가상화(VT-x) 격리 환경에서 가벼운 텍스트 요약만 주고받습니다. (화면은 검증 실패나 예외 상황에서만 로컬 비전 데몬으로 최소한만 확인합니다.)
+ERP에서 매일 주문을 내보낼 때 바뀌는 것은 주문 번호입니다. VAMP는 검토한 작업과 결과 확인 절차를 내 기기에 저장합니다. 다음 실행에서는 MCP를 지원하는 모델에 새 주문 번호만 건네면 됩니다. GUI 작업은 게스트 화면에서 버튼을 확인하고, CLI 작업은 연결한 Linux 게스트 안에서 스크립트를 실행합니다. 화면을 매번 외부 비전 API로 보내는 호출을 줄일 수 있고, 저장한 절차는 팀원과 공유할 수 있습니다.
 
 ---
 
@@ -140,27 +163,15 @@ WSL2 원격 MCP 설치·사용 영상 ([English](https://github.com/wayfarer6/va
 
 ## ⚡ 핵심 아키텍처 & 기능
 
-### 1. 🌐 Universal SSH 단일 제어 플레인
-게스트 OS에 따라 제어 방식을 바꿀 필요가 없습니다. Packer 빌드 시점에 게스트 환경을 통일합니다:
-- **Windows 11**: OpenSSH Server 기능 자동 활성화, 22번 방화벽 오픈, **기본 셸을 PowerShell로 지정**.
-- **Debian**: `openssh-server` 자동 설치 및 활성화, 샌드박스 계정 NOPASSWD `sudo` 구성.
-- **효과**: AI 에이전트는 운영체제에 구애받지 않고 **단 하나의 표준 SSH 파이프**로 게스트를 완벽히 제어합니다.
+### 게스트 제어와 VM 관리
 
-### 2. 🎛️ Packer와 Vagrant를 통한 가상화 계층 추상화
-VAMP는 **HashiCorp Packer**와 **Vagrant**를 결합하여 가상화 인프라 전반을 추상화함으로써, **다양한 하이퍼바이저와 게스트 OS를 단일 규격으로 지원**합니다:
-- **이미지 빌드 자동화 (Packer)**: Windows 11과 Debian의 무인 설치, 드라이버 주입(VirtIO / Guest Additions), OpenSSH 서버 구성을 표준 골든 이미지(`.box` / OVA / QCOW2)로 완전 자동화합니다.
-- **수명주기 통합 제어 (Vagrant & DesktopAdapter)**: 가상머신 생성, 기동, 스냅샷, 정지를 `DesktopAdapter` 공통 인터페이스로 제어합니다. 플랫폼 환경에 맞춰 **VirtualBox, KVM(libvirt/QEMU), Hyper-V** 등 최적의 프로바이더와 플러그인을 자동으로 판별해 연동합니다.
-- **하이퍼바이저 종속성 제거**: 어떤 호스트 OS나 가상화 엔진을 쓰더라도, AI 에이전트는 동일한 MCP 도구와 표준 SSH 통로를 통해 일관되게 VM을 다룰 수 있습니다.
+VirtualBox, KVM, Hyper-V는 VM 생성·관리 백엔드입니다. 게스트 화면의 GUI 녹화 재생은 VirtualBox와 로컬 VNC를 제공하는 KVM에서 지원합니다. Hyper-V에서는 VMConnect로 화면을 열 수 있습니다. Python·Playwright CLI 워크플로는 세 백엔드의 Linux 게스트 모두에서 검토한 버전을 SSH로 전달해 rootless Podman 안에서 실행합니다. [CLI 게스트 준비와 예제](docs/CLI_WORKFLOWS.md)
 
-### 3. 🚀 비전 데몬 백그라운드 사전 예열 (Cold-Start 해소)
-VAMP MCP는 시작할 때 기본 OmniParser YOLO 아이콘 가중치를 백그라운드에서 준비합니다. SHA-256을 검증하고 사용자 캐시를 재사용합니다. 설정된 OCR·YOLO 워커 예열은 MCP 연결을 기다리게 하지 않습니다. [모델 설정과 사용자 가중치 지정](docs/USER_GUIDE.md#호스트-paddleocr-준비)
+### 화면 검증과 Vault
 
-### 4. 🔐 제로 트러스트 자격증명 금고 (`vamp-vault`)
-- **KeePassXC** (`.kdbx`) 및 **VeraCrypt** (`.vhd`) 기반의 강력한 암호화 볼트.
-- Vault가 CLI에 암호를 제공할 때는 명령 인자 대신 표준 입력(`stdin`)을 사용합니다.
-- **호스트별 엄격한 격리**: 원격 서버는 각자의 로컬 볼트를 독립적으로 소유하며, 호스트 간 자격증명을 절대 공유하거나 동기화하지 않습니다.
+GUI 재생을 실행하는 호스트의 OCR·YOLO 워커가 게스트 화면을 분석합니다. VAMP Vault는 별도 MCP 서버이며 사용자 승인과 KeePassXC 항목의 볼륨 파일 연결을 확인합니다. Windows의 관리형 마운트는 저장한 키를 WSL VeraCrypt CLI의 표준입력으로 전달합니다. 최초 설정과 Vault 잠금 해제 후에는 승인된 마운트마다 볼륨 키를 다시 입력할 필요가 없습니다. [화면 검증](docs/RECORDED_CLICKS.md) · [Vault 설정](vscode-vault-extension/README.md)
 
-### 5. 📦 게스트 초기 설정
+### 📦 게스트 초기 설정
 
 VirtualBox는 빌드 NAT에서 사후 설정 파일을 받습니다. Hyper-V의 Windows 게스트는 선택한 가상 스위치의 호스트 IPv4를 사용하고, Debian 게스트는 오프라인 응답 미디어로 설치한 뒤 고정 네트워크 프로필을 사용합니다. QEMU 기본 빌드 NAT의 호스트 주소는 `10.0.2.2`이며, 배포된 libvirt VM의 네트워크와는 별개입니다. [VM MCP 설정 및 오류 진단](docs/VM_MCP.md)
 
@@ -172,16 +183,7 @@ Hyper-V에서 Debian 골든 이미지를 만들기 전에 WinNAT를 구성한 �
 
 ### 1. VS Code 없이 MCP 사용
 
-Node.js 22+ 환경에서 [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)의 `vamp-mcp`와 선택 사항인 `vamp-mcp-vault` tarball을 내려받습니다. `RELEASE-SHA256SUMS`에서 SHA-256을 확인한 뒤 내려받은 파일을 설치합니다.
-
-```bash
-npm install -g ./vamp-mcp-0.3.13.tgz
-vamp-mcp setup
-# Vault를 사용할 때만
-npm install -g ./vamp-mcp-vault-0.1.15.tgz
-```
-
-클라이언트에 인자 없이 `vamp-mcp`를 **VAMP MCP**로, `vamp-mcp-vault`를 **VAMP Vault**로 등록합니다. 클라이언트가 명령을 찾지 못하면 설치된 전체 경로를 사용하세요. Podman이나 하이퍼바이저를 별도로 등록하지 않습니다. 자세한 내용은 [MCP 등록 가이드](docs/MCP_REGISTRATION.md)를 참고하세요.
+Node.js 22 이상을 준비하고 MCPB를 지원하는 클라이언트에서 VAMP 번들을 설치하세요. Vault도 쓸 경우 별도 Vault 번들을 추가합니다. Windows의 MCPB 실행에는 관리자 권한으로 시작한 호스트가 필요합니다. 수동으로 받을 때는 릴리즈의 `SHA256SUMS`와 파일 해시를 대조하세요. [VAMP MCP](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.wayfarer6%2Fvamp-mcp/versions/latest) · [Vault MCP](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.wayfarer6%2Fvamp-mcp-vault/versions/latest) · [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases)
 
 ### 2. VS Code 확장 사용
 
@@ -214,6 +216,8 @@ flowchart TD
             DB["KeePassXC KDBX · 자격 증명과 볼륨 소유 에이전트 ID"]
             VC["VeraCrypt"]
             Vault --> DB
+            Vault -->|승인된 Windows 마운트| WSL["WSL VeraCrypt CLI"]
+            WSL --> VC
             Vault --> VC
         end
         HTTP["Postinstall Script 서버 :8421"]
@@ -224,8 +228,22 @@ flowchart TD
         Agent <-->|MCP Stdio 프로토콜| MCP
         Agent <-->|MCP stdio · 도구 호출과 결과| Vault
         MCP --> HTTP
-        MCP --> RPA
-        RPA -->|키보드·마우스 입력| Desktop
+        UI["VS Code · RPA Library"]
+        Catalog["검토한 워크플로와 클릭 설정"]
+        CLI["CLI 실행기 · SSH"]
+        Audit["프로필별 SQLite 감사 기록"]
+        MCP --> Catalog
+        UI --> Catalog
+        Catalog --> RPA
+        Catalog --> CLI
+        RPA --> Audit
+        CLI --> Audit
+        Vault --> Audit
+        Audit --> Query["MCP 감사 조회 · VS Code 감사 화면"]
+        RPA -->|검증을 켠 녹화 클릭| Guard{"기준 점수 이상인 대상이 하나이고 포인터 이동 후에도 안정적인가?"}
+        Guard -->|통과| Desktop
+        Guard -->|입력 중단| Audit
+        RPA -->|키보드 또는 검사를 끈 클릭| Desktop
         Desktop -->|캡처한 화면| RPA
         RPA -->|분석할 이미지| Vision
         Vision -->|탐지 영역·텍스트| RPA
@@ -242,6 +260,7 @@ flowchart TD
 
     VM["격리된 VM 데스크톱"]
     Container["격리된 데스크톱 컨테이너"]
+    CLI --> GuestJob["Linux 게스트 · rootless Podman · 스크립트와 결과 검사"]
     Disk["할당된 VeraCrypt 볼륨"]
     VC --> Disk
     Disk -->|보조 디스크| VM
@@ -263,6 +282,27 @@ VAMP Vault MCP를 각각 호출합니다. 사용자 승인 후 `vault_deliver_cr
 지정된 수신기에 값을 직접 전달하고 MCP 호출에는 전달 결과를 반환합니다.
 
 ---
+
+### 화면을 확인한 순간과 클릭하는 순간이 다를 때 (TOCTOU)
+
+ERP에서 **저장** 버튼을 정확히 읽었어도, 마우스를 그쪽으로 옮기는 동안 도움말이 버튼을 덮거나 목록이 갱신될 수 있습니다. 예전 좌표로 클릭하면 다른 주문을 선택할 수 있습니다. 이처럼 **확인한 시점**(time of check)과 **실제 사용하는 시점**(time of use) 사이에 상태가 바뀌는 문제를 TOCTOU라고 합니다. 인식 점수 99%는 첫 화면을 읽은 모델의 점수입니다. 다음 순간의 화면까지 보장하지는 않습니다. [TOCTOU 정의](https://cwe.mitre.org/data/definitions/367.html)
+
+1. **첫 화면에서 대상을 찾습니다.** 검토한 녹화의 OCR 글자 또는 YOLO 전용 클래스와 맞는 후보가 하나인지, 점수가 기준(기본 90%) 이상인지, 녹화 위치와 가까운지 확인합니다.
+2. **포인터를 옮긴 뒤 다시 캡처합니다.** 같은 해상도에서 버튼과 클릭 위치 주변의 픽셀을 첫 화면과 비교합니다. 영역이 그대로일 때만 버튼을 누릅니다. 연속 클릭도 누를 때마다 확인합니다.
+3. **화면이 바뀌면 클릭을 보류합니다.** 대상 누락·낮은 점수·호버 후 영역 변화는 새 화면으로 한 번 더 검사합니다. 두 번째에도 실패하거나 같은 후보가 여러 개이면 이후 입력을 멈춥니다. 사용자가 좌표 재생을 명시적으로 선택하면 이 시각 검사를 건너뜁니다.
+
+두 번째 캡처와 입력 전송 사이에도 짧은 간격이 있고, 똑같이 보이는 버튼이 다른 주문을 가리킬 수 있습니다. 주문 내보내기의 성공 조건은 **클릭 후 새 CSV에 요청한 주문 번호가 있는지**처럼 별도로 확인하세요. [클릭 검사 구현](backends/library/click_guard.py) · [호버 예외 설계안](docs/HOVER_TARGETS.md)
+
+### 프로젝트 코드 위치
+
+| 기능 | 찾아갈 곳 |
+| --- | --- |
+| 녹화와 변환 | [vamp-recorder.py](guest_setup/recorder/vamp-recorder.py) · [recording_converter.py](recording_converter.py) |
+| GUI 재생과 클릭 검증 | [replay.py](backends/library/replay.py) · [click_guard.py](backends/library/click_guard.py) |
+| CLI 워크플로와 실행 | [cli-catalog.cjs](backends/library/cli-catalog.cjs) · [cli-runs.cjs](backends/library/cli-runs.cjs) |
+| 감사 저장 및 화면 | [audit.cjs](backends/common/audit.cjs) · [audit-panel.cjs](backends/common/audit-panel.cjs) |
+| Vault MCP와 마운트 | [server.mjs](vscode-vault-extension/backends/vault/server.mjs) · [vault_cli.mjs](vscode-vault-extension/src/vault_cli.mjs) |
+| VS Code와 MCP 배포 | [vscode-extension](vscode-extension) · [registry](registry) |
 
 ## 🌐 커뮤니티 스크립트 허브
 

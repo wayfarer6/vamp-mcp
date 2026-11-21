@@ -7,13 +7,13 @@
     "url": "https://github.com/wayfarer6/vamp-mcp",
     "source": "github"
   },
-  "version": "0.3.14",
+  "version": "0.3.15",
   "packages": [
     {
       "registryType": "mcpb",
-      "identifier": "https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.14/vamp-mcp-0.3.14.mcpb",
-      "version": "0.3.14",
-      "fileSha256": "651217da82c051f98c580265ac95aa39b2383b406357f8c764d6152d49f60425",
+      "identifier": "https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.15/vamp-mcp-0.3.15.mcpb",
+      "version": "0.3.15",
+      "fileSha256": "c026e3b0c64e2fc37019d709eea6bfda32d57d96ec3c4ef5acff7cb8b0e5fea2",
       "transport": {
         "type": "stdio"
       }

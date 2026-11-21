@@ -19,6 +19,7 @@ async function load(relative,overrides={}){
    else if(spec==='node:os')exports={default:{homedir:()=>'/mock'}};
    else if(spec.endsWith('/mcp.js'))exports={McpServer};else if(spec.endsWith('/stdio.js'))exports={StdioServerTransport:class{constructor(){unexpected();}}};
    else if(spec.includes('/zod/'))exports={z:schema};
+   else if(spec.endsWith('/audit.cjs'))exports={default:require('../common/audit.cjs')};
    else if(spec.endsWith('packer.cjs'))exports={default:{packer:()=>unexpected}};
    else if(spec.endsWith('/hyperv/uac.cjs'))exports={default:{createHyperVUac:()=>({request:unexpected})}};
    else if(spec.endsWith('vision-preload.cjs'))exports={default:{ensureVisionServices:unexpected}};

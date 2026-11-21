@@ -32,6 +32,46 @@ From the VAMP VS Code extension, open a VirtualBox guest and verify that its Deb
 
 [English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
 
+See which Linux KVM calls were recorded automatically, how to read the two outcomes, and what a Vault credential lookup proves. [Audit log video · English, 1:51](docs/media/vamp-audit-log-en.mp4)
+
+Find a saved run by script and agent, then open its queued and verified events in VS Code. [SQLite audit walkthrough · English, 0:47](docs/media/vamp-sqlite-audit-en.mp4) · [GUI and CLI library design proposal](docs/WORKFLOW_LIBRARY_DESIGN.md)
+
+## Build the automation today. Tomorrow, just change the order number.
+
+Today, work with a large model to export an order from your ERP to CSV. Save the steps along with a check that the new file contains the requested order number. Tomorrow, ask a smaller model to **“export order 1042 the same way.”** It finds the workflow in the RPA Library and passes the new order number through MCP. VAMP runs the saved steps on your device and checks the CSV.
+
+**You can share a reviewed workflow with a colleague.** Export a specific version of a GUI RPA as a source ZIP. Your colleague can inspect the code and inputs, then reuse it in a compatible environment on their device with their own order number. Leave passwords and real order data out of the package. Reusing the steps can lower model costs on repeat runs because a large model no longer has to plan each click or command anew.
+
+**VAMP 0.3.15 includes saved Python and Playwright workflows alongside GUI recordings.** Open the RPA Library to import an order-export example, review its code for your VM and run it with a different order number. The CLI worker supports Linux guests on VirtualBox, KVM and Hyper-V. [GUI RPA guide](docs/WORKFLOWS.md) · [CLI setup and order example](docs/CLI_WORKFLOWS.md)
+
+```mermaid
+flowchart TD
+    A["Define steps and success checks with a large model"] --> G["GUI RPA · available today"]
+    A --> C["Python or Playwright workflow"]
+    G --> L["Review and save a version on your device"]
+    C --> L
+    L --> M["Your small model calls it with its ID and inputs"]
+    L --> P["Share a reviewed version"]
+    P --> T["Colleague reviews and sets it up on their device"]
+    T --> N["Their small model calls it with their own inputs"]
+    M --> R["VAMP runs and verifies the task on each device"]
+    N --> R
+    R --> DB["SQLite audit log for this profile"]
+    V["Vault credential use and volume mounts"] --> DB
+    DB --> Q["MCP search by time, script or agent"]
+    DB --> U["VS Code audit log and run details"]
+```
+
+If an AI provider raises its API prices or discontinues its service, you can keep using the saved workflow by maintaining its execution environment and connecting another small model that supports MCP. You decide how to edit the script and whom to share it with.
+
+**Even if you switch models, the workflows you’ve built stay on your device.**
+
+## Which agent ran a script?
+
+**VAMP: Open Audit Log** shows the latest matching event per run over the last 24 hours. Combine a local time range, script name or UUID, agent ID and activity type. Select a row to open its timeline.
+
+Ask your AI to “Find runs of the order export script by `orders-agent` between 9 and 10 this morning and show their verification results.” It can use `audit_search` and `audit_run_details`. For a stable ID across restarts, set `VAMP_AGENT_ID=orders-agent` on that agent’s dedicated MCP server. Otherwise the server automatically assigns a process-session ID. [SQLite location, profiles and query examples](docs/AUDIT_LOG.md)
+
 ### Verify a recorded click
 
 When saving a recording, enter the text on each button or its specific YOLO class. Replay checks the guest before each press. The default minimum score is 90%. In **RPA Library → Recorded click verification**, set 1–100% or turn verification off. You can also tell your agent “Use 95% for this run only.” [Recognition, fallback and MCP examples](docs/RECORDED_CLICKS.md)
@@ -102,24 +142,7 @@ Watch the [Windows VirtualBox Notepad verification in English](https://github.co
 
 ## 💡 Why VAMP?
 
-Computer-Using AI agents (CUA) are powerful, but they suffer from two fundamental problems in the real world:
-
-1. **Repeated screen analysis**. A screenshot-driven agent may send new frames to a vision model as it makes decisions. Repeating the same workflow can incur the same model calls again.
-2. **The Environment Wall**: Headless browsers and lightweight Docker containers fall flat when faced with native Windows desktop applications, enterprise ERPs, government portals, anti-bot software, and hardware security token checks.
-
-**VAMP introduces an elegant, token-efficient paradigm:**
-
-```
-[1. Record Once]        Human or CUA performs the task once on a clean VM.
-       │
-[2. Package as RPA]     VAMP converts the action into a deterministic Robot/Python script.
-       │
-[3. Universal SSH]      AI agents trigger the script over a unified SSH pipe with parameters.
-       │
-[4. Zero-Token Check]   Local YOLO & OCR daemons verify success inside the VM without streaming frames to the LLM.
-```
-
-By decoupling **execution logic** from **visual reasoning**, VAMP avoids expensive multimodal roundtrips entirely for routine workflows, running deterministic RPA inside full hardware virtual machines (VT-x) and inspecting screens with local vision models only when verification or error handling is strictly needed.
+When you export an ERP order every day, the order number changes but the steps often stay the same. Keep the reviewed workflow and its outcome check on your own machine. On the next run, give an MCP-capable model the new order number. GUI replay checks buttons on the guest screen. CLI workflows run their scripts inside a bound Linux guest. Reusing the steps can reduce repeated vision API calls and lets colleagues run the same workflow with their own inputs.
 
 ---
 
@@ -143,27 +166,15 @@ In a separate matched comparison with three runs per method and layout, VAMP sav
 
 ## ⚡ Core Architecture & Highlights
 
-### 1. 🌐 Universal SSH Control Plane
-Forget OS-dependent orchestration. During Packer automated builds, VAMP automatically configures:
-- **Windows 11**: OpenSSH Server capability enabled, automatic service startup, port 22 firewall rule, and **PowerShell configured as the default shell**.
-- **Debian**: `openssh-server` preseeded, auto-enabled, and passwordless `sudo` set up for sandbox users.
-- **Result**: AI agents interact with all guests through a **single, standardized SSH pipe**.
+### Guest control and VM management
 
-### 2. 🎛️ Virtualization Abstraction via Packer & Vagrant
-VAMP abstracts the entire virtualization stack using **HashiCorp Packer** and **Vagrant**, enabling seamless support across diverse hypervisors and guest OSes:
-- **Automated Image Provisioning (Packer)**: Builds clean, standardized golden images (`.box` / OVA / QCOW2) across **Windows 11 and Debian** with zero human intervention. Automatically injects guest drivers (VirtIO / Guest Additions) and provisions OpenSSH.
-- **Unified Runtime Lifecycle (Vagrant & DesktopAdapter)**: Wraps VM creation, boot, snapshots, and networking behind a common interface. Automatically resolves the optimal provider and plugins across **VirtualBox, KVM (libvirt/QEMU), and Hyper-V**.
-- **Zero Hypervisor Boilerplate**: AI agents and developers interact with the exact same MCP tools and SSH pipelines regardless of the host OS or underlying hypervisor engine.
+VirtualBox, KVM and Hyper-V provide VM lifecycle operations. Saved GUI replay supports VirtualBox and KVM with local VNC. On Hyper-V, open the guest console with VMConnect. Python and Playwright CLI workflows support Linux guests on all three backends. The runner sends the reviewed version over SSH and runs it in rootless Podman inside the bound guest. [CLI guest setup and examples](docs/CLI_WORKFLOWS.md)
 
-### 3. 🚀 Instant Vision Preload (Zero Cold-Start)
-VAMP MCP prepares its default OmniParser YOLO icon weights in the background at startup, checks their SHA-256, and reuses the user cache. Configured OCR and YOLO workers warm up without delaying the MCP handshake. [Model setup and overrides](docs/USER_GUIDE.md#호스트-paddleocr-준비)
+### Screen verification and Vault
 
-### 4. 🔐 Zero-Trust Credential Isolation (`vamp-vault`)
-- Encrypted **KeePassXC** (`.kdbx`) and optional **VeraCrypt** (`.vhd`) volume storage.
-- Credentials are piped exclusively via `stdin` directly into target tools—**never passed via command-line arguments (`argv`)**, preventing `ps aux` process table inspection.
-- **Strict Per-Host Boundary**: Remote servers maintain their own independent vaults; credentials and master keys are never shared or synced between remote hosts.
+OCR and YOLO workers on the replay host analyze guest frames. VAMP Vault is a separate MCP server. For managed Windows mounts, it checks approval and the KeePassXC entry’s binding to the volume file, then sends the stored key to the WSL VeraCrypt CLI over stdin. After initial setup and Vault unlock, subsequent approved mounts can reuse the key. [Screen verification](docs/RECORDED_CLICKS.md) · [Vault setup](vscode-vault-extension/README.md)
 
-### 5. 📦 Guest bootstrapping
+### 📦 Guest bootstrapping
 
 VirtualBox fetches post-install resources over its build NAT. Hyper-V Windows uses the selected switch's host IPv4, while Hyper-V Debian reads offline answer media and uses a static network profile after installation. QEMU's default build NAT reaches the host at `10.0.2.2`, independently of the deployed libvirt network. [VM MCP setup and troubleshooting](docs/VM_MCP.md)
 
@@ -175,16 +186,7 @@ For a Debian golden image on Hyper-V, prepare a dedicated internal switch with W
 
 ### 1. Use MCP without VS Code
 
-With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases). Verify the tarball hashes against `RELEASE-SHA256SUMS`, then install the packages you downloaded.
-
-```bash
-npm install -g ./vamp-mcp-0.3.13.tgz
-vamp-mcp setup
-# Optional Vault
-npm install -g ./vamp-mcp-vault-0.1.15.tgz
-```
-
-Register **VAMP MCP** with command `vamp-mcp` and no arguments, and **VAMP Vault** with command `vamp-mcp-vault` and no arguments. If the client cannot resolve these commands, use their full installed paths. Do not add separate Podman or hypervisor registrations. See [MCP registration](docs/MCP_REGISTRATION.md).
+With Node.js 22 or later, install the VAMP bundle in an MCPB-compatible client. Add the separate Vault bundle if you use it. On Windows, the bundle requires an already elevated host. For manual downloads, verify the file against the release’s `SHA256SUMS`. [VAMP MCP](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.wayfarer6%2Fvamp-mcp/versions/latest) · [Vault MCP](https://registry.modelcontextprotocol.io/v0.1/servers/io.github.wayfarer6%2Fvamp-mcp-vault/versions/latest) · [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases)
 
 ### 2. Use the VS Code extensions
 
@@ -219,6 +221,8 @@ flowchart TD
             DB["KeePassXC KDBX · credentials and volume owner agent IDs"]
             VC["VeraCrypt"]
             Vault --> DB
+            Vault -->|Approved Windows mount| WSL["WSL VeraCrypt CLI"]
+            WSL --> VC
             Vault --> VC
         end
         HTTP["Postinstall Script Server :8421"]
@@ -229,8 +233,22 @@ flowchart TD
         Agent <-->|MCP Stdio Protocol| MCP
         Agent <-->|MCP stdio · tools and receipts| Vault
         MCP --> HTTP
-        MCP --> RPA
-        RPA -->|Keyboard and mouse| Desktop
+        UI["VS Code · RPA Library"]
+        Catalog["Reviewed workflows and click settings"]
+        CLI["CLI runner over SSH"]
+        Audit["Profile-scoped SQLite audit log"]
+        MCP --> Catalog
+        UI --> Catalog
+        Catalog --> RPA
+        Catalog --> CLI
+        RPA --> Audit
+        CLI --> Audit
+        Vault --> Audit
+        Audit --> Query["MCP audit queries and VS Code audit panel"]
+        RPA -->|Recorded press with verification enabled| Guard{"One target above threshold and stable after pointer move?"}
+        Guard -->|Yes| Desktop
+        Guard -->|Blocked| Audit
+        RPA -->|Keyboard or explicitly unchecked press| Desktop
         Desktop -->|Captured frames| RPA
         RPA -->|Selected images| Vision
         Vision -->|Detections and text| RPA
@@ -247,6 +265,7 @@ flowchart TD
 
     VM["Isolated VM desktop"]
     Container["Isolated desktop container"]
+    CLI --> GuestJob["Linux guest · rootless Podman · script and outcome check"]
     Disk["Assigned VeraCrypt volume"]
     VC --> Disk
     Disk -->|Secondary disk| VM
@@ -270,6 +289,27 @@ separately for credentials and encrypted volumes. After user approval,
 and returns a delivery receipt over MCP.
 
 ---
+
+### When the screen changes between checking and clicking (TOCTOU)
+
+An ERP’s **Save** button can be correctly recognized, then covered by a tooltip as the pointer moves. A list refresh can also put a different order at the same coordinates. This gap between observing state (**time of check**) and acting on it (**time of use**) creates a TOCTOU race. A 99% recognition score describes the first frame. The interface can still change before the press. [TOCTOU definition](https://cwe.mitre.org/data/definitions/367.html)
+
+1. **Identify the target on the first frame.** Require one matching reviewed OCR label or specific YOLO class, a score at or above the configured minimum (90% by default), and a location consistent with the recording.
+2. **Move the pointer and capture again.** Check the guest geometry and compare pixels around the target and click point. Press only if the region is stable. Repeat the check for each press in a multi-click action.
+3. **Hold the click when the target changes.** A missing target, low score or changed region gets one fresh attempt. A second failure stops later input. Duplicate matches stop immediately. Explicit coordinate-only replay skips this visual check.
+
+The final capture and input delivery are separate operations. Identical-looking buttons can also refer to different records. Give the workflow an independent outcome check, such as verifying that the newly exported CSV contains the requested order ID. [Click guard implementation](backends/library/click_guard.py) · [Proposed hover handling](docs/HOVER_TARGETS.md)
+
+### Where the code lives
+
+| Component | Source |
+| --- | --- |
+| Recording and conversion | [vamp-recorder.py](guest_setup/recorder/vamp-recorder.py) · [recording_converter.py](recording_converter.py) |
+| GUI replay and click checks | [replay.py](backends/library/replay.py) · [click_guard.py](backends/library/click_guard.py) |
+| CLI catalog and runs | [cli-catalog.cjs](backends/library/cli-catalog.cjs) · [cli-runs.cjs](backends/library/cli-runs.cjs) |
+| Audit storage and UI | [audit.cjs](backends/common/audit.cjs) · [audit-panel.cjs](backends/common/audit-panel.cjs) |
+| Vault MCP and mounting | [server.mjs](vscode-vault-extension/backends/vault/server.mjs) · [vault_cli.mjs](vscode-vault-extension/src/vault_cli.mjs) |
+| VS Code extensions and MCP distribution | [vscode-extension](vscode-extension) · [registry](registry) |
 
 ## 🌐 Community Script Hub
 

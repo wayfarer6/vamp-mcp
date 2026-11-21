@@ -1,0 +1,7 @@
+FROM docker.io/library/debian:trixie-slim
+RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends python3 chromium nodejs npm ca-certificates && rm -rf /var/lib/apt/lists/*
+WORKDIR /opt/vamp
+COPY order-playwright.json /tmp/example.json
+RUN node -e "const fs=require('fs'), lock=JSON.parse(require('/tmp/example.json').files['package-lock.json']); fs.writeFileSync('package-lock.json',JSON.stringify(lock)); fs.writeFileSync('package.json',JSON.stringify(lock.packages['']))" && npm ci --ignore-scripts --no-audit --no-fund && npm cache clean --force
+ENV NODE_PATH=/opt/vamp/node_modules
+USER 65534:65534

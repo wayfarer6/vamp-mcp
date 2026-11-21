@@ -18,6 +18,9 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(path.join(runtime, 'backends/vault'), { recursive: true });
 await mkdir(path.join(runtime, 'src'), { recursive: true });
 
+const auditSource=path.resolve(here,'../backends/common');
+await build({entryPoints:[path.join(auditSource,'audit-panel.cjs')],outfile:path.join(here,'dist/audit-panel.cjs'),bundle:true,platform:'node',format:'cjs',external:['vscode']});
+await copyFile(path.join(auditSource,'audit-panel.html'),path.join(here,'dist/audit-panel.html'));
 // The MCP server is bundled so the extension ships without node_modules.
 const built = await build({
   metafile: true,
