@@ -119,6 +119,7 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
                 const message=JSON.parse(line);
                 if (message.id===1) {
                   assert.ok(message.result?.serverInfo,JSON.stringify(message));
+                  if (vault || command==='unified') assert.equal(message.result.serverInfo.version,sourceManifest.version);
                   child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');
                   child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:2,method:'tools/list',params:{}})+'\n');
                 } else if (message.id===2) {clearTimeout(timer);resolve(message);}

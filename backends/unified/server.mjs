@@ -10,10 +10,11 @@ import {fileURLToPath,pathToFileURL} from 'node:url';
 import visionPreload from '../common/vision-preload.cjs';
 import windowsAdmin from '../common/windows-admin.cjs';
 import path from 'node:path';
+import packageManifest from '../../npm-package/package.json' with {type:'json'};
 export function createUnifiedServer({remote={},podman={}}={}){
   const instructions=[virtualBoxInstructions,libraryInstructions,podmanInstructions,remoteInstructions,
     'This is the single VAMP MCP server. VirtualBox VM tools retain vm_ names; remote backend tools use remote_ names. Podman manages existing containers, scoped workspace sessions and explicitly authorized local Debian VM builds. Vault remains a separate server. Startup preloads configured host vision models locally. Registration and initialization do not prepare or start hosts, guests, or container engines.'].join('\n\n');
-  const server=new McpServer({name:'VAMP MCP',version:'0.3.9'},{instructions});
+  const server=new McpServer({name:'VAMP MCP',version:packageManifest.version},{instructions});
   registerVirtualBoxTools(server);
   registerLibraryTools(server);
   registerPodmanTools(server,podman);

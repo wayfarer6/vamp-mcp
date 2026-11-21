@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/wayfarer6/vamp-mcp/actions/workflows/ci.yml"><img src="https://github.com/wayfarer6/vamp-mcp/actions/workflows/ci.yml/badge.svg?branch=main" alt="main 브랜치 CI 상태"></a>
   <a href="https://github.com/wayfarer6/vamp-mcp/releases"><img src="https://img.shields.io/github/v/release/wayfarer6/vamp-mcp?style=flat-square&color=8A2BE2" alt="최신 릴리즈"></a>
   <a href="https://www.npmjs.com/package/vamp-mcp"><img src="https://img.shields.io/npm/v/vamp-mcp?style=flat-square&label=vamp-mcp&color=CB3837" alt="npm vamp-mcp"></a>
   <a href="https://www.npmjs.com/package/vamp-mcp-vault"><img src="https://img.shields.io/npm/v/vamp-mcp-vault?style=flat-square&label=vamp-mcp-vault&color=CB3837" alt="npm vamp-mcp-vault"></a>
@@ -22,6 +23,14 @@
 </p>
 
 ---
+
+## 30초 만에 보는 VAMP
+
+VAMP VS Code 확장에서 VirtualBox 게스트를 열고 Debian 화면이 연결되는 과정을 보여 줍니다.
+
+[![데모 미리보기: VAMP에서 VirtualBox 게스트를 이름으로 열고 Debian 화면 연결을 확인](docs/media/vamp-demo-preview-ko.gif)](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-ko.mp4)
+
+[▶ 한국어 데모 보기 (0:30)](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-ko.mp4)
 
 [한국어·영어 영상 모음](docs/VM_LAB.md)에서 30초 결과 데모, 설치와 AI 연결, 구조 소개, 실제 VM 생성과 게스트 화면 실습을 종류별로 볼 수 있습니다.
 
