@@ -8,6 +8,7 @@ const [destination, output, ...arguments_] = process.argv.slice(2);
 const separator = arguments_.indexOf('--');
 const sshArgs = separator < 0 ? arguments_ : arguments_.slice(0, separator);
 const remoteCommand = separator < 0 ? [] : arguments_.slice(separator + 1);
+const scenario = process.env.VAMP_WSL_QA_SCENARIO ?? 'headless_gui_smoke';
 if (!destination || !output || !sshArgs.length) {
   throw new Error('Usage: node verify-ssh.mjs <ssh-alias> <new-result-file> <ssh-options...>');
 }
@@ -32,13 +33,14 @@ try {
   const status = await call('worker_status');
   assert.equal(status.status, 'ready');
   assert.notEqual(status.uid, 0);
-  const denied = await call('worker_run', {scenario:'headless_gui_smoke'});
+  assert.ok(status.scenarios.includes(scenario));
+  const denied = await call('worker_run', {scenario});
   assert.equal(denied.status, 'confirmation_required');
-  const result = await call('worker_run', {scenario:'headless_gui_smoke', confirmed:true});
+  const result = await call('worker_run', {scenario, confirmed:true});
   assert.equal(result.status, 'verified', JSON.stringify(result));
   const artifact = Buffer.from(result.artifact.data, 'base64');
   assert.equal(createHash('sha256').update(artifact).digest('hex'), result.artifact.sha256);
-  assert.equal(artifact.toString('utf8'), 'VAMP WSL GUI check\n');
+  if (scenario === 'headless_gui_smoke') assert.equal(artifact.toString('utf8'), 'VAMP WSL GUI check\n');
   await writeFile(output, artifact, {flag:'wx'});
   console.log(JSON.stringify({status, denied:denied.status, result:result.status, artifact_sha256:result.artifact.sha256}));
 } finally {

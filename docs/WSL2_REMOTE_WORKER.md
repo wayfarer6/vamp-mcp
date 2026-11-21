@@ -44,6 +44,10 @@ Allow up to 120 seconds for NVIDIA warm-up by setting `startup_timeout_sec = 120
 
 If the administrator sets a forced SSH command to start the worker, omit the last argument. In AI chat, ask for `worker_status` first. Then authorize `worker_run` with `scenario: "headless_gui_smoke"` and `confirmed: true`. Verify the artifact digest before saving the decoded file. Reconnect when SSH returns after sleep or a network failure. Check the previous result before authorizing a retry.
 
+## Add a reviewed task
+
+As the WSL account operator, place a reviewed Robot suite at `~/.local/share/vamp-wsl-worker/reviewed/<name>/run.robot` on the WSL filesystem. Make the scenario directory and its files readable to the container account. Use a lowercase scenario name with letters, digits, underscores or dashes. The suite receives the `${ARTIFACT}` variable and should write its verified result there. Keep the result under 16 KiB. Reconnect the client to mount this directory read-only and list the installed scenarios. AI clients can choose an installed scenario and request execution with explicit confirmation.
+
 ## WSL2에서 설치하고 AI에 연결하기
 
 **SSH 연결은 운영자가 보호해야 합니다.** 전용 계정, 공개키 인증, 호스트 키 검증, 방화벽을 설정하세요. 공개 인터넷에 SSH를 직접 노출하지 않는 구성을 권장합니다. 설치 스크립트는 기존 SSH 서버 설정을 바꾸지 않습니다.

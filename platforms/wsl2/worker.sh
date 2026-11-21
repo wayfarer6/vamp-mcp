@@ -44,10 +44,16 @@ if [[ "${VAMP_WSL_VISION:-}" == gpu ]]; then
   fi
 fi
 image="vamp-wsl-worker:$target"
+scenario_mount=()
+if [[ -d "$dir/reviewed" && ! -L "$dir/reviewed" ]]; then
+  reviewed="$(realpath -- "$dir/reviewed")"
+  [[ "$reviewed" != /mnt/* ]] || { echo 'Keep reviewed scenarios in the WSL filesystem.' >&2; exit 2; }
+  scenario_mount=(--mount "type=bind,src=$reviewed,dst=/opt/vamp/reviewed,ro")
+fi
 case "${1:-serve}" in
   build) exec "$engine" build "${build_network[@]}" --target "$target" -t "$image" -f "$dir/Containerfile" "$dir";;
   serve) exec "$engine" run --pull=never --rm -i --read-only --network=none --cap-drop=ALL \
           --security-opt=no-new-privileges --pids-limit=128 --memory=4096m --tmpfs /tmp:rw,nosuid,nodev,size=128m \
-          "${devices[@]}" "$image";;
+          "${devices[@]}" "${scenario_mount[@]}" "$image";;
   *) echo 'Usage: worker.sh [build|serve]' >&2; exit 2;;
 esac
