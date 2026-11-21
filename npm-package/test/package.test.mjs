@@ -66,6 +66,10 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       }
     });
     await t.test('packaged KVM creation requires confirmation and rejects an active VirtualBox VM',async scenario=>{
+      if (!localAdmin) {
+        scenario.skip('Run from administrator Windows to verify the installed CLI host guard without an interactive prompt');
+        return;
+      }
       const source=path.join(temporary,'installer.iso');await writeFile(source,'test');
       const args={name:'Blocked-Test',iso_path:source,confirmed:false};
       if(process.platform==='win32') {
