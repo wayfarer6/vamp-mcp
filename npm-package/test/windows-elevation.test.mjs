@@ -26,6 +26,7 @@ test('Windows elevation preserves MCP stdout and diagnostics separately',
       VAMP_REPAIR_ARTIFACT_SHA256: '2'.repeat(64),
       VAMP_REPAIR_GUEST_USER: 'synthetic-guest',
       VAMP_REPAIR_GUEST_PASSWORD_FILE: 'C:/private/fixture-password.txt',
+      VAMP_UAC_YOLO_MODEL: 'C:/fixtures/uac.pt',
     };
     for (const [key, value] of Object.entries({ ...repairSettings, VAMP_REPAIR_GUEST_PASSWORD: 'not-forwarded' })) {
       const previous = process.env[key];

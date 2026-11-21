@@ -1,6 +1,7 @@
 import unittest
 import json
 import os
+from pathlib import Path
 from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
@@ -189,6 +190,33 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
                         self.assertEqual(inspect_elevation_screen('fixture.png', 'Installed').kind, expected)
                     else:
                         self.assertIsNone(inspect_elevation_screen('fixture.png', 'Installed'))
+
+    def test_optional_uac_yolo_detection_does_not_override_ocr(self):
+        from backends.library.replay import inspect_elevation_screen
+
+        installed = dict(text='Installed', confidence=0.95, language='en')
+        prompt = dict(text='User Account Control', confidence=0.95, language='en')
+        with TemporaryDirectory() as directory:
+            weights = Path(directory) / 'uac.pt'
+            weights.touch()
+            with patch.dict(os.environ, {'VAMP_UAC_YOLO_MODEL': str(weights)}), \
+                 patch('model_daemon.request') as request:
+                request.side_effect = [
+                    {'lines': [installed]},
+                    {'verified_class': 'uac_prompt', 'targets': [{'label': 'uac_prompt'}]},
+                ]
+                observed = inspect_elevation_screen('fixture.png', 'Installed')
+                self.assertEqual(observed.kind, 'unknown')
+                self.assertEqual(request.call_args.args[1]['required_class'], 'uac_prompt')
+
+                request.reset_mock()
+                request.side_effect = [{'lines': [prompt]}]
+                self.assertEqual(inspect_elevation_screen('fixture.png').kind, 'unknown')
+                request.assert_called_once()
+
+                request.side_effect = [{'lines': [installed]}, {'verified_class': 'icon', 'targets': []}]
+                with self.assertRaisesRegex(ValueError, 'configured modal class'):
+                    inspect_elevation_screen('fixture.png', 'Installed')
 
     async def test_virtualbox_uac_wait_timeout_leaves_remaining_actions_unsent(self):
         driver = FixtureDriver()

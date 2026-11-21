@@ -263,6 +263,13 @@ def inspect_elevation_screen(path, resume_text=None):
         consent = any('do you want to allow' in text or '변경할 수 있도록 허용' in text for text in visible)
         kind = 'credential' if credential else 'consent' if consent else 'unknown'
         return ElevationPrompt(elevation_program_name(elevation_lines), kind)
+    model = os.environ.get('VAMP_UAC_YOLO_MODEL')
+    if model:
+        weights = Path(model)
+        if not weights.is_absolute() or not weights.is_file():
+            raise ValueError('Configure an absolute path to the local UAC model.')
+        if detect_local_class(path, str(weights), 'uac_prompt'):
+            return ElevationPrompt(None, 'unknown')
     if prompt_scores or not any(text and confidence >= 0.8 for text, confidence in readings):
         raise ValueError('The guest frame did not provide a confident elevation check.')
     if language is not None:
@@ -319,21 +326,26 @@ async def check_elevation_boundary(driver, resolution, completed, phase, wait_se
         on_resume(completed, phase, program_name, observed_at, prompt_kind)
 
 
+def detect_local_class(screenshot, model, label):
+    from model_daemon import request
+
+    result = request('yolo', {
+        'op': 'predict', 'image': str(screenshot), 'model': model,
+        'required_class': label, 'confidence': 0.35,
+    }, timeout=90)
+    if result.get('verified_class') != label or not isinstance(result.get('targets'), list):
+        raise ValueError('The local detector did not confirm the configured modal class.')
+    return any(target['label'] == label for target in result['targets'])
+
+
 async def screen_match_count(driver, resolution, expected, *, verify_absence=False, forbidden_modal=None):
     with TemporaryDirectory(prefix='vamp-rpa-screen-') as folder:
         screenshot = Path(folder) / 'screen.png'
         await driver.capture(screenshot, resolution)
         lines = await asyncio.to_thread(recognize_start_screen, screenshot, expected)
         if forbidden_modal:
-            from model_daemon import request
             model, label = forbidden_modal
-            result = await asyncio.to_thread(request, 'yolo', {
-                'op': 'predict', 'image': str(screenshot), 'model': model,
-                'required_class': label, 'confidence': 0.35,
-            }, timeout=90)
-            if result.get('verified_class') != label or not isinstance(result.get('targets'), list):
-                raise ValueError('The local detector did not confirm the configured modal class.')
-            if any(target['label'] == label for target in result['targets']):
+            if await asyncio.to_thread(detect_local_class, screenshot, model, label):
                 raise OutcomeScreenBlocked('The configured blocking modal is visible after scratch replay.')
     return text_occurrences(lines, expected, verify_absence=verify_absence)
 
