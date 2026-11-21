@@ -31,14 +31,18 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
   assert.equal(execFileSync(process.execPath,[cli,'--version'],{encoding:'utf8'}).trim(),sourceManifest.version);
   assert.match(execFileSync(process.execPath,[cli,'--help'],{encoding:'utf8'}),vault?/usage:/i:/No VM/);
   if(!vault) {
-    await t.test('packaged runtime excludes guest provisioning files', async () => {
+    await t.test('packaged runtime includes the reviewed CLI worker pair and excludes bulk provisioning files', async () => {
       const runtime = path.resolve(path.dirname(cli), '../runtime');
       const inventory = await readdir(runtime, { recursive: true, withFileTypes: true });
-      const downloader = path.join(runtime, 'scripts', 'download_models.py');
+      const pythonFiles = [
+        'scripts/download_models.py',
+        'backends/library/cli_worker.py',
+        'backends/library/install_cli_worker.py',
+      ].map(relative => path.join(runtime, relative));
       const unexpected = inventory.filter(item => !item.isDirectory() && (!item.isFile() ||
-        (!/\.(?:mjs|cjs|js|json)$/i.test(item.name) && path.join(item.parentPath, item.name) !== downloader)));
+        (!/\.(?:mjs|cjs|js|json)$/i.test(item.name) && !pythonFiles.includes(path.join(item.parentPath, item.name)))));
       assert.deepEqual(unexpected.map(item => item.name), []);
-      await access(downloader);
+      for (const file of pythonFiles) await access(file);
       await access(path.join(runtime,'models/manifest.json'));
       await assert.rejects(access(path.join(runtime,'models/omniparser-icon.pt')), {code:'ENOENT'});
       for (const relative of ['guest_setup', 'third_party/pyautogui-recorder', 'backends/packer', 'rpas', 'backends/virtualbox/rpas']) {
