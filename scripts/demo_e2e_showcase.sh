@@ -29,6 +29,16 @@ if [[ ${1:-} == showcase ]]; then
     csv_v1=$8 csv_v2=$9
     host_url=${VAMP_DEMO_HOST_URL:-http://127.0.0.1:8080}
     [[ -n ${VAMP_RPA_REGISTRY:-} ]] || { echo 'Set VAMP_RPA_REGISTRY to the reviewed demo catalog.' >&2; exit 2; }
+    "$python" - "$csv_v1" "$csv_v2" <<'PY'
+from pathlib import Path
+import sys
+
+v1, v2 = map(Path, sys.argv[1:])
+if v1.resolve() == v2.resolve():
+    raise SystemExit('Use distinct CSV destinations for v1 and v2.')
+if any(path.exists() or path.is_symlink() or not path.parent.is_dir() for path in (v1, v2)):
+    raise SystemExit('Choose two unused CSV paths in existing download directories.')
+PY
     mkdir -- "$reports"
     confirm_stage '1/8 Start the disposable VirtualBox guest and the standalone ERP. Confirm the fixture URL and open Orders in the guest.'
     "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/01-baseline.json"
