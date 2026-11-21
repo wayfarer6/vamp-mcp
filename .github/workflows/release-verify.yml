@@ -1,0 +1,81 @@
+name: Release verification
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            label: Linux artifacts and installed MCP smoke
+          - os: windows-latest
+            label: Windows artifact build and archive checks
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+
+      - name: Install locked build dependencies
+        shell: bash
+        run: |
+          for directory in third_party/mcp-virtualbox npm-package vscode-extension vscode-vault-extension; do
+            npm --prefix "$directory" ci --ignore-scripts --no-audit --no-fund
+          done
+          npm --prefix third_party/mcp-virtualbox run build
+
+      - name: Build release archives
+        shell: bash
+        env:
+          VAMP_RELEASE_ASSETS_OUTPUT: ${{ github.workspace }}/artifacts/provisioning
+        run: |
+          mkdir -p artifacts
+          npm --prefix vscode-extension run package
+          npm --prefix vscode-vault-extension run package
+          mv vscode-vault-extension/vamp-vault-*.vsix artifacts/
+          (cd npm-package && npm pack --pack-destination ../artifacts)
+          (cd npm-packages/vault && npm pack --pack-destination ../../artifacts)
+
+      - name: Verify package identity, release version and hashes
+        run: python scripts/verify_release_archives.py artifacts
+
+      - name: Smoke-test installed packages over stdio (Linux only)
+        if: runner.os == 'Linux'
+        shell: bash
+        env:
+          VAMP_TEST_ASSETS_OUTPUT: ${{ github.workspace }}/artifacts/provisioning
+        run: |
+          export npm_config_cache="$(npm config get cache)"
+          export HOME="$(mktemp -d "$RUNNER_TEMP/vamp-release.XXXXXX")"
+          export XDG_CONFIG_HOME="$HOME/.config" XDG_STATE_HOME="$HOME/.local/state"
+          export VAMP_PRELOAD_MODELS=0
+          echo "Testing VAMP with provisioning assets from this build only"
+          VAMP_TEST_TARBALL="$(realpath artifacts/vamp-mcp-[0-9]*.tgz)" npm --prefix npm-package test
+          echo "Testing Vault with an isolated temporary home"
+          VAMP_TEST_PACKAGE=vault VAMP_TEST_TARBALL="$(realpath artifacts/vamp-mcp-vault-*.tgz)" npm --prefix npm-package test
+
+      - name: Store verified build artifacts for review
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-verify-${{ runner.os }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7

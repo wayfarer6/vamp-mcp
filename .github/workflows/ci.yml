@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  node:
+    name: Node.js test and build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, windows-2025]
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          package-manager-cache: false
+      - name: Install locked dependencies
+        shell: bash
+        run: |
+          npm --prefix third_party/mcp-virtualbox ci --ignore-scripts --no-audit --no-fund
+          npm --prefix vscode-extension ci --ignore-scripts --no-audit --no-fund
+          npm --prefix vscode-vault-extension ci --ignore-scripts --no-audit --no-fund
+          npm --prefix npm-package ci --ignore-scripts --no-audit --no-fund
+      # The main npm build includes the VAMP extension build; no package is published.
+      - name: Build VAMP runtime and Vault extension
+        shell: bash
+        run: |
+          npm --prefix npm-package run build
+          npm --prefix vscode-vault-extension run build
+      - name: Check MCP registrations (no live backend)
+        run: npm --prefix vscode-extension run test:mcp-registration
+      - name: Check guest and Vault contracts
+        run: >-
+          node --test
+          vscode-extension/test/hyperv-errors.cjs
+          vscode-extension/test/hyperv-uac.cjs
+          vscode-extension/test/debian-engine-create.cjs
+          vscode-extension/test/container-viewer.cjs
+          vscode-vault-extension/test/workspace-policy.cjs
+          vscode-vault-extension/test/veracrypt-workspace.cjs
+          vscode-vault-extension/test/encrypted-export.mjs
+          vscode-vault-extension/test/remote-export.mjs
+      - name: Check Windows elevation transport (simulated worker)
+        run: node --test npm-package/test/windows-elevation.test.mjs
+      # The broad suites include POSIX-shell fixtures; Windows runs the portable checks above.
+      - name: Check VirtualBox, VAMP extension and Podman
+        if: runner.os == 'Linux'
+        run: |
+          npm --prefix third_party/mcp-virtualbox test
+          npm --prefix vscode-extension test
+          npm --prefix vscode-extension run test:containers
+          node --test vscode-vault-extension/test/browser.cjs
+
+  python:
+    name: Python provisioning and RPA contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      # Explicitly headless tests: no GPU stack, guest installs or provider-wide discovery.
+      - name: Check mocked provisioning and golden-image operations
+        run: >-
+          python -m unittest
+          tests/test_debian_mirrors.py
+          tests/test_guest_display_startup.py
+          tests/test_guest_install.py
+          tests/test_guest_ssh.py
+          tests/test_hyperv_bootstrap.py
+          tests/test_hyperv_debian_workflow.py
+          tests/test_kvm_bootstrap.py
+          tests/test_packer.py
+          tests/test_podman_packer_profile.py
+          tests/test_virtualbox_provision.py
+          tests/test_virtualbox_repair_scratch.py
+          tests/test_virtualbox_snapshots.py
+      - name: Validate RPA manifests without executing them
+        run: python scripts/validate_rpas.py
+
+  powershell:
+    name: Windows PowerShell syntax
+    runs-on: windows-2025
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Parse tracked PowerShell files without executing them
+        shell: powershell
+        run: |
+          $files = @(git ls-files -- '*.ps1')
+          if ($LASTEXITCODE -ne 0 -or $files.Count -eq 0) { throw 'Could not list PowerShell files' }
+          $errorsFound = 0
+          foreach ($file in $files) {
+            $tokens = $null
+            $parseErrors = $null
+            $path = (Resolve-Path -LiteralPath $file).Path
+            $null = [System.Management.Automation.Language.Parser]::ParseFile($path, [ref]$tokens, [ref]$parseErrors)
+            foreach ($item in $parseErrors) {
+              Write-Output ('{0}:{1}:{2}: {3}' -f $file, $item.Extent.StartLineNumber, $item.Extent.StartColumnNumber, $item.Message)
+              $errorsFound++
+            }
+          }
+          if ($errorsFound -ne 0) { throw "$errorsFound PowerShell syntax error(s)" }
+          Write-Output "Parsed $($files.Count) PowerShell files"

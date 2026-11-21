@@ -1,5 +1,7 @@
 # AI에게 VAMP MCP 설치를 부탁해 보세요
 
+[English guide](FIRST_RUN.en.md)
+
 Windows PC에서 Claude Code 또는 Codex에 VAMP를 연결하고, 연습용 주문 세 건을 CSV로 받는 예제입니다. 영상은 한국어 음성·자막이 있는 3분 51초 MP4입니다. 명령 예시는 v0.3.13과 Windows PowerShell을 기준으로 합니다.
 
 [![VAMP 첫 실행 가이드 영상 내려받기](media/vamp-first-run-ko.jpg)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4)

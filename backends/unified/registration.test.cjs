@@ -13,7 +13,8 @@ async function load(relative,overrides={}){
   let exports=overrides[spec];
   if(!exports){
    if(spec==='node:path')exports={default:path};else if(spec==='node:url')exports={fileURLToPath:url.fileURLToPath,pathToFileURL:url.pathToFileURL};
-   else if(spec==='node:fs/promises')exports=Object.fromEntries(['readdir','readFile','mkdtemp','writeFile','rm'].map(n=>[n,unexpected]));
+   else if(spec==='../../npm-package/package.json')exports={default:require('../../npm-package/package.json')};
+   else if(spec==='node:fs/promises')exports=Object.fromEntries(['readdir','readFile','mkdtemp','writeFile','rm','open'].map(n=>[n,unexpected]));
    else if(spec==='node:util')exports={promisify:()=>unexpected};
    else if(spec==='node:os')exports={default:{homedir:()=>'/mock'}};
    else if(spec.endsWith('/mcp.js'))exports={McpServer};else if(spec.endsWith('/stdio.js'))exports={StdioServerTransport:class{constructor(){unexpected();}}};
@@ -52,5 +53,6 @@ test('unified combines four public registrars once and forwards options without 
  const m=await load('backends/unified/server.mjs',overrides);
  const remote={configured:true},podman={mock:true};const server=m.createUnifiedServer({remote,podman});
  assert.equal(calls.length,4);assert.ok(calls.every(c=>c[1]===server));assert.equal(calls[2][2],podman);assert.equal(calls[3][2],remote);
+ assert.equal(server.meta.version,require('../../npm-package/package.json').version);
  assert.match(server.options.instructions,/Vault remains a separate server/);
 });

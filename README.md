@@ -9,6 +9,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/wayfarer6/vamp-mcp/actions/workflows/ci.yml"><img src="https://github.com/wayfarer6/vamp-mcp/actions/workflows/ci.yml/badge.svg?branch=main" alt="CI checks on main"></a>
   <a href="https://github.com/wayfarer6/vamp-mcp/releases"><img src="https://img.shields.io/github/v/release/wayfarer6/vamp-mcp?style=flat-square&color=8A2BE2" alt="Latest Release"></a>
   <a href="https://marketplace.visualstudio.com/items?itemName=wayfarer6.vamp-mcp-tools"><img src="https://img.shields.io/badge/VS%20Code-vamp--mcp-007ACC?style=flat-square&logo=visual-studio-code&logoColor=white" alt="VS Code Extension"></a>
   <a href="https://wayfarer6.github.io/vamp-script-hub/"><img src="https://img.shields.io/badge/Community-Script%20Hub-blueviolet?style=flat-square" alt="Script Hub"></a>
@@ -20,6 +21,14 @@
 </p>
 
 ---
+
+## See VAMP in 30 seconds
+
+From the VAMP VS Code extension, open a VirtualBox guest and verify that its Debian desktop is live.
+
+[![Demo preview: open a VirtualBox guest by name and verify its live Debian desktop in VAMP](docs/media/vamp-demo-preview-en.gif)](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-en.mp4)
+
+[▶ Watch the English demo (0:30)](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-en.mp4)
 
 [English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
 
@@ -41,11 +50,11 @@ checksum, connect it to this AI client, and list my VMs using the backend I use 
 this PC (VirtualBox or KVM) to confirm it works.
 ```
 
-[Download the Korean walkthrough with narration and captions (3:51)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [Copy the web-chat prompt, follow the install commands, and try the order CSV demo (Korean)](docs/FIRST_RUN.ko.md)
+[English first-run guide: web-chat prompts, install commands, screenshots, and the order CSV demo](docs/FIRST_RUN.en.md) · [English walkthrough video (3:02)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [한국어 가이드](docs/FIRST_RUN.ko.md)
 
 Next video · [VAMP MCP architecture in Korean (3:04)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-ko.mp4). Follow a request from the AI client to the guest and compare VirtualBox, KVM, and Hyper-V.
 
-**English editions with narration and captions** · [First run, AI connection and order export (3:02)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [VirtualBox, KVM and Hyper-V architecture (1:53)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4).
+**English architecture video** · [VirtualBox, KVM and Hyper-V architecture (1:53)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4).
 
 ## How to use
 
