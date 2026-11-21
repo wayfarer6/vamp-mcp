@@ -35,8 +35,11 @@ PYTHON
 fi
 target=basic
 devices=()
+rootfs=(--read-only)
 if [[ "${VAMP_WSL_VISION:-}" == gpu ]]; then
   target=vision
+  # The NVIDIA CDI hook updates the container-only linker cache at creation.
+  rootfs=()
   if [[ "$engine" == podman ]]; then
     devices=(--device nvidia.com/gpu=all)
   else
@@ -52,7 +55,7 @@ if [[ -d "$dir/reviewed" && ! -L "$dir/reviewed" ]]; then
 fi
 case "${1:-serve}" in
   build) exec "$engine" build "${build_network[@]}" --target "$target" -t "$image" -f "$dir/Containerfile" "$dir";;
-  serve) exec "$engine" run --pull=never --rm -i --read-only --network=none --cap-drop=ALL \
+  serve) exec "$engine" run --pull=never --rm -i "${rootfs[@]}" --network=none --cap-drop=ALL \
           --security-opt=no-new-privileges --pids-limit=128 --memory=4096m --tmpfs /tmp:rw,nosuid,nodev,size=128m \
           "${devices[@]}" "${scenario_mount[@]}" "$image";;
   *) echo 'Usage: worker.sh [build|serve]' >&2; exit 2;;

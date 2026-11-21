@@ -17,9 +17,12 @@ RUN pip install --no-cache-dir torch==2.10.0 torchvision==0.25.0 --index-url htt
 RUN pip install --no-cache-dir "ultralytics>=8.3,<9"
 RUN python3 -m venv /opt/ocr && /opt/ocr/bin/pip install --no-cache-dir paddlepaddle-gpu==3.3.0 --index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/
 RUN /opt/ocr/bin/pip install --no-cache-dir "paddleocr>=3.4,<4"
-COPY fetch-icons.py ./
-RUN python fetch-icons.py
-RUN HOME=/tmp/vamp-model-setup /opt/ocr/bin/python -c "from paddleocr import PaddleOCR; PaddleOCR(device='cpu', text_detection_model_name='PP-OCRv5_mobile_det', text_recognition_model_name='en_PP-OCRv5_mobile_rec', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)" && cp -r /tmp/vamp-model-setup/.paddlex/official_models/. /opt/vamp/models/ && rm -rf /tmp/vamp-model-setup
+COPY scripts/download_models.py ./scripts/
+COPY models/manifest.json ./models/
+RUN python scripts/download_models.py
+RUN HOME=/tmp/vamp-model-setup /opt/ocr/bin/python -c "from paddlex.inference.utils.official_models import official_models; print(official_models['PP-OCRv5_mobile_det'], official_models['en_PP-OCRv5_mobile_rec'])" && cp -r /tmp/vamp-model-setup/.paddlex/official_models/. /opt/vamp/models/ && rm -rf /tmp/vamp-model-setup
 COPY worker.py workflow.py smoke.robot vision.py vision_process.py ./
+RUN apt-get update && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/* \
+    && chmod -R a+rX /opt/vamp/models
 ENV VAMP_WSL_VISION=gpu
 USER 10001:10001

@@ -20,8 +20,11 @@ if [[ "$vision_mode" == auto ]]; then
 fi
 [[ "$vision_mode" == gpu || "$vision_mode" == off ]]
 new="$(mktemp -d)"
-trap 'rm -f -- "$new/"{worker.py,workflow.py,smoke.robot,vision.py,vision_process.py,fetch-icons.py,Containerfile,worker.sh}; rmdir -- "$new"' EXIT
-install -m 0644 "$src/"{worker.py,workflow.py,smoke.robot,vision.py,vision_process.py,fetch-icons.py,Containerfile} "$new/"
+trap 'rm -f -- "$new/"{worker.py,workflow.py,smoke.robot,vision.py,vision_process.py,Containerfile,worker.sh,scripts/download_models.py,models/manifest.json}; rmdir -- "$new/scripts" "$new/models" "$new"' EXIT
+mkdir -- "$new/scripts" "$new/models"
+install -m 0644 "$src/../../scripts/download_models.py" "$new/scripts/"
+install -m 0644 "$src/../../models/manifest.json" "$new/models/"
+install -m 0644 "$src/"{worker.py,workflow.py,smoke.robot,vision.py,vision_process.py,Containerfile} "$new/"
 install -m 0755 "$src/worker.sh" "$new/worker.sh"
 VAMP_WSL_VISION="$vision_mode" "$new/worker.sh" build
 install -d -m 0700 "$destination"

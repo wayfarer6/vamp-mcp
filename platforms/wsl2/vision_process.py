@@ -15,6 +15,8 @@ def load_ocr():
         raise RuntimeError("PaddleOCR CUDA is unavailable")
     model = PaddleOCR(device="gpu:0", use_doc_orientation_classify=False,
                       use_doc_unwarping=False, use_textline_orientation=False,
+                      text_detection_model_name="PP-OCRv5_mobile_det",
+                      text_recognition_model_name="en_PP-OCRv5_mobile_rec",
                       text_detection_model_dir="/opt/vamp/models/PP-OCRv5_mobile_det",
                       text_recognition_model_dir="/opt/vamp/models/en_PP-OCRv5_mobile_rec")
 
@@ -32,10 +34,13 @@ def load_yolo():
     if not torch.cuda.is_available() or torch.version.hip:
         raise RuntimeError("YOLO NVIDIA CUDA is unavailable")
     model = YOLO("/opt/vamp/models/omniparser-icon.pt")
+    model.to("cuda:0")
 
     def predict(image):
         result, = model.predict(image, device="cuda:0", imgsz=1280, verbose=False)
-        return {"device": str(next(model.model.parameters()).device), "targets": len(result.boxes)}
+        device = torch.device(model.predictor.model.device)
+        return {"device": f"cuda:{device.index or 0}" if device.type == "cuda" else str(device),
+                "targets": len(result.boxes)}
 
     return predict
 
