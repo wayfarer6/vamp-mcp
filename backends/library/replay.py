@@ -143,7 +143,10 @@ class VNC:
     async def capture(self, path, resolution):
         from PIL import Image
         pixels = await asyncio.wait_for(self.client.screenshot(), timeout=15)
-        Image.fromarray(pixels).save(path, format='PNG')
+        image = Image.fromarray(pixels)
+        if image.size != tuple(resolution):
+            raise ValueError('The captured VNC frame does not match the recorded guest resolution.')
+        image.save(path, format='PNG')
     def key(self,key):return VNC_KEYS.get(key,key.upper() if key.startswith('f') and key[1:].isdigit() else key)
     def down(self,key):
         if key in self.held:return
@@ -287,6 +290,8 @@ async def require_clear_elevation_screen(driver, resolution, completed, phase, r
             screenshot = Path(folder) / 'screen.png'
             await driver.capture(screenshot, resolution)
             detected = await asyncio.to_thread(inspect_elevation_screen, screenshot, resume_text)
+            if driver.geometry() != resolution:
+                raise ValueError('Guest resolution changed during elevation verification.')
     except StartScreenBlocked:
         raise
     except Exception as error:
@@ -392,6 +397,8 @@ async def replay(driver,actions,resolution,vault_steps=None,*,start_text=None,ou
         await check_elevation_boundary(driver, resolution, completed, phase, uac_wait_seconds,
                                        uac_resume_text, on_uac_resume, on_uac_wait)
     try:
+        if pause_on_uac and resolution != [1920, 1080]:
+            raise ValueError('Guest UAC replay requires a 1920x1080 recording and guest display.')
         actual = driver.geometry()
         if actual != resolution:raise ValueError(f'Recorded guest resolution {resolution} does not match {actual}; recalibrate rather than guessing')
         if start_text is not None:

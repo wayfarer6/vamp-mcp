@@ -37,6 +37,13 @@ class FixtureDriver:
 
 
 class StartScreenTest(unittest.IsolatedAsyncioTestCase):
+    async def test_uac_replay_refuses_non_fhd_resolution(self):
+        driver = FixtureDriver()
+        with self.assertRaisesRegex(ValueError, '1920x1080'):
+            await replay(driver, [], [1280, 720], pause_on_uac=True)
+        self.assertEqual(driver.events, [])
+        self.assertTrue(driver.closed)
+
     async def test_kvm_saved_replay_waits_for_verified_uac_resume(self):
         await self.check_kvm_saved_uac_replay(wait_seconds=10)
 
@@ -395,7 +402,7 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
 
         def from_array(pixels):
             self.assertEqual(pixels, 'fixture-pixels')
-            return SimpleNamespace(save=lambda path, format: path.write_bytes(png))
+            return SimpleNamespace(size=(1920, 1080), save=lambda path, format: path.write_bytes(png))
 
         def recognize(path, expected):
             self.assertEqual(path.read_bytes(), png)
