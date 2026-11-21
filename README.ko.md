@@ -23,6 +23,8 @@
 
 ---
 
+[한국어·영어 영상 모음](docs/VM_LAB.md)에서 30초 결과 데모, 설치와 AI 연결, 구조 소개, 실제 VM 생성과 게스트 화면 실습을 종류별로 볼 수 있습니다.
+
 ## 처음이라면 AI에게 설치를 부탁해 보세요
 
 내 PC에서 명령을 실행할 수 있는 **Claude Code 또는 Codex**에 아래 문장을 붙여 넣으세요.
@@ -30,7 +32,8 @@
 ```text
 https://github.com/wayfarer6/vamp-mcp
 내 Windows PC에 최신 공식 릴리스로 VAMP MCP를 설치해 줘. 파일 해시를 확인하고
-지금 쓰는 AI에 연결한 뒤, VirtualBox 가상머신 목록을 조회해서 연결됐는지 보여 줘.
+지금 쓰는 AI에 연결한 뒤, 이 PC에서 사용하는 VirtualBox 또는 Hyper-V의
+가상머신 목록을 조회해서 연결됐는지 보여 줘.
 ```
 
 [![한국어 영상 내려받기 · AI에게 VAMP 설치 부탁하기](docs/media/vamp-first-run-ko.jpg)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4)
@@ -39,9 +42,13 @@ https://github.com/wayfarer6/vamp-mcp
 
 다음 영상 · [VAMP MCP 구조 소개 (3분 04초)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-ko.mp4)에서 VirtualBox, KVM, Hyper-V의 VM 관리와 게스트 화면 경로를 비교합니다.
 
+**영어 음성·자막판** · [설치와 AI 연결, 주문 내보내기 (3분 02초)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [VirtualBox·KVM·Hyper-V 구조 (1분 53초)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4).
+
 ## How to use
 
 **지원 호스트:** Windows와 Linux입니다. macOS는 지원 대상에서 제외합니다.
+
+**Windows의 Hyper-V (실험적 지원).** Hyper-V를 활성화한 뒤 **VM Manager → Connection → Virtualization platform → Hyper-V**를 선택하세요. VAMP에서 VM을 생성하고 목록을 조회하거나 VMConnect를 열 수 있으며, 지원되는 Windows 게스트와 파일도 주고받을 수 있습니다. 게스트 화면은 VMConnect에서 여세요. Hyper-V에서는 내장 화면 뷰어와 저장된 데스크톱 작업 재생을 아직 지원하지 않습니다. [Hyper-V 설정 및 MCP 도구](backends/hyperv/README.md)
 
 **Windows에서 VAMP 및 VAMP Vault MCP 서버를 실행하려면 관리자 권한이 필요합니다.** `vamp-mcp` CLI는 호스트 UAC 승인을 받아 서버를 별도 관리자 프로세스로 시작할 수 있습니다. 서버 명령을 직접 실행할 때는 관리자 터미널을 사용하세요. VS Code 확장이 제공하는 MCP 서버를 쓰려면 VS Code를 **관리자 권한으로 실행**하세요. Windows가 관리자 권한을 부여하지 않은 경우 서버를 직접 실행하면 시작 단계에서 종료됩니다.
 

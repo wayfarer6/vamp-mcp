@@ -21,6 +21,8 @@
 
 ---
 
+[English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
+
 ## Ask your AI to install VAMP
 
 In Claude Code or Codex with terminal access to your Windows PC, paste this request:
@@ -28,16 +30,21 @@ In Claude Code or Codex with terminal access to your Windows PC, paste this requ
 ```text
 https://github.com/wayfarer6/vamp-mcp
 Install VAMP MCP on my Windows PC from the latest official release. Verify the package
-checksum, connect it to this AI client, and list my VirtualBox VMs to confirm it works.
+checksum, connect it to this AI client, and list my VMs using the backend I use on
+this PC (VirtualBox or Hyper-V) to confirm it works.
 ```
 
 [Download the Korean walkthrough with narration and captions (3:51)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [Copy the web-chat prompt, follow the install commands, and try the order CSV demo (Korean)](docs/FIRST_RUN.ko.md)
 
 Next video · [VAMP MCP architecture in Korean (3:04)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-ko.mp4). Follow a request from the AI client to the guest and compare VirtualBox, KVM, and Hyper-V.
 
+**English editions with narration and captions** · [First run, AI connection and order export (3:02)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [VirtualBox, KVM and Hyper-V architecture (1:53)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4).
+
 ## How to use
 
 **Supported hosts:** Windows and Linux. macOS is outside the supported host scope.
+
+**Hyper-V on Windows (experimental).** Enable Hyper-V and select **VM Manager → Connection → Virtualization platform → Hyper-V**. VAMP can create and list VMs, launch VMConnect, and exchange files with supported Windows guests. Use VMConnect for the guest desktop. Hyper-V does not yet support the embedded viewer or saved desktop replay. [Hyper-V setup and MCP tools](backends/hyperv/README.md)
 
 **Windows MCP requirement.** VAMP and VAMP Vault MCP servers require Windows administrator privileges. The `vamp-mcp` CLI can request UAC to start the server in a separate elevated process while the MCP client stays open. For a direct server command, start it from an administrator terminal. To use the MCP servers provided by the VS Code extensions, start VS Code with **Run as administrator**. Direct server startup exits when Windows has not granted administrator privileges.
 
