@@ -166,6 +166,8 @@ class StartScreenTest(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['program_identity'], 'unverified')
         self.assertEqual(result['program_name_ocr'], 'Windows PowerShell')
         self.assertEqual(result['prompt_kind'], 'credential')
+        self.assertIn('credential prompt', result['message'])
+        self.assertIn('guest console', result['message'])
         self.assertEqual(result['replay_commit'], commit)
         self.assertEqual(driver.events, [])
         self.assertEqual(record['vm'], 'fixture-vm')

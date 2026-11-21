@@ -214,7 +214,15 @@ class ElevationHandoff(ValueError):
         self.program_name = program_name
         self.prompt_kind = prompt_kind
         self.observed_at = observed_at or datetime.now(timezone.utc).isoformat()
-        super().__init__('Check the guest desktop before continuing.')
+        if reason == 'uac_resume_not_verified':
+            message = 'Replay stopped because the expected screen could not be verified after the UAC prompt. Check the guest console.'
+        elif reason == 'screen_unverified':
+            message = 'Replay stopped because the guest screen could not be verified. Check the guest console and display resolution.'
+        elif prompt_kind == 'credential':
+            message = 'Replay stopped at a Windows credential prompt. Review it in the guest console and enter credentials there only if approved.'
+        else:
+            message = 'Replay stopped at a Windows UAC prompt. Review the request in the guest console.'
+        super().__init__(message)
 
 
 @dataclass(frozen=True)
