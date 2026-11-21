@@ -6,6 +6,27 @@
 | 설치·AI 연결·첫 사용 / Installation, AI connection and first task | [영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-first-run-ko.mp4) · [자막](media/vamp-first-run-ko.srt) | [Video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-first-run-en.mp4) · [Captions](media/vamp-first-run-en.srt) |
 | VirtualBox · KVM · Hyper-V 구조 / Architecture | [영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-architecture-ko.mp4) · [자막](media/vamp-architecture-ko.srt) | [Video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-architecture-en.mp4) · [Captions](media/vamp-architecture-en.srt) |
 | 실제 VM 생성·게스트 화면 / VM creation and guest consoles | [실습 영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-vm-lab-ko.mp4) · [자막](media/vamp-vm-lab-ko.srt) | [Lab video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-vm-lab-en.mp4) · [Captions](media/vamp-vm-lab-en.srt) |
+| 로그 감사 / Audit logs | [영상 · 2:08](media/vamp-audit-log-ko.mp4) · [자막](media/vamp-audit-log-ko.srt) | [Video · 1:51](media/vamp-audit-log-en.mp4) · [Captions](media/vamp-audit-log-en.srt) |
+
+## 감사 로그 따라 보기 · Read the audit log
+
+**한국어.** KVM에 연결된 AI에게 “가상 머신 목록을 보여 줘”라고 요청하세요. Linux KVM 원격 MCP 서버를 실행한 계정으로 작업 폴더를 여세요. 영상 **0:32**에서 파일 위치를, **0:52**에서 실제 로그 두 줄을 확인할 수 있습니다. 서버를 `--workdir`로 실행했다면 아래 첫 줄의 경로를 해당 디렉터리로 바꾸세요.
+
+**English.** Ask your KVM-connected AI to list the virtual machines. On the Linux KVM host, open the work directory as the user running the remote MCP server. Jump to **0:25** for the file location or **0:44** for the two observed rows. If the server was started with `--workdir`, substitute that directory on the first line.
+
+```sh
+cd "${VAMP_REMOTE_WORKDIR:-$HOME/.vamp/remote}"
+tail -n 2 tool-audit.jsonl
+stat -c '%a %n' tool-audit.jsonl
+```
+
+| 확인한 내용 | Observed behavior |
+| --- | --- |
+| Linux KVM에서 VM 목록 조회는 `returned`, 잘못된 테스트 ID로 상태 조회는 `error`로 남았습니다. 별도 감사 호출은 0회였고 두 행에는 시각·도구·결과만 있었습니다. | Two ordinary calls produced two rows with a timestamp, tool and outcome. The list request returned a response. An invalid status lookup produced an error. File mode was `600`. |
+| 임시 Vault를 사용한 테스트에서 대상에 전달할 수 없는 경우에도 `credential_resolved`가 남았습니다. 마운트는 해당 환경의 볼륨 목록에서 확인하세요. | The temporary Vault test recorded credential resolution even when the destination was unavailable. A delivery receipt and an observed mount are separate evidence. |
+| 마지막 장면은 별도 CLI 개발판의 **Run history**입니다. 통합 감사 화면은 설계 단계입니다. | The last chapter shows **Run history** in a separate CLI development build. The unified audit screen is a proposal. |
+
+KVM 및 Vault 검증에 사용한 소스 / Source used for the KVM and Vault checks: [6e90a7b](https://github.com/wayfarer6/vamp-mcp/tree/6e90a7bf06b991f6084e8aef311505f7fb2752f4).
 
 ## 한국어 실습
 
