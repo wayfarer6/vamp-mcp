@@ -6,6 +6,8 @@ Windows PC에서 Claude Code 또는 Codex에 VAMP를 연결하고, 연습용 주
 
 [영상 내려받기 (MP4)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [한국어 자막 (SRT)](media/vamp-first-run-ko.srt) · [실습 결과 CSV](media/first-run-orders.csv)
 
+영어판 · [설치 가이드 MP4](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [영어 자막](media/vamp-first-run-en.srt) · [구조 소개 MP4](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4) · [영어 자막](media/vamp-architecture-en.srt)
+
 ## 이 문장을 AI에 붙여 넣으세요
 
 **내 PC에서 실행하는 Claude Code나 Codex에는** 아래 문장을 그대로 보내세요.

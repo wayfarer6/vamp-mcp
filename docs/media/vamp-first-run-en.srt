@@ -1,0 +1,75 @@
+1
+00:00:00,000 --> 00:00:09,467
+What would it take to ask your AI to ship two pending orders and save the order list? Follow the request from your Windows PC into a practice virtual machine.
+
+2
+00:00:09,467 --> 00:00:16,333
+If Claude Code or Codex can run commands on your PC, paste the repository address and this request.
+
+3
+00:00:16,333 --> 00:00:24,600
+Ask it to verify the download, connect the tool, and list your virtual machines. Approve the Windows prompt yourself.
+
+4
+00:00:24,600 --> 00:00:32,533
+In a web chat without access to your terminal, ask for one command at a time. Send back the result before moving on.
+
+5
+00:00:32,533 --> 00:00:45,267
+Your AI client talks to VAMP on the host. The order application and its clicks run inside the guest. This example uses Windows, Node.js 22 or later, and VirtualBox 7.
+
+6
+00:00:45,267 --> 00:00:57,067
+To install manually, open the GitHub release and expand Assets. Save the package and its checksum list in the same folder. The commands here use version zero point three point thirteen.
+
+7
+00:00:57,067 --> 00:01:05,600
+Compare all sixty-four characters of the SHA-256 digest. Once they match, install the local package with npm.
+
+8
+00:01:05,600 --> 00:01:13,067
+Run the version command. For the file in this example, the output should be zero point three point thirteen.
+
+9
+00:01:13,067 --> 00:01:23,400
+For text and icon recognition, set up Python three point twelve and the appropriate device driver on the host. Run setup and allow time for the models to download.
+
+10
+00:01:23,400 --> 00:01:33,133
+With the Codex CLI installed on the same PC, add the server, then inspect its registration. Open a new Codex session for the first tool call.
+
+11
+00:01:33,133 --> 00:01:42,067
+Approve the host UAC prompt when the server connects. An empty list can be a successful response if you have not registered any VMs yet.
+
+12
+00:01:42,067 --> 00:01:51,200
+To use the graphical manager, verify the VSIX from the same release and install it in VS Code. Reload the window and open VM Manager.
+
+13
+00:01:51,200 --> 00:02:00,733
+Use an existing practice VM, or choose an ISO and create a new one. Open the guest desktop and load the separate Demo ERP Orders page.
+
+14
+00:02:00,733 --> 00:02:11,533
+Start the guest recorder and perform the order update once. Stop the recording and save its Python file to the mounted VAMPRecords share. Guest Additions must mount the share.
+
+15
+00:02:11,533 --> 00:02:22,333
+In RPA Library, select the recording and choose Create. State what success looks like, check the guest resolution, and review the actions before allowing reuse.
+
+16
+00:02:22,333 --> 00:02:34,667
+Reset the practice data and open the original starting screen. Have the AI show the target and expected result before running the saved task. A separate CLI must point to the same RPA catalog.
+
+17
+00:02:34,667 --> 00:02:42,067
+Two rows begin as pending. Updating each row changes it to shipped. The third row was already shipped.
+
+18
+00:02:42,067 --> 00:02:51,133
+Here is the project’s recorded VirtualBox guest at the export step. The resulting file gives us a way to check what the application actually saved.
+
+19
+00:02:51,133 --> 00:03:02,067
+Open the new CSV. Check that the three expected order IDs appear once each and all three statuses say shipped. The companion guide includes a sample file for comparison.

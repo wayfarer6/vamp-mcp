@@ -1,0 +1,43 @@
+1
+00:00:00,000 --> 00:00:10,133
+When an AI asks to export an order list, where does the click happen? Let’s follow the request through the three virtualization backends supported by different VAMP components.
+
+2
+00:00:10,133 --> 00:00:18,333
+The client calls a tool on the host. The host runs the virtual machine. The guest is the operating system inside it.
+
+3
+00:00:18,333 --> 00:00:29,133
+VirtualBox and local KVM tools share one MCP registration. A configured remote host uses SSH. Vault is a separate server when you need credentials.
+
+4
+00:00:29,133 --> 00:00:37,000
+Use vm_list to identify the intended VirtualBox guest. A reviewed task can replay inside that guest.
+
+5
+00:00:37,000 --> 00:00:47,200
+This is the published Windows guest exporting orders. VS Code can preview the screen. For direct manual input, open the native VirtualBox window.
+
+6
+00:00:47,200 --> 00:00:55,467
+KVM provides virtualization on Linux and QEMU runs the virtual hardware. VAMP manages the machines through libvirt.
+
+7
+00:00:55,467 --> 00:01:05,467
+Select the connection where you created the VM. User and system inventories are different. Here the VS Code VNC viewer shows the Debian installer.
+
+8
+00:01:05,467 --> 00:01:15,733
+On a Windows Hyper-V host, VM Manager can create a generation-two machine and attach the installation ISO. Use the external VMConnect window for the console.
+
+9
+00:01:15,733 --> 00:01:29,867
+In version zero point three point thirteen, desktop RPA replay on Hyper-V is unsupported. The separate Python server provides inventory and console tools. The project verified file transfer in a nested Windows lab.
+
+10
+00:01:29,867 --> 00:01:41,600
+For a repeatable VirtualBox or KVM task, first identify a reviewed RPA and its target. Then check the output: three expected orders marked shipped in a newly exported CSV.
+
+11
+00:01:41,600 --> 00:01:52,800
+Start with the host you actually use. For VirtualBox or local KVM, ask for the corresponding inventory. On Hyper-V, open the guest through VMConnect.
