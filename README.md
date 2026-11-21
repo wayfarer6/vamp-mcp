@@ -31,14 +31,9 @@ Contributions are welcome. See the [contribution guide](CONTRIBUTING.md) and [AI
 
 Run GUI automation inside a guest while you keep using your host desktop. With saved RPA, local replay can check the screen and output files without sending frames to a model. An external agent can receive screen data if its client requests it during exploration or targeted fallback. Vault-managed secrets can be delivered through the approved guest connection.
 
-VirtualBox setup recordings are available as separate Korean and English QHD editions with on-screen instructions.
+Watch the [VAMP overview in English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/14-VAMP-Overview-en.mp4) for the architecture and first steps. The [English installation guide](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/11-VAMP-Install-Guide-X-en.mp4) starts on the Windows host with MCP package and VSIX installation and follows both routes through Debian startup in VirtualBox.
 
 Watch the [Windows VirtualBox Notepad verification in English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/04-Windows-VirtualBox-Notepad-QHD-en.mp4) or [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/04-Windows-VirtualBox-Notepad-QHD-ko.mp4). The Robot Framework run opens Notepad and checks the `Windows (CRLF)` status bar in a 1920×1080 guest.
-
-| Guest OS | MCP | VS Code |
-| --- | --- | --- |
-| Debian | [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01A-Debian-MCP-QHD-ko.mp4) · [English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01A-Debian-MCP-QHD-en.mp4) | [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02A-Debian-VSCode-QHD-ko.mp4) · [English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02A-Debian-VSCode-QHD-en.mp4) |
-| Windows 11 | [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01B-Windows11-MCP-QHD-ko.mp4) · [English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01B-Windows11-MCP-QHD-en.mp4) | [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02B-Windows11-VSCode-QHD-ko.mp4) · [English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02B-Windows11-VSCode-QHD-en.mp4) |
 
 - Podman · Debian / VirtualBox setup video ([Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD-ko.mp4) · [English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD-en.mp4))
 - [Robot Framework source for the Korean and English editions](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-setup-editions-robot-source.zip)

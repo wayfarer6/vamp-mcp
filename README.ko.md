@@ -33,14 +33,9 @@
 
 호스트 PC를 계속 사용하면서 게스트에서 GUI 자동화를 실행할 수 있습니다. 저장된 RPA는 화면과 결과 파일을 로컬에서 확인할 수 있으며, 탐색이나 예외 대응 중 외부 에이전트의 클라이언트가 화면을 요청하면 그 데이터가 전달될 수 있습니다. Vault의 비밀값은 승인된 게스트 연결을 통해 전달할 수 있습니다.
 
-VirtualBox 설치 녹화에 한국어와 영어 안내를 각각 넣은 QHD 영상을 볼 수 있습니다.
+[VAMP 영어 소개 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/14-VAMP-Overview-en.mp4)에서 시스템 구조와 시작 방법을 확인할 수 있습니다. [영어 설치 가이드](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/11-VAMP-Install-Guide-X-en.mp4)는 Windows 호스트에서 MCP 패키지와 VSIX를 설치하는 화면부터 VirtualBox에서 Debian이 부팅되는 과정까지 안내합니다.
 
 [Windows VirtualBox 메모장 검증 한국어 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/04-Windows-VirtualBox-Notepad-QHD-ko.mp4)과 [영어 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/04-Windows-VirtualBox-Notepad-QHD-en.mp4)에서 Robot Framework가 1920×1080 게스트의 메모장을 열고 상태 표시줄의 `Windows (CRLF)`를 확인하는 과정을 볼 수 있습니다.
-
-| 운영체제 | MCP | VS Code |
-| --- | --- | --- |
-| Debian | [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01A-Debian-MCP-QHD-ko.mp4) · [영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01A-Debian-MCP-QHD-en.mp4) | [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02A-Debian-VSCode-QHD-ko.mp4) · [영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02A-Debian-VSCode-QHD-en.mp4) |
-| Windows 11 | [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01B-Windows11-MCP-QHD-ko.mp4) · [영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/01B-Windows11-MCP-QHD-en.mp4) | [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02B-Windows11-VSCode-QHD-ko.mp4) · [영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/02B-Windows11-VSCode-QHD-en.mp4) |
 
 - Podman · Debian / VirtualBox 구성 영상 ([한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD-ko.mp4) · [영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/03-Podman-VirtualBox-QHD-en.mp4))
 - [한국어·영어 영상 제작용 Robot Framework 코드](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/VAMP-setup-editions-robot-source.zip)
