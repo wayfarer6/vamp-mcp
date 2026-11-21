@@ -104,7 +104,7 @@ For an authorized repair, use `rpa_revision` with `read-source`, then `validate`
 1. In VS Code MCP server management, start **VAMP MCP**. RPA Library, VM and Podman tools share this registration.
 2. Example request: `Find the saved RPA for customer search by title and description. Reuse a compatible reviewed skill on my running VM with query=Alice, then verify its expected result.`
 3. The agent calls **rpa_search**, then **rpa_details** for a likely match. It checks backend, recorded resolution, input names, review state and expected result.
-4. With task authorization and an exact VM UUID, it calls **rpa_run_saved** with all declared inputs and `confirmed:true`. The runner does not start another VM implicitly.
+4. With task authorization and an exact VM UUID, it calls **rpa_run_saved** with all declared inputs and `confirmed:true`. The runner does not start another VM implicitly. For Windows replay on VirtualBox or KVM with local VNC, add `pause_on_uac: true` to stop on a guest elevation prompt. See the [UAC replay workflow](WORKFLOWS.md#guest-uac-replay) for the operator approval and resume settings.
 5. The runner replays parsed events on guest devices; it never executes recorder Python source on the host.
 6. Read the compact result first. **completed_unverified** means the events completed, not that the application task succeeded. Verify the expected result with the cheapest reliable observation.
 
@@ -257,7 +257,7 @@ AI는 설명과 검색 메타데이터를 작성합니다. 녹화 동작을 몰�
 1. VS Code의 MCP 서버 관리에서 **VAMP MCP**를 시작합니다. RPA Library, VM, Podman 도구가 같은 MCP 등록에 있습니다.
 2. 예: `거래처 검색 작업을 해줘. 먼저 저장된 RPA를 제목과 설명으로 찾아보고, 맞는 검토 완료 RPA가 있으면 재사용해. 입력은 query=홍길동이고 대상 VM은 내가 켜 둔 VM이야.`
 3. 에이전트는 `rpa_search`로 검색한 뒤 `rpa_details`에서 입력값·백엔드·해상도·검토 상태를 확인합니다.
-4. 사용자 작업 권한과 정확한 VM UUID를 확인한 뒤 `rpa_run_saved`에 선언한 입력과 `confirmed:true`를 전달합니다. 실행하지 않은 VM을 임의로 켜지는 않습니다.
+4. 사용자 작업 권한과 정확한 VM UUID를 확인한 뒤 `rpa_run_saved`에 선언한 입력과 `confirmed:true`를 전달합니다. 실행하지 않은 VM을 임의로 켜지는 않습니다. Windows VirtualBox 또는 로컬 VNC 기반 KVM에서 게스트 UAC 창이 나타나면 멈추도록 하려면 `pause_on_uac: true`를 추가합니다. 운영자 승인과 재개 설정은 [게스트 UAC 재생 절차](WORKFLOWS.md#guest-uac-replay)를 참고하세요.
 5. 실행은 호스트에서 녹화 Python 코드를 실행하는 방식이 아니라, 파싱된 이벤트를 해당 게스트 장치로 재생합니다.
 6. `completed_unverified`는 이벤트 재생 완료입니다. 업무 성공을 의미하지 않습니다. 에이전트가 **Expected result**를 가장 저렴하고 신뢰할 수 있는 관찰로 확인해야 합니다.
 
