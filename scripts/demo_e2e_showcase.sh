@@ -68,7 +68,7 @@ if saved['id'].lower() != repair['id'].lower() or saved['vm_id'].lower() == repa
     raise SystemExit('Use the same RPA and a separate scratch VM for repair.')
 PY
     bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/06-validation" --validate
-    confirm_stage '7/8 Prepare the disconnected scratch guest and its OCR, modal and CSV checks. Authorize the scratch test and promotion on success.'
+    confirm_stage '7/8 Prepare the disconnected v2 scratch guest, OCR and modal checks, and a reset CSV baseline. Start the fixture export watcher and wait for awaiting_fresh_export. Authorize the scratch test and promotion on success.'
     bash "$repo/scripts/demo_e2e_showcase.sh" repair "$repair_request" "$reports/07-repair" --commit
     "$python" - "$reports/07-repair" "$VAMP_RPA_REGISTRY" <<'PY'
 import json
@@ -91,7 +91,7 @@ PY
     confirm_stage '8/8 Review the promoted RPA in the library. Confirm the v2 rerun and use a fresh CSV output path.'
     "$python" "$demo/scenario.py" --url "$host_url" reset | tee "$reports/08-baseline.json"
     "$python" "$demo/scenario.py" --url "$host_url" layout v2 | tee "$reports/08-layout.json"
-    confirm_stage 'Refresh Orders in the target guest and verify that the v2 fixture is visible.'
+    confirm_stage 'Refresh Orders in the target guest, dismiss any browser prompts, and restore the v2 starting screen and keyboard focus expected by the reviewed recording.'
     bash "$repo/scripts/demo_e2e_showcase.sh" verified-replay "$saved_request" "$demo" "$csv_v2" "$reports/08-v2" --confirm
     "$python" - "$csv_v1" "$csv_v2" <<'PY' | tee "$reports/08-csv-comparison.json"
 import hashlib
