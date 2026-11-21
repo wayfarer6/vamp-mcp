@@ -1,0 +1,61 @@
+name: Publish verified MCP Registry bundles
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [vamp-mcp, vamp-mcp-vault]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Download and verify released file
+        env:
+          PACKAGE: ${{ matrix.package }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v$(node -p "require('./npm-package/package.json').version")"
+          case "$PACKAGE" in
+            vamp-mcp) directory=vscode-extension ;;
+            vamp-mcp-vault) directory=vscode-vault-extension ;;
+          esac
+          version=$(node -p "require('./$directory/package.json').version")
+          file="$PACKAGE-$version.mcpb"
+          gh release download "$tag" --repo "$GITHUB_REPOSITORY" -p "$file" -p SHA256SUMS
+          digest=$(awk -v name="$file" '$2 == name {print $1}' SHA256SUMS)
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          echo "$digest  $file" | sha256sum -c -
+          jq -e --arg version "$version" --arg name "io.github.wayfarer6/$PACKAGE" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$file" \
+            --arg digest "$digest" '.name == $name and .version == $version and
+            (.packages | length) == 1 and .packages[0].identifier == $url and
+            .packages[0].fileSha256 == $digest' "registry/$PACKAGE/server.json"
+      - name: Publish to MCP Registry with GitHub identity
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error https://github.com/modelcontextprotocol/registry/releases/download/v1.8.10/mcp-publisher_linux_amd64.tar.gz -o "$RUNNER_TEMP/publisher.tar.gz"
+          echo "32d287ed6fb7dc04eddd2621097784c06a355b2348b35ccc630a1643aa75ff4a  $RUNNER_TEMP/publisher.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+          cd "registry/$PACKAGE"
+          "$RUNNER_TEMP/mcp-publisher" validate
+          "$RUNNER_TEMP/mcp-publisher" login github-oidc
+          "$RUNNER_TEMP/mcp-publisher" publish
