@@ -50,11 +50,11 @@ checksum, connect it to this AI client, and list my VMs using the backend I use 
 this PC (VirtualBox or KVM) to confirm it works.
 ```
 
-[Download the Korean walkthrough with narration and captions (3:51)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [Copy the web-chat prompt, follow the install commands, and try the order CSV demo (Korean)](docs/FIRST_RUN.ko.md)
+[English first-run guide: web-chat prompts, install commands, screenshots, and the order CSV demo](docs/FIRST_RUN.en.md) · [English walkthrough video (3:02)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [한국어 가이드](docs/FIRST_RUN.ko.md)
 
 Next video · [VAMP MCP architecture in Korean (3:04)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-ko.mp4). Follow a request from the AI client to the guest and compare VirtualBox, KVM, and Hyper-V.
 
-**English editions with narration and captions** · [First run, AI connection and order export (3:02)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-en.mp4) · [VirtualBox, KVM and Hyper-V architecture (1:53)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4).
+**English architecture video** · [VirtualBox, KVM and Hyper-V architecture (1:53)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-architecture-en.mp4).
 
 ## How to use
 
