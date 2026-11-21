@@ -132,10 +132,12 @@ For a Debian golden image on Hyper-V, prepare a dedicated internal switch with W
 
 ### 1. Use MCP without VS Code
 
-With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases). Verify the SHA-256 hashes against the release's `SHA256SUMS` file, then install from the downloaded files:
+With Node.js 22+, download the standalone `vamp-mcp` and optionally `vamp-mcp-vault` tarballs from [GitHub Releases](https://github.com/wayfarer6/vamp-mcp/releases). Verify the tarball hashes against `RELEASE-SHA256SUMS`, then install the packages you downloaded.
 
 ```bash
-npm install -g ./vamp-mcp-0.3.10.tgz ./vamp-mcp-vault-0.1.13.tgz
+npm install -g ./vamp-mcp-0.3.11.tgz
+# Optional Vault
+npm install -g ./vamp-mcp-vault-0.1.15.tgz
 ```
 
 Register **VAMP MCP** with command `vamp-mcp` and no arguments, and **VAMP Vault** with command `vamp-mcp-vault` and no arguments. If the client cannot resolve these commands, use their full installed paths. Do not add separate Podman or hypervisor registrations. See [MCP registration](docs/MCP_REGISTRATION.md).

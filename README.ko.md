@@ -134,10 +134,12 @@ Hyper-V에서 Debian 골든 이미지를 만들기 전에 WinNAT를 구성한 �
 
 ### 1. VS Code 없이 MCP 사용
 
-Node.js 22+ 환경에서 [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)의 `vamp-mcp`와 선택 사항인 `vamp-mcp-vault` tarball을 내려받습니다. 릴리즈 노트의 SHA-256을 확인한 뒤 내려받은 파일로 설치합니다.
+Node.js 22+ 환경에서 [GitHub 릴리즈](https://github.com/wayfarer6/vamp-mcp/releases)의 `vamp-mcp`와 선택 사항인 `vamp-mcp-vault` tarball을 내려받습니다. `RELEASE-SHA256SUMS`에서 SHA-256을 확인한 뒤 내려받은 파일을 설치합니다.
 
 ```bash
-npm install -g ./vamp-mcp-0.3.10.tgz ./vamp-mcp-vault-0.1.13.tgz
+npm install -g ./vamp-mcp-0.3.11.tgz
+# Vault를 사용할 때만
+npm install -g ./vamp-mcp-vault-0.1.15.tgz
 ```
 
 클라이언트에 인자 없이 `vamp-mcp`를 **VAMP MCP**로, `vamp-mcp-vault`를 **VAMP Vault**로 등록합니다. 클라이언트가 명령을 찾지 못하면 설치된 전체 경로를 사용하세요. Podman이나 하이퍼바이저를 별도로 등록하지 않습니다. 자세한 내용은 [MCP 등록 가이드](docs/MCP_REGISTRATION.md)를 참고하세요.
