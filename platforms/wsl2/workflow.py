@@ -9,9 +9,9 @@ from PIL import ImageGrab
 def verify_gui(artifact):
     root = tk.Tk()
     try:
-        root.geometry("420x230+100+100")
-        entry = tk.Entry(root)
-        entry.pack()
+        root.geometry("720x230+100+100")
+        entry = tk.Entry(root, font=("DejaVu Sans", 28), width=24)
+        entry.pack(pady=40)
         root.update()
         entry.focus_force()
         root.update()
@@ -22,8 +22,7 @@ def verify_gui(artifact):
             raise AssertionError("The headless desktop did not deliver keyboard input.")
         if tuple(pyautogui.size()) != (1920, 1080):
             raise AssertionError("Unexpected virtual display resolution.")
-        if os.environ.get("VAMP_WSL_VISION") == "gpu":
-            ImageGrab.grab(xdisplay=os.environ["DISPLAY"]).save(Path(artifact).with_suffix(".png"))
+        ImageGrab.grab(xdisplay=os.environ["DISPLAY"]).save(Path(artifact).with_suffix(".png"))
         Path(artifact).write_text(expected + "\n", encoding="utf-8")
     finally:
         root.destroy()

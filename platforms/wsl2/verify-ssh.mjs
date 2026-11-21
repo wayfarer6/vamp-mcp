@@ -38,11 +38,20 @@ try {
   assert.equal(denied.status, 'confirmation_required');
   const result = await call('worker_run', {scenario, confirmed:true});
   assert.equal(result.status, 'verified', JSON.stringify(result));
+  const gpu = process.env.VAMP_WSL_QA_REQUIRE_GPU === '1';
+  if (gpu) {
+    for (const vision of [status.vision, result.vision]) {
+      assert.equal(vision.status, 'verified');
+      assert.equal(vision.ocr, 'gpu:0');
+      assert.equal(vision.yolo, 'cuda:0');
+    }
+  }
   const artifact = Buffer.from(result.artifact.data, 'base64');
   assert.equal(createHash('sha256').update(artifact).digest('hex'), result.artifact.sha256);
   if (scenario === 'headless_gui_smoke') assert.equal(artifact.toString('utf8'), 'VAMP WSL GUI check\n');
   await writeFile(output, artifact, {flag:'wx'});
-  console.log(JSON.stringify({status, denied:denied.status, result:result.status, artifact_sha256:result.artifact.sha256}));
+  console.log(JSON.stringify({status, denied:denied.status, result:result.status, gpu,
+    vision:result.vision, artifact_sha256:result.artifact.sha256}));
 } finally {
   await client.close();
 }
