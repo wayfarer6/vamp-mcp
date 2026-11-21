@@ -34,6 +34,8 @@ From the VAMP VS Code extension, open a VirtualBox guest and verify that its Deb
 
 See which Linux KVM calls were recorded automatically, how to read the two outcomes, and what a Vault credential lookup proves. [Audit log video · English, 1:51](docs/media/vamp-audit-log-en.mp4)
 
+Find a saved run by script and agent, then open its queued and verified events in VS Code. [SQLite audit walkthrough · English, 0:47](docs/media/vamp-sqlite-audit-en.mp4) · [GUI and CLI library design proposal](docs/WORKFLOW_LIBRARY_DESIGN.md)
+
 ## Build the automation today. Tomorrow, just change the order number.
 
 Today, work with a large model to export an order from your ERP to CSV. Save the steps along with a check that the new file contains the requested order number. Tomorrow, ask a smaller model to **“export order 1042 the same way.”** It finds the workflow in the RPA Library and passes the new order number through MCP. VAMP runs the saved steps on your device and checks the CSV.

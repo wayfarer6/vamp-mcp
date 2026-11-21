@@ -36,6 +36,8 @@ VAMP VS Code 확장에서 VirtualBox 게스트를 열고 Debian 화면이 연결
 
 Linux KVM에서 자동으로 남은 로그 두 줄을 열고, 호출 결과와 Vault 자격 증명 조회 기록을 해석하는 방법을 확인하세요. [감사 로그 영상 · 한국어 2:08](docs/media/vamp-audit-log-ko.mp4)
 
+VS Code에서 스크립트와 에이전트로 실행을 찾고, 한 실행의 대기·검증 완료 기록을 여는 과정입니다. [SQLite 감사 화면 실습 · 한국어, 1:00](docs/media/vamp-sqlite-audit-ko.mp4) · [GUI·CLI 라이브러리 분리 설계안](docs/WORKFLOW_LIBRARY_DESIGN.md)
+
 ## 오늘 만든 자동화를, 내일은 주문 번호만 바꿔 쓰세요
 
 오늘은 대형 모델과 함께 ERP에서 주문을 CSV로 내보내는 절차를 만들고, 결과 파일에 요청한 주문 번호가 들어 있는지 확인하는 방법까지 저장합니다. 내일은 소형 모델에 **“주문 1042도 같은 방식으로 내보내 줘”**라고 요청하세요. 소형 모델이 RPA Library에서 작업을 찾아 MCP로 새 주문 번호를 전달하면, VAMP가 내 기기에서 절차를 실행하고 CSV를 확인합니다.

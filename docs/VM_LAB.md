@@ -7,6 +7,7 @@
 | VirtualBox · KVM · Hyper-V 구조 / Architecture | [영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-architecture-ko.mp4) · [자막](media/vamp-architecture-ko.srt) | [Video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-architecture-en.mp4) · [Captions](media/vamp-architecture-en.srt) |
 | 실제 VM 생성·게스트 화면 / VM creation and guest consoles | [실습 영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-vm-lab-ko.mp4) · [자막](media/vamp-vm-lab-ko.srt) | [Lab video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-vm-lab-en.mp4) · [Captions](media/vamp-vm-lab-en.srt) |
 | 로그 감사 / Audit logs | [영상 · 2:08](media/vamp-audit-log-ko.mp4) · [자막](media/vamp-audit-log-ko.srt) | [Video · 1:51](media/vamp-audit-log-en.mp4) · [Captions](media/vamp-audit-log-en.srt) |
+| SQLite 감사 화면 / Search runs in VS Code | [실습 · 1:00](media/vamp-sqlite-audit-ko.mp4) · [자막](media/vamp-sqlite-audit-ko.srt) | [Walkthrough · 0:47](media/vamp-sqlite-audit-en.mp4) · [Captions](media/vamp-sqlite-audit-en.srt) |
 
 ## 감사 로그 따라 보기 · Read the audit log
 
