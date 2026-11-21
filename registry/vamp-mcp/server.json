@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.wayfarer6/vamp-mcp",
+  "description": "Run VM, desktop RPA, and Podman workflows on Linux and Windows. Windows requires admin.",
+  "title": "VAMP MCP",
+  "repository": {
+    "url": "https://github.com/wayfarer6/vamp-mcp",
+    "source": "github"
+  },
+  "version": "0.3.14",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.14/vamp-mcp-0.3.14.mcpb",
+      "version": "0.3.14",
+      "fileSha256": "651217da82c051f98c580265ac95aa39b2383b406357f8c764d6152d49f60425",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

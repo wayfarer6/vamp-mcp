@@ -1,0 +1,22 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.wayfarer6/vamp-mcp-vault",
+  "description": "Manage KeePassXC credentials and VeraCrypt volumes. Windows requires admin.",
+  "title": "VAMP Vault",
+  "repository": {
+    "url": "https://github.com/wayfarer6/vamp-mcp",
+    "source": "github"
+  },
+  "version": "0.1.16",
+  "packages": [
+    {
+      "registryType": "mcpb",
+      "identifier": "https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.14/vamp-mcp-vault-0.1.16.mcpb",
+      "version": "0.1.16",
+      "fileSha256": "d69c6e41340b9148417ec89fa08a39d1f919c8dd736c81580ac95fc7b4f1357d",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}
