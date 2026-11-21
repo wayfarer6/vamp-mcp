@@ -5,6 +5,7 @@
 import fs from 'node:fs/promises';
 import hostSupport from '../common/host-support.cjs';
 import packerModule from '../common/packer.cjs';
+import audit from '../common/audit.cjs';
 import {remoteReplayEndpoint,runWithVault} from '../library/vault-replay.mjs';
 import path from 'node:path';
 import { describeConfig } from './config.mjs';
@@ -398,6 +399,7 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
     let parsed = null;
     if (vaultBridge) {
       parsed=await runWithVault(config.python,script,payload,{
+        auditContext:audit.correlation(),
         ...vaultBridge,timeoutMs:Math.max(1000,Math.min(Number(timeout_ms)||610000,610000)),
       });
     } else {
@@ -786,9 +788,22 @@ export function createTools({ run, config, fsx = fs, now = () => new Date() }) {
         required: ['id', 'vm_id'],
         additionalProperties: false,
       },
-      handler: args => rpaRun(args),
+      handler: (args,extra) => audit.observe(audit.ledger(),{category:'gui',action:args.dry_run?'preview':'remote_replay',source:'remote',script_id:args.id,...audit.identity(extra)},()=>rpaRun(args)),
     },
   ];
 
+  for(const tool of tools.filter(t=>t.name.startsWith('remote_vm_'))){
+    const handle=tool.handler;
+    tool.handler=(args,extra)=>audit.observe(audit.ledger(),{category:'hypervisor',action:tool.name,source:'remote',...audit.identity(extra)},()=>handle(args,extra));
+  }
+  tools.push({
+    name:'remote_audit_search',title:'Search this host’s audit log',
+    description:'Search the audit SQLite file on the selected host by time, script, agent or run. Times must include a time zone.',
+    inputSchema:{type:'object',additionalProperties:false,properties:{
+      ...Object.fromEntries(['from','to','agent_id','script_id','run_id','category','outcome'].map(k=>[k,{type:'string',maxLength:80}])),
+      script_name:{type:'string',maxLength:250},limit:{type:'integer',minimum:1,maximum:100},
+      before:{type:'integer',minimum:1},snapshot_seq:{type:'integer',minimum:0}
+    }},handler:args=>audit.search(audit.ledger(),args,config.registry)
+  });
   return { tools, envCheck, envSetup, list, status, start, stop, screenshot, sendKeys, mouseClick, mouseMove, rpaRun };
 }

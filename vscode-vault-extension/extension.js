@@ -212,7 +212,7 @@ async function handle(request, context, state, output,replay=false,signal) {
       return state.checkReplayDestination(request.params?.destination,request.params?.vmId,request.params?.references);
     case 'deliver-credential':
       return state.deliverCredential(request.params?.entry, request.params?.destination, request.params?.field,
-        replay?'rpa_run_saved':'vault_deliver_credential',request.params?.vmId,signal);
+        replay?'rpa_run_saved':'vault_deliver_credential',request.params?.vmId,signal,request.params?.auditContext);
     case 'state': {
       const map = await readSecretMap(context);
       return { unlocked: Boolean(map[request.params?.kdbx ?? kdbx]), stored_databases: Object.keys(map).length, approval_mode:config.get('approvalMode')||'per-session',cache_minutes:Number(config.get('sessionCacheMinutes')??5),revision:state.revision };
@@ -265,6 +265,12 @@ async function handle(request, context, state, output,replay=false,signal) {
 }
 
 function activate(context) {
+  const auditPanel=require('./dist/audit-panel.cjs');
+  const auditLib=auditPanel.audit;
+  const auditProfile=auditLib.profileFor(context.globalStorageUri.fsPath);
+  const journal=auditLib.ledger(auditProfile);
+  const registry=path.resolve(context.globalStorageUri.fsPath,'../wayfarer6.vamp-mcp-tools/rpa-catalog');
+  auditPanel.register(context,'vampVault.openAuditLog',registry);
   const output = vscode.window.createOutputChannel('VAMP Vault');
   const changes = new vscode.EventEmitter();
   const state = { setup: false, revision: 0, remoteSetup: false };
@@ -656,6 +662,8 @@ function activate(context) {
       const environment = {
         ELECTRON_RUN_AS_NODE: '1',
         VAULT_BIN_DIR: binDir,
+        VAMP_AUDIT_PROFILE:auditProfile,VAMP_RPA_REGISTRY:registry,
+        ...(process.env.VAMP_AGENT_ID && {VAMP_AGENT_ID:process.env.VAMP_AGENT_ID}),
         VAULT_KDBX: kdbxPath(),
         VAULT_VOLUME: volumePath(),
         VAULT_MOUNT_POINT: mountPoint(),
@@ -1353,7 +1361,7 @@ function activate(context) {
     if(!record.password||record.url!==pathToFileURL(volumePath).href)throw Error('The credential is not bound to the configured workspace volume.');
     if(opened.db!==kdbxPath()||revision!==state.revision)throw Error('The vault changed. Review the workspace again.');
     signal?.throwIfAborted();
-    const report=await opened.cli.mountVolume({file:volumePath,mountPoint,password:record.password});
+    const report=await auditLib.observe(journal,{category:'mount',action:'workspace_mount',source:'vsix'},()=>opened.cli.mountVolume({file:volumePath,mountPoint,password:record.password}));
     return {status:report.mounted?'mounted':'mount_unverified'};
   };
   state.checkReplayDestination=async(destination,vmId,references)=>{
@@ -1376,7 +1384,8 @@ function activate(context) {
     }
     return {status:'ready'};
   };
-  state.deliverCredential=async (entry,destination,field,caller='vscode_vault_browser',expectedVmId,signal)=>{
+  state.deliverCredential=async (entry,destination,field,caller='vscode_vault_browser',expectedVmId,signal,auditContext={})=>auditLib.observe(journal,
+    {category:'credential',action:'delivery',source:caller==='vscode_vault_browser'?'vsix':'mcp',...auditLib.correlation(auditContext)},async()=>{
     if(typeof entry!=='string'||!entry.trim()||entry.length>1024||/[\x00-\x1f]/.test(entry))throw Error('Select one credential entry.');
     if(!['username','password','totp'].includes(field))throw Error('Choose one credential field.');
     const delivery=await import(pathToFileURL(path.join(runtime,'src/credential_delivery.mjs')).href);
@@ -1424,8 +1433,9 @@ function activate(context) {
     }
     if(revision!==state.revision||database!==kdbxPath()||
       JSON.stringify(target)!==JSON.stringify(delivery.deliveryTarget(destination,deliveryConfig(),expectedVmId)))throw Error('The vault or destination changed. Review the transfer again.');
+    auditLib.mark(journal,'resolve','resolved');
     return delivery.deliverCredential(target,value,field,signal);
-  };
+  });
   browser=require('./vault-browser').registerBrowser(context,{
     async load(){
       const data=await credentialData();
@@ -1457,6 +1467,7 @@ function activate(context) {
       if(!(await readSecretMap(context))[kdbxPath()])throw Error('The vault was locked. Unlock it again.');
       const opened=await openVault();if(!opened)return;
       const record=await opened.cli.showEntry({file:opened.db,entry,databasePassword:opened.password,showProtected:true});
+      journal.record({category:'credential',action:'reveal',source:'vsix',run_id:crypto.randomUUID(),outcome:'revealed'});
       return record.password || '';
     }
   });
@@ -1608,7 +1619,7 @@ function activate(context) {
         vscode.window.showWarningMessage(`VAMP Vault: ${entryPath} on ${opened.target} has no username stored.`);
         return;
       }
-      await vscode.env.clipboard.writeText(record.username);
+      await auditLib.observe(journal,{category:'credential',action:'copy_username',source:'vsix'},async()=>{await vscode.env.clipboard.writeText(record.username);return {status:'copied'};});
       output.appendLine(`Copied the username for ${entryPath} from the vault on ${opened.target}.`);
       vscode.window.setStatusBarMessage(`VAMP Vault: username for ${entryPath} copied from ${opened.target}.`, 5000);
       return;
@@ -1623,7 +1634,7 @@ function activate(context) {
         vscode.window.showWarningMessage(`VAMP Vault: ${entryPath} has no username stored.`);
         return;
       }
-      await vscode.env.clipboard.writeText(record.username);
+      await auditLib.observe(journal,{category:'credential',action:'copy_username',source:'vsix'},async()=>{await vscode.env.clipboard.writeText(record.username);return {status:'copied'};});
       output.appendLine(`Copied the username for ${entryPath} to the clipboard.`);
       vscode.window.setStatusBarMessage(`VAMP Vault: username for ${entryPath} copied.`, 5000);
     } catch (error) {
@@ -1649,7 +1660,7 @@ function activate(context) {
         vscode.window.showWarningMessage(`VAMP Vault: ${entryPath} on ${opened.target} has no password stored.`);
         return;
       }
-      await vscode.env.clipboard.writeText(record.password);
+      await auditLib.observe(journal,{category:'credential',action:'copy_password',source:'vsix'},async()=>{await vscode.env.clipboard.writeText(record.password);return {status:'copied'};});
       scheduleClipboardClear(record.password);
       output.appendLine(`Approved and copied the password for ${entryPath} from ${opened.target}.`);
       vscode.window.setStatusBarMessage('VAMP Vault: password copied; cleared in 30 s if the clipboard still holds it.', 7000);
@@ -1671,7 +1682,7 @@ function activate(context) {
         vscode.window.showWarningMessage(`VAMP Vault: ${entryPath} has no password stored.`);
         return;
       }
-      await vscode.env.clipboard.writeText(record.password);
+      await auditLib.observe(journal,{category:'credential',action:'copy_password',source:'vsix'},async()=>{await vscode.env.clipboard.writeText(record.password);return {status:'copied'};});
       scheduleClipboardClear(record.password);
       output.appendLine(`Approved and copied the password for ${entryPath}.`);
       vscode.window.setStatusBarMessage('VAMP Vault: password copied; cleared in 30 s if the clipboard still holds it.', 7000);

@@ -32,6 +32,7 @@ import { exportEncryptedFile, exportMountedFile } from '../../src/encrypted_expo
 import { createManagedVolume, deleteManagedVolume } from '../../src/managed_volume.mjs';
 import { hypervVolume, kvmVolume, reconcileVirtualBoxDisks, releaseWindowsVirtualBoxMount, virtualBoxVolume } from '../../src/vm_volume.mjs';
 import { withVmVolumeState } from '../../src/vm_volume_state.mjs';
+import audit from '../../../backends/common/audit.cjs';
 import { auditRemoteDelivery, deliverCredential, deliveryTarget, remoteProcessTarget, validateCredentialField } from '../../src/credential_delivery.mjs';
 import podmanModule from '../../../backends/podman/adapter.cjs';
 import manifest from '../../package.json' with { type: 'json' };
@@ -140,7 +141,16 @@ const server = new McpServer({ name: settings.remoteHost ? `VAMP Vault (Remote) 
 
 /** Tool table: registered on the MCP server and runnable one at a time by --call. */
 const tools = [];
+const auditedActions={
+  vault_get_credential:['credential','read'],vault_deliver_credential:['credential','deliver_tool'],
+  vault_attach_container:['mount','attach_container'],vault_mount_volume:['mount','mount'],vault_unmount_volume:['mount','unmount']
+};
 function tool(name, definition, handler) {
+  const action=auditedActions[name];
+  if(action){
+    const execute=handler;
+    handler=(args,extra)=>audit.observe(audit.ledger(),{category:action[0],action:action[1],source:'mcp',...audit.identity(extra)},()=>execute(args,extra));
+  }
   tools.push({ name, title: definition.title, description: definition.description, inputSchema: definition.inputSchema, handler });
 }
 
@@ -522,12 +532,13 @@ tool('vault_deliver_credential', {
       const value = await resolveDeliveryField(selected);
       await auditRemoteDelivery(destination.directory,{ action:'credential_resolved', caller:'vault_deliver_credential',
         entry:selected.entry, field:selected.field, destination:args.destination });
+      audit.mark(audit.ledger(),'resolve','resolved');
       return text(await deliverCredential(destination.target,value,selected.field));
     }
     const bridge = await getBridge();
     if (!bridge) return text(await deliverWithChatApproval(args,selected,extra));
     return text(await bridge.request('deliver-credential', {
-      entry: selected.entry, field: selected.field, destination: args.destination, vmId: args.vm_id,
+      entry: selected.entry, field: selected.field, destination: args.destination, vmId: args.vm_id, auditContext:audit.correlation(),
     },{timeout:180000}));
   } catch (error) {
     return failure(error);
@@ -1019,6 +1030,7 @@ tool('vault_mount_volume', {
         throw new Error('The vault entry is not bound to this encrypted volume.');
       }
       password = record.password;
+      audit.mark(audit.ledger(),'resolve_for_mount','resolved','credential');
     } else if (process.platform !== 'win32') {
       password = (await masterPassword({ file: volume, label: 'VeraCrypt volume password' })).password;
     }
@@ -1231,6 +1243,9 @@ tool('vault_status', {
   }
 });
 
+tool('audit_search',{title:'Search audit events',description:'Filter local audit events by time, script UUID or name and agent ID.',inputSchema:audit.querySchema(z)},async f=>text(await audit.search(audit.ledger(),f,process.env.VAMP_RPA_REGISTRY)));
+tool('audit_run_details',{title:'Read audit run details',inputSchema:{run_id:z.string().uuid(),before:z.number().int().positive().optional()}},async f=>text(audit.ledger().search(f,true)));
+tool('audit_coverage',{title:'Read local audit coverage',inputSchema:{}},async(_,extra)=>text({...audit.ledger().coverage(),current_agent:audit.identity(extra)}));
 for (const entry of tools) {
   server.registerTool(entry.name, {
     title: entry.title,

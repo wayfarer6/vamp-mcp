@@ -2,6 +2,7 @@
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
+const audit = require('../common/audit.cjs');
 const { randomUUID } = require('node:crypto');
 const { check, hash, read, atomic, maybe, uuid, leaf } = require('./cli-catalog.cjs');
 
@@ -63,7 +64,12 @@ function sendGuest(b, payload) {
     child.stdin.end(JSON.stringify(payload));
   });
 }
-function runs(cat, dispatch = sendGuest) {
+function runs(cat, dispatch = sendGuest, options = {}) {
+  const store = options.store || audit.ledger(audit.profileFor(undefined,cat.registry));
+  const source = options.source || 'mcp';
+  function fields(a, id) {
+    return {category:'cli', source, script_id:a.id, revision:a.expected_revision, run_id:id, ...options.actor};
+  }
   const folder = (id) => {
     check(uuid.test(id), 'invalid_run_id');
     return path.join(cat.state, 'runs', id);
@@ -176,17 +182,27 @@ function runs(cat, dispatch = sendGuest) {
       check(out.status !== 'verified' || !name || artifacts.length, 'missing_artifact');
       const code = Number.isInteger(out.exit_code) ? out.exit_code : null;
       await atomic(file, { ...base, status: out.status, exit_code: code, checks, artifacts });
+      audit.finish(store,{...fields(a,id),action:'execute',outcome:out.status});
     } catch (e) {
       await atomic(file, {
         ...base,
         status: e.status === 'timed_out' ? 'timed_out' : 'failed',
         reason: e.status || 'execution_failed'
       });
+      audit.finish(store,{...fields(a,id),action:'execute',outcome:e.status==='timed_out'?'timed_out':'failed'});
     }
   }
   async function start(a) {
-    const { s, b, values, name } = await prepare(a);
-    if ((a.mode ?? 'preview') === 'preview')
+    const attempt = randomUUID();
+    let prepared;
+    try { prepared = await prepare(a); }
+    catch(error) {
+      store.record({...fields(a,attempt),action:'request',outcome:error.status||'error'});
+      throw error;
+    }
+    const { s, b, values, name } = prepared;
+    if ((a.mode ?? 'preview') === 'preview') {
+      store.record({...fields(a,attempt),action:'preview',outcome:'preview'});
       return {
         status: 'preview',
         id: s.pkg.id,
@@ -197,6 +213,10 @@ function runs(cat, dispatch = sendGuest) {
         runner: s.pkg.runner,
         outputs: name ? [name] : []
       };
+    }
+    if(!(a.mode==='run' && a.confirmed===true && uuid.test(a.request_id))){
+      store.record({...fields(a,attempt),action:'request',outcome:'needs_confirmation'});
+    }
     check(
       a.mode === 'run' && a.confirmed === true && uuid.test(a.request_id),
       'needs_confirmation'
@@ -230,6 +250,11 @@ function runs(cat, dispatch = sendGuest) {
       check(existing.fingerprint === fingerprint, 'request_conflict');
       return status(existing.run_id);
     }
+    try {store.record({...fields(a,id),action:'accept',outcome:'queued'});}
+    catch(error){
+      await atomic(path.join(dir,'result.json'),{run_id:id,id:a.id,revision:s.revision,workspace_id:b.id,status:'failed',reason:'audit_unavailable'});
+      throw error;
+    }
     void execute({ ...a, inputs: values }, id).catch((error) => {
       console.error('Could not persist CLI run status', id, error.code || error.name);
     });
@@ -237,4 +262,4 @@ function runs(cat, dispatch = sendGuest) {
   }
   return { start, status };
 }
-module.exports = { runs, sendGuest, leaf, catalog: require('./cli-catalog.cjs').catalog };
+module.exports = { runs, sendGuest, leaf, audit, catalog: require('./cli-catalog.cjs').catalog };

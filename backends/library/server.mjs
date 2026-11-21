@@ -8,6 +8,7 @@ import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import {mkdtemp,writeFile,rm} from 'node:fs/promises';
 import os from 'node:os';
+import audit from '../common/audit.cjs';
 import cliCatalogModule from './cli-catalog.cjs';
 import cliRunsModule from './cli-runs.cjs';
 import visionPreload from '../common/vision-preload.cjs';
@@ -25,6 +26,10 @@ const cliId=cliCatalogModule.uuid, runs=cliRunsModule.runs;
 const cliResult=async fn=>{try{return result(await fn());}catch(e){return result({status:e.status||'library_error'});}};
 const result=value=>({content:[{type:'text',text:JSON.stringify(value)}]});
 const identifier=z.string().uuid();
+const store=()=>audit.ledger();
+server.tool('audit_search','Search the local SQLite audit log. Combine timezone-qualified from (inclusive), to (exclusive), exact script name or UUID and agent ID. Default: last 24 hours.',audit.querySchema(z),{readOnlyHint:true},async filters=>result(await audit.search(store(),filters,root)));
+server.tool('audit_run_details','Read events for one audit run or operation.',{run_id:identifier,before:z.number().int().positive().optional()},{readOnlyHint:true},async f=>result(store().search(f,true)));
+server.tool('audit_coverage','Read local profile, retained event count and first and last observation.',{},{readOnlyHint:true},async(_,extra)=>result({...store().coverage(),current_agent:audit.identity(extra)}));
 async function definition(id){if(!root)throw Error('Open VAMP RPA Library in VS Code first.');const item=JSON.parse(await readFile(path.join(root,id,'rpa.json'),'utf8'));if(item.id!==id||item.format!=='vamp-saved-rpa')throw Error('Unknown saved RPA');return item;}
 async function definitions(){if(!root)return [];let names;try{names=await readdir(root);}catch(error){if(error.code==='ENOENT')return [];throw error;}const rows=[];for(const id of names.slice(0,2000)){if(!/^[a-f0-9-]{36}$/i.test(id))continue;try{rows.push(await definition(id));}catch{}}return rows;}
 const summary=i=>({id:i.id,title:i.name,description:i.description.slice(0,500),when_to_use:i.when_to_use.slice(0,250),tags:i.tags,backend:i.backend,inputs:i.inputs,reviewed:i.reviewed});
@@ -51,30 +56,32 @@ server.tool('rpa_details','Read a saved skill’s purpose, input contract, guest
 server.tool('cli_based_run_saved','Preview or run a reviewed CLI workflow in its bound VM workspace. Authorize the exact inputs before confirming.',{
  id:identifier,expected_revision:z.string().regex(/^[a-f0-9]{40}$/),workspace_id:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/),
  inputs:z.record(z.string().max(10000)),mode:z.enum(['preview','run']).default('preview'),confirmed:z.boolean().default(false),request_id:identifier.optional()
-},{readOnlyHint:false,destructiveHint:true},async a=>cliResult(()=>runs(cliCatalog()).start(a)));
+},{readOnlyHint:false,destructiveHint:true},async (a,extra)=>cliResult(()=>runs(cliCatalog(),undefined,{actor:audit.identity(extra)}).start(a)));
 server.tool('cli_based_run_status','Read the local status, verification checks and artifact references for one accepted run.',
  {run_id:identifier},{readOnlyHint:true},async a=>cliResult(()=>runs(cliCatalog()).status(a.run_id)));
-server.tool('rpa_run_saved','Replay a reviewed saved skill. Enable pause_on_uac for Windows runs on VirtualBox or KVM with local VNC to check the guest screen between actions and hand off to the operator on a UAC prompt. With uac_wait_seconds and uac_resume_text, wait for the operator and resume only on the expected post-approval screen. Use dry_run to inspect Vault references without guest input or secret reads.',{id:identifier,vm_id:identifier,inputs:z.record(z.string()).default({}),expected_source_sha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),confirmed:z.boolean().default(false),dry_run:z.boolean().default(false),pause_on_uac:z.boolean().default(false),uac_wait_seconds:z.number().int().min(0).max(120).default(0),uac_resume_text:z.string().trim().min(1).max(240).optional(),vault_destination:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/).optional()},{readOnlyHint:false,destructiveHint:true},async request=>{
- const metadata=await definition(request.id);if(!metadata.reviewed||(!request.confirmed&&!request.dry_run))return result({status:'needs_review_or_confirmation',message:'Review and approve this definition in the VAMP RPA Library, then explicitly authorize execution.'});
- if(request.pause_on_uac&&!['virtualbox','kvm'].includes(metadata.backend))return result({status:'unsupported',message:'Guest UAC handoff is available for Windows replay on VirtualBox or KVM with local VNC.'});
+server.tool('rpa_run_saved','Replay a reviewed saved skill. Enable pause_on_uac for Windows runs on VirtualBox or KVM with local VNC to check the guest screen between actions and hand off to the operator on a UAC prompt. With uac_wait_seconds and uac_resume_text, wait for the operator and resume only on the expected post-approval screen. Use dry_run to inspect Vault references without guest input or secret reads.',{id:identifier,vm_id:identifier,inputs:z.record(z.string()).default({}),expected_source_sha256:z.string().regex(/^[a-f0-9]{64}$/).optional(),confirmed:z.boolean().default(false),dry_run:z.boolean().default(false),pause_on_uac:z.boolean().default(false),uac_wait_seconds:z.number().int().min(0).max(120).default(0),uac_resume_text:z.string().trim().min(1).max(240).optional(),vault_destination:z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/).optional()},{readOnlyHint:false,destructiveHint:true},async (request,extra)=>audit.observe(store(),{category:'gui',action:request.dry_run?'preview':'replay',source:'mcp',script_id:request.id,...audit.identity(extra)},async runId=>{
+ const respond=value=>result({...value,audit_run_id:runId});
+ const metadata=await definition(request.id);if(!metadata.reviewed||(!request.confirmed&&!request.dry_run))return respond({status:'needs_review_or_confirmation',message:'Review and approve this definition in the VAMP RPA Library, then explicitly authorize execution.'});
+ if(request.pause_on_uac&&!['virtualbox','kvm'].includes(metadata.backend))return respond({status:'unsupported',message:'Guest UAC handoff is available for Windows replay on VirtualBox or KVM with local VNC.'});
  const python=metadata.backend==='virtualbox'?(process.env.RPA_REPLAY_PYTHON||process.env.RPA_HOST_PYTHON):process.env.RPA_HOST_PYTHON;
- if(!python)return result({status:'needs_setup',message:'Run VAMP Python setup in VS Code first.'});
+ if(!python)return respond({status:'needs_setup',message:'Run VAMP Python setup in VS Code first.'});
  const script=await packerModule.resolveRuntimeAsset(runtime,'backends/library/replay.py');
  const payload={...request,registry:root,libvirt_uri:process.env.VAMP_LIBVIRT_URI||'qemu:///session'};
- if(request.vault_destination&&!request.dry_run)return result(await runWithVault(python,script,payload,{
-  socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN,
+ if(request.vault_destination&&!request.dry_run)return respond(await runWithVault(python,script,payload,{
+  socketPath:process.env.VAULT_RPA_BRIDGE_SOCKET,token:process.env.VAULT_RPA_BRIDGE_TOKEN,auditContext:audit.correlation(),
  }));
- return result(await new Promise(resolve=>{
+ return respond(await new Promise(resolve=>{
   const child=execFile(python,[script],{env:pythonJsonEnv,windowsHide:true,timeout:610000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:error?String(stderr||error.message).slice(0,500):'Invalid replay result'});}});
   child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));
  }));
-});
+}));
 server.tool('rpa_revision','Inspect or validate an RPA repair. test checks the outcome screen in an isolated VirtualBox guest. test-and-commit requires a new OCR outcome, a passing configured YOLO modal check, and a verified output file before committing. update commits after static validation only. Every committed repair requires review.',{
  id:identifier,action:z.enum(['status','read-source','validate','test','test-and-commit','update']).default('status'),source:z.string().max(64000).optional(),expected_commit:z.string().regex(/^[a-f0-9]{40}$/).optional(),commit_message:z.string().max(200).optional(),confirmed:z.boolean().default(false),
  scratch_vm:identifier.optional(),outcome_text:z.string().trim().min(1).max(240).optional(),
  start_text:z.string().trim().min(1).max(240).optional(),
  test_inputs:z.record(z.string().max(10000)).optional(),
-},{readOnlyHint:false,destructiveHint:true},async request=>{
+},{readOnlyHint:false,destructiveHint:true},async (request,extra)=>{
+ const execute=async()=>{
  const item=await definition(request.id),folder=path.join(root,request.id);
  const latest=(await runGit('git',['-C',folder,'rev-parse','HEAD'],{timeout:15000})).stdout.trim();
  if(request.action==='status'){
@@ -99,6 +106,9 @@ server.tool('rpa_revision','Inspect or validate an RPA repair. test checks the o
   const repaired=await new Promise(resolve=>{const child=execFile(python,[script],{env:pythonJsonEnv,windowsHide:true,timeout:testing?620000:45000,maxBuffer:1024*1024},(error,stdout,stderr)=>{try{resolve(JSON.parse(stdout));}catch{resolve({status:'error',message:String(stderr||error?.message||'Invalid repair response').slice(0,500)});}});child.stdin.on('error',()=>{});child.stdin.end(JSON.stringify(payload));});
   return result(repaired.status==='registered'?{status:'committed_needs_review',id:item.id,version:repaired.definition.version,commit:repaired.commit,reviewed:false}:repaired);
  }finally{await rm(temporary,{recursive:true,force:true});}
+ };
+ if(['test','test-and-commit'].includes(request.action))return audit.observe(store(),{category:'gui',action:'revision_test',script_id:request.id,revision:request.expected_commit,source:'mcp',...audit.identity(extra)},execute);
+ return execute();
 });
 return server;
 }

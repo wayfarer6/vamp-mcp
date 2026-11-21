@@ -45,7 +45,7 @@ async function inspect(text) {
 function ui(context, registry) {
   const { catalog, runs } = require('./dist/cli_library.cjs');
   const repo = catalog(registry),
-    service = runs(repo);
+    service = runs(repo,undefined,{source:'vsix'});
   async function install(p) {
     let existing = await repo.snapshot(p.id);
     if (existing)

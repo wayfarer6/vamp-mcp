@@ -50,6 +50,7 @@
   },
   "contributes": {
     "commands": [
+      {"command":"vamp.openAuditLog","title":"VAMP: Open Audit Log","icon":"$(history)"},
       {
         "command": "vamp.openRpaLibrary",
         "title": "VAMP: Find and Export RPA",

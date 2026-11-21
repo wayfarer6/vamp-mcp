@@ -313,7 +313,7 @@ function catalog(registry, stateBase = path.join(os.homedir(), '.vamp', 'cli-lib
       workspaces: approved
     };
   }
-  return { state, install, snapshot, bind, binding, approve, receipt, workspaces, details };
+  return { registry, state, install, snapshot, bind, binding, approve, receipt, workspaces, details };
 }
 module.exports = {
   catalog,

@@ -52,11 +52,21 @@ flowchart TD
     T --> N["Their small model calls it with their own inputs"]
     M --> R["VAMP runs and verifies the task on each device"]
     N --> R
+    R --> DB["SQLite audit log for this profile"]
+    V["Vault credential use and volume mounts"] --> DB
+    DB --> Q["MCP search by time, script or agent"]
+    DB --> U["VS Code audit log and run details"]
 ```
 
 If an AI provider raises its API prices or discontinues its service, you can keep using the saved workflow by maintaining its execution environment and connecting another small model that supports MCP. You decide how to edit the script and whom to share it with.
 
 **Even if you switch models, the workflows you’ve built stay on your device.**
+
+## Which agent ran a script?
+
+In this branch, **VAMP: Open Audit Log** shows the latest matching event per run over the last 24 hours. Combine a local time range, script name or UUID, agent ID and activity type. Select a row to open its timeline.
+
+Ask your AI to “Find runs of the order export script by `orders-agent` between 9 and 10 this morning and show their verification results.” It can use `audit_search` and `audit_run_details`. For a stable ID across restarts, set `VAMP_AGENT_ID=orders-agent` on that agent’s dedicated MCP server. Otherwise the server automatically assigns a process-session ID. [SQLite location, profiles and query examples](docs/AUDIT_LOG.md)
 
 ## Ask your AI to install VAMP
 
