@@ -52,6 +52,8 @@ SPICE/KVM MCP 브랜치에서도 `vm_recorder_media`로 같은 ISO를 만들 수
 
 ## 녹화 → RPA 변환
 
+**수동 시연에서는 폴백 코드가 자동 생성되지 않습니다.** 나중에 YOLO 검증을 추가하려면 녹화를 시작하기 전에 버튼 캡처 옵션을 켜세요. 클릭 검증과 복구 절차는 별도로 검토합니다. [버튼 이미지 검토 및 새 초안 만들기](RECORDED_CLICKS.md) · [한·영 실제 화면 영상](VM_LAB.md)
+
 1. VM 바탕화면의 `RPA-Recorder` 폴더에서 Windows `Start-Recorder.cmd`, Debian `start-recorder.sh`를 실행합니다.
 2. VAMP UI에서 Start recording → 작업 → Stop → Save Python. `recordings/naver_login.py` 같은 Python 파일로 저장합니다. 비밀번호/인증정보는 녹화하지 않습니다.
 3. Python 파일을 호스트로 복사합니다. VirtualBox Guest Additions와 `VAMPRecords` 공유 폴더가 게스트에 연결돼 있다면 해당 폴더에 바로 저장할 수 있습니다.

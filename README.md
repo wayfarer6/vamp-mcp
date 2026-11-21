@@ -26,6 +26,8 @@
 
 **Try a warehouse close.** Ask “Close the warehouse for the month.” Codex finds a reviewed GUI recording and LibreOffice Calc writes an Excel workbook for four synthetic SKUs. The demo checks all 24 formulas and the closing value after saving. [English video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-workflow-en.mp4) · [Example and setup](examples/warehouse-close/README.md) · [Finished XLSX](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-12.xlsx)
 
+**Record a task yourself.** Open the guest recorder, enable button crops for later YOLO review, and choose **Save Python**. A writable recording share makes the source visible on the host. Review and save it in RPA Library for agent reuse. Manual demonstrations do not generate fallback code. A failed verified click stops replay. [Watch the guide](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.17/manual-recorder-en.mp4) · [Captions](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.17/manual-recorder-en.srt)
+
 From the VAMP VS Code extension, open a VirtualBox guest and verify that its Debian desktop is live.
 
 [![Demo preview: open a VirtualBox guest by name and verify its live Debian desktop in VAMP](docs/media/vamp-demo-preview-en.gif)](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-en.mp4)

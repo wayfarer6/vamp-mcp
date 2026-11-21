@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.17
+
+- Capture guest button crops by request and generate a separate YOLO-checked draft after review. The recorder and RPA Library explain manual fallback behavior. MCP reports it in English or Korean.
+
 ## 0.3.16
 
 - Include a reusable LibreOffice Calc warehouse close example. Search the reviewed GUI recording in Korean or English, run it in a VirtualBox guest, and check the saved Excel formulas and stock valuation.

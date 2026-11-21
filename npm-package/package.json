@@ -1,6 +1,6 @@
 {
   "name": "vamp-mcp",
-  "version": "0.3.16",
+  "version": "0.3.17",
   "description": "Run AI computer-use agents in VMs on your own hardware. VM lifecycle, GUI automation, and saved RPA replay over MCP.",
   "type": "module",
   "license": "MIT",
