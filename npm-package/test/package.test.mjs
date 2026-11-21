@@ -180,6 +180,10 @@ test('packed npm install works outside the repository', {timeout:45000}, async t
       await access(path.join(installed,'backends/packer/runner.py'));
       await access(path.join(installed,'backends/packer/podman/host_job.py'));
       await access(path.join(installed,'backends/library/replay.py'));
+      for (const file of ['Warehouse Intake.xlsx', 'recording.py', 'register.py', 'verify.py']) {
+        const relative = path.join('examples', 'warehouse-close', file);
+        assert.deepEqual(await readFile(path.join(installed, relative)), await readFile(path.join(root, '..', relative)));
+      }
       for (const relative of ['rpas', 'backends/virtualbox/rpas']) {
         await assert.rejects(access(path.join(installed, relative)), {code:'ENOENT'});
       }

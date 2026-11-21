@@ -2,6 +2,15 @@ name: Publish verified MCP Registry bundles
 
 on:
   workflow_dispatch:
+    inputs:
+      bundles:
+        description: Select the packages versioned in this release
+        type: choice
+        default: both
+        options:
+          - both
+          - vamp-mcp
+          - vamp-mcp-vault
 
 permissions:
   contents: read
@@ -17,7 +26,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [vamp-mcp, vamp-mcp-vault]
+        package: ${{ fromJSON(inputs.bundles == 'vamp-mcp' && '["vamp-mcp"]' || inputs.bundles == 'vamp-mcp-vault' && '["vamp-mcp-vault"]' || '["vamp-mcp","vamp-mcp-vault"]') }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
