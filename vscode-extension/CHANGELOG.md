@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.12
+
+- Pause reviewed Windows RPA on a detected guest UAC prompt on VirtualBox and local VNC-backed KVM.
+- Resume after operator review only when two fresh 1920×1080 frames confirm the expected screen.
+- Recheck UAC before Vault delivery and record the backend and replay phase in the audit history.
+
 ## 0.3.11
 
 - Require an administrator token for Windows MCP startup and keep elevated OCR workers separate.
