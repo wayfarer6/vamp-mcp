@@ -35,6 +35,15 @@ class ComposedSteps(TestCase):
         self.assertEqual(metadata['step_plan'],self.plan)
         self.assertEqual([a['enter_text'] for a in actions], ['Home','Menu'])
 
+    def test_stale_review_cannot_replace_a_new_step_plan(self):
+        definition = self.base['definition']
+        edit = {**self.request, 'id': definition['id'], 'expected_version': definition['version']}
+        updated = register(self.root, {**edit, 'step_plan': [self.local], 'reviewed': False})
+        with self.assertRaisesRegex(ValueError, 'editor was open'):
+            register(self.root, {**edit, 'step_plan': [self.step]})
+        stored = json.loads((Path(updated['folder']) / 'rpa.json').read_text())
+        self.assertEqual(stored, updated['definition'])
+
     def test_join_revision_and_key_boundaries(self):
         with self.assertRaisesRegex(ValueError,'preceding'):
             register(self.root,{**self.request,'step_plan':[self.ref,{**self.local,'entry':'Elsewhere'}]})

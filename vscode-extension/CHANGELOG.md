@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.19
+
+- Prevent an older review form from overwriting a revision saved by MCP or another editor.
+- Added English and Korean walkthroughs for reviewing annotated steps and updating a dependent workflow to a reviewed commit.
+
 ## 0.3.18
 
 - Open GUI scripts with Edit. Compose reviewed source ranges and pinned steps, verify screen checkpoints, and resume a reconciled run at a named step.

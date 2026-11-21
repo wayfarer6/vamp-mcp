@@ -52,6 +52,8 @@ flowchart LR
 
 소스 미리보기에서 스크립트를 고르고 **Edit**를 누르면 해당 파일이 VS Code 편집기에 열립니다. 저장된 스킬은 **Edit details and steps**에서 수정본을 검토하고 새 버전으로 저장하세요. 실패 후에는 어느 단계까지 통과했는지와 저장·전송이 이미 처리됐는지 확인하세요. MCP 재개 시 기존 대상 VM·입력·실행 승인과 함께 검토한 `expected_commit`, 시작할 `from_step`, 처리 결과를 확인했다는 `effects_reconciled: true`를 보냅니다. VAMP가 현재 진입 화면을 다시 검사한 뒤에만 입력을 보냅니다. [한국어 데모](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-ko.mp4) · [자막](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.18/reusable-steps-ko.srt)
 
+공통 단계에 주석을 추가하면 그 단계를 참조하는 기존 업무는 이전 커밋을 계속 사용합니다. 공통 단계의 새 버전을 검토한 뒤 필요한 업무만 새 커밋을 가리키도록 갱신하세요. [주석 초안부터 참조 갱신까지](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.19/review-and-repin-ko.mp4) · [자막](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.19/review-and-repin-ko.srt)
+
 ## 30초 만에 보는 VAMP
 
 **“월말 창고 결산 해줘”로 실행해 보세요.** Codex가 검토된 GUI RPA를 찾으면 LibreOffice Calc가 가상 품목 네 개의 결산 엑셀을 만듭니다. 데모에서는 파일을 다시 열고 수식 24개와 기말 재고 금액을 확인합니다. [한국어 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-workflow-ko.mp4) · [실습·등록 방법](examples/warehouse-close/README.md) · [완성된 엑셀](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-11.xlsx)
