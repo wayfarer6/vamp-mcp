@@ -1,15 +1,7 @@
-name: Publish verified release bundles
+name: Publish verified MCP Registry bundles
 
 on:
   workflow_dispatch:
-    inputs:
-      destination:
-        description: Publication channel
-        type: choice
-        required: true
-        options:
-          - registry
-          - marketplace
 
 permissions:
   contents: read
@@ -35,7 +27,6 @@ jobs:
           node-version: '22'
       - name: Download and verify released file
         env:
-          CHANNEL: ${{ inputs.destination }}
           PACKAGE: ${{ matrix.package }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -45,24 +36,18 @@ jobs:
             vamp-mcp) directory=vscode-extension ;;
             vamp-mcp-vault) directory=vscode-vault-extension ;;
           esac
-          vsix=$(node -p "const p=require('./$directory/package.json');p.name+'-'+p.version+'.vsix'")
           version=$(node -p "require('./$directory/package.json').version")
           file="$PACKAGE-$version.mcpb"
-          if [[ "$CHANNEL" == marketplace ]]; then file="$vsix"; fi
           gh release download "$tag" --repo "$GITHUB_REPOSITORY" -p "$file" -p SHA256SUMS
           digest=$(awk -v name="$file" '$2 == name {print $1}' SHA256SUMS)
           [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
           echo "$digest  $file" | sha256sum -c -
-          echo "BUNDLE_FILE=$file" >> "$GITHUB_ENV"
-          if [[ "$CHANNEL" == registry ]]; then
-            jq -e --arg version "$version" --arg name "io.github.wayfarer6/$PACKAGE" \
-              --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$file" \
-              --arg digest "$digest" '.name == $name and .version == $version and
-              (.packages | length) == 1 and .packages[0].identifier == $url and
-              .packages[0].fileSha256 == $digest' "registry/$PACKAGE/server.json"
-          fi
+          jq -e --arg version "$version" --arg name "io.github.wayfarer6/$PACKAGE" \
+            --arg url "https://github.com/$GITHUB_REPOSITORY/releases/download/$tag/$file" \
+            --arg digest "$digest" '.name == $name and .version == $version and
+            (.packages | length) == 1 and .packages[0].identifier == $url and
+            .packages[0].fileSha256 == $digest' "registry/$PACKAGE/server.json"
       - name: Publish to MCP Registry with GitHub identity
-        if: inputs.destination == 'registry'
         env:
           PACKAGE: ${{ matrix.package }}
         run: |
@@ -74,8 +59,3 @@ jobs:
           "$RUNNER_TEMP/mcp-publisher" validate
           "$RUNNER_TEMP/mcp-publisher" login github-oidc
           "$RUNNER_TEMP/mcp-publisher" publish
-      - name: Publish VSIX with Marketplace trusted publishing
-        if: inputs.destination == 'marketplace'
-        run: |
-          npm --prefix vscode-extension ci --ignore-scripts --no-audit --no-fund
-          vscode-extension/node_modules/.bin/vsce publish --oidc --packagePath "$BUNDLE_FILE"
