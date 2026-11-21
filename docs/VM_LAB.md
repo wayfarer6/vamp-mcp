@@ -25,7 +25,7 @@ stat -c '%a %n' tool-audit.jsonl
 | --- | --- |
 | Linux KVM에서 VM 목록 조회는 `returned`, 잘못된 테스트 ID로 상태 조회는 `error`로 남았습니다. 별도 감사 호출은 0회였고 두 행에는 시각·도구·결과만 있었습니다. | Two ordinary calls produced two rows with a timestamp, tool and outcome. The list request returned a response. An invalid status lookup produced an error. File mode was `600`. |
 | 임시 Vault를 사용한 테스트에서 대상에 전달할 수 없는 경우에도 `credential_resolved`가 남았습니다. 마운트는 해당 환경의 볼륨 목록에서 확인하세요. | The temporary Vault test recorded credential resolution even when the destination was unavailable. A delivery receipt and an observed mount are separate evidence. |
-| 마지막 장면은 별도 CLI 개발판의 **Run history**입니다. 통합 감사 화면은 설계 단계입니다. | The last chapter shows **Run history** in a separate CLI development build. The unified audit screen is a proposal. |
+| 마지막 장면은 촬영 당시 CLI 개발판의 **Run history**입니다. v0.3.15에서 출시된 통합 감사 화면은 [SQLite 감사 실습](media/vamp-sqlite-audit-ko.mp4)에서 확인하세요. | The final chapter shows **Run history** as it appeared in the earlier CLI development build. The [SQLite walkthrough](media/vamp-sqlite-audit-en.mp4) shows the unified audit panel shipped in v0.3.15. |
 
 KVM 및 Vault 검증에 사용한 소스 / Source used for the KVM and Vault checks: [6e90a7b](https://github.com/wayfarer6/vamp-mcp/tree/6e90a7bf06b991f6084e8aef311505f7fb2752f4).
 
