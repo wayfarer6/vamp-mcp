@@ -94,6 +94,10 @@ jobs:
           tests/test_virtualbox_provision.py
           tests/test_virtualbox_repair_scratch.py
           tests/test_virtualbox_snapshots.py
+      - name: Check recorded clicks and score overrides on synthetic guest frames
+        run: |
+          python -m pip install Pillow
+          python -m unittest tests.test_recorded_click_guard
       - name: Validate RPA manifests without executing them
         run: python scripts/validate_rpas.py
 

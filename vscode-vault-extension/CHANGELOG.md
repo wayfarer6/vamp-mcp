@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.16
+
+- Configure a saved KeePassXC entry and WSL mount directory for the default volume. Approved Windows MCP mounts reuse the bound key over CLI stdin. Missing setup returns a setup result before opening a password dialog.
+
 ## 0.1.15
 
 - Require administrator privileges for Windows Vault MCP and its remote proxy.

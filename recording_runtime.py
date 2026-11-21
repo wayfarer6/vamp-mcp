@@ -169,9 +169,19 @@ class RecordedWorkflow:
                 for key in reversed(action['keys']):self._up(key)
         elif op=='move':self._move(action)
         elif op=='click':
-            self._move(action)
+            from backends.library.click_guard import verify_click
+            def geometry():
+                info = self.spice.screen_info()
+                if info['mouse_mode'] != 2:
+                    raise ValueError('SPICE absolute pointer mode changed')
+                return [info['width'], info['height']]
+            async def capture(path, size):
+                self.spice.capture_guest_screen(path)
+            async def position(x, y):
+                self._move({'x': x, 'y': y})
             button={'left':1,'middle':2,'right':3}[action['button']]
             for _ in range(action['clicks']):
+                asyncio.run(verify_click(action, self.data['resolution'], capture, geometry, position))
                 try:
                     self.spice.inputs.button_press(button,1<<(button-1));self.spice._pump(.05)
                 finally:self.spice.inputs.button_release(button,0)

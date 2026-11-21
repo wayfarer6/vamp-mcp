@@ -945,6 +945,19 @@ if (!status.cli.keepassxc.available) {
           const closed=await call('vault_unmount_volume',{mount_point});
           assert.equal(closed.status,'unmounted');
         }
+        const savedClient = await connect({kdbx, volume, env:{
+          VAULT_VOLUME_CREDENTIAL_ENTRY:created.entry, VAULT_VERACRYPT_WSL_MOUNT_POINT:mount_point
+        }});
+        try {
+          for (let run=0; run<2; run++) {
+            const mounted = payload(await savedClient.callTool({name:'vault_mount_volume',arguments:{read_only:true,confirm:true}}));
+            assert.equal(mounted.status,'mounted',mounted.error);
+            assert.equal(mounted.mount_point,mount_point);
+            assert.ok(!JSON.stringify(mounted).includes(record.password));
+            const closed = payload(await savedClient.callTool({name:'vault_unmount_volume',arguments:{}}));
+            assert.equal(closed.status,'unmounted',closed.error);
+          }
+        } finally { await savedClient.close(); }
         const probeVmDisk=process.env.VAULT_TEST_WSL_VBOX_MEDIA==='1';
         assert.equal((await call('vault_mount_volume',{...args,read_only:!probeVmDisk,confirm:true})).status,'mounted');
         const wslCli=new VaultCli({env:process.env});

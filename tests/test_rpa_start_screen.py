@@ -37,6 +37,13 @@ class FixtureDriver:
 
 
 class StartScreenTest(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        # Isolate elevation/start/outcome checks from the independent click detector.
+        async def confirmed(action, resolution, capture, geometry, position, threshold):
+            await position(action['x'], action['y'])
+            return (action['x'], action['y']), {'score': .98}
+        self.enterContext(patch('backends.library.replay.verify_click', new=confirmed))
+
     async def test_uac_appearing_during_drain_blocks_vault_delivery(self):
         driver = FixtureDriver()
         prompt = SimpleNamespace(program_name=None, kind='credential')

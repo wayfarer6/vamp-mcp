@@ -23,7 +23,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { access, realpath, stat } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { sep } from 'node:path';
+import { resolve, sep } from 'node:path';
 import { BridgeClient, BridgeUnavailable } from '../../src/bridge_client.mjs';
 import { cliStatus, resolveCli } from '../../src/downloader.mjs';
 import { splitEntryPath, VaultCli } from '../../src/vault_cli.mjs';
@@ -994,27 +994,33 @@ tool('vault_mount_volume', {
 }, async args => {
   try {
     const cli = await getCli();
-    const wsl = process.platform === 'win32' && Boolean(args.credential_entry);
-    if (!wsl && !cli.hasVeracrypt) return failure(new Error('The VeraCrypt CLI is not installed.'), { code: 'veracrypt_missing' });
+    const configuredEntry = process.env.VAULT_VOLUME_CREDENTIAL_ENTRY?.trim();
+    const defaultVolume = !args.volume || settings.volume && resolve(args.volume) === resolve(settings.volume);
+    const entry = args.credential_entry || (defaultVolume ? configuredEntry : undefined);
+    if (entry && !/^VeraCrypt\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(entry)) throw Error('Choose a valid VeraCrypt credential entry.');
+    const wsl = process.platform === 'win32' && Boolean(entry);
+    const mountPoint = args.mount_point || (wsl ? process.env.VAULT_VERACRYPT_WSL_MOUNT_POINT : settings.mountPoint);
     const volume = args.volume || settings.volume;
     if (!volume) return failure(new Error('No volume path configured.'), { code: 'path_required' });
     if (!(await fileExists(volume))) return text({ status: 'volume_missing', volume, hint: 'Create it with vault_create (volume_file) or the VeraCrypt application.' });
-    if (args.credential_entry && process.platform !== 'linux' && !wsl) throw new Error('Mounting with a Vault credential on stdin requires Linux or WSL.');
-    if (wsl && (!process.env.VAULT_VERACRYPT_WSL_DISTRO || !args.mount_point || args.pim || args.slot || args.key_files?.length)) {
+    if (process.platform === 'win32' && !entry) return text({status:'setup_required',code:'saved_volume_credential_required',message:'Select the saved VeraCrypt credential, WSL distribution and WSL mount directory in VAMP Vault settings. No password dialog was opened.'});
+    if (!wsl && !cli.hasVeracrypt) return failure(new Error('The VeraCrypt CLI is not installed.'), { code: 'veracrypt_missing' });
+    if (entry && process.platform !== 'linux' && !wsl) throw new Error('Mounting with a Vault credential on stdin requires Linux or WSL.');
+    if (wsl && (!process.env.VAULT_VERACRYPT_WSL_DISTRO || !mountPoint || args.pim || args.slot || args.key_files?.length)) {
       throw new Error('Configure the WSL distribution and specify its mount directory. Managed WSL mounts use the generated Vault password.');
     }
-    const credential = args.credential_entry ? ` using ${args.credential_entry}` : '';
-    const destination = wsl ? ` in WSL ${process.env.VAULT_VERACRYPT_WSL_DISTRO} at ${args.mount_point} (WSL root mount)` : '';
+    const credential = entry ? ` using ${entry}` : '';
+    const destination = wsl ? ` in WSL ${process.env.VAULT_VERACRYPT_WSL_DISTRO} at ${mountPoint} (WSL root mount)` : '';
     const decision = await approve({ action: 'mount_volume', entry: volume + credential + destination, confirm: args.confirm, detail: `Mount ${volume}${args.read_only ? ' read-only' : ''}${credential}${destination}.` });
     if (decision.pending) return approvalNotice(volume, 'Mount this encrypted volume.');
     if (!decision.approved) return text({ status: 'denied', volume, reason: decision.how });
     let password;
-    if (args.credential_entry) {
+    if (entry) {
       const file = settings.kdbx;
       const master = await masterPassword({ file });
       const listing = await cli.listEntries({ file, databasePassword: master.password });
-      if (listing.entries.filter(item => item.path === args.credential_entry).length !== 1) throw new Error('Choose one unique volume credential.');
-      const record = await cli.showEntry({ file, entry: args.credential_entry, databasePassword: master.password });
+      if (listing.entries.filter(item => item.path === entry).length !== 1) throw new Error('Choose one unique volume credential.');
+      const record = await cli.showEntry({ file, entry, databasePassword: master.password });
       if (!record.password || record.url !== pathToFileURL(await realpath(volume)).href) {
         throw new Error('The vault entry is not bound to this encrypted volume.');
       }
@@ -1023,7 +1029,7 @@ tool('vault_mount_volume', {
       password = (await masterPassword({ file: volume, label: 'VeraCrypt volume password' })).password;
     }
     if (wsl) {
-      const result = await cli.mountVolumeViaWsl({file:volume,mountPoint:args.mount_point,password,readOnly:args.read_only});
+      const result = await cli.mountVolumeViaWsl({file:volume,mountPoint,password,readOnly:args.read_only});
       return text({status:result.mounted?'mounted':'failed',approved_by:decision.how,...result});
     }
     const result = await cli.mountVolume({
@@ -1051,10 +1057,11 @@ tool('vault_unmount_volume', {
 }, async args => {
   try {
     const cli = await getCli();
-    if (process.platform==='win32' && args.mount_point?.startsWith('/') && !args.all) {
+    const wslPoint = args.mount_point || (process.env.VAULT_VOLUME_CREDENTIAL_ENTRY && process.env.VAULT_VERACRYPT_WSL_MOUNT_POINT);
+    if (process.platform==='win32' && wslPoint?.startsWith('/') && !args.all) {
       const result=await withVmVolumeState(async guard=>{
-        await guard.assertDetached({mountPoint:args.mount_point});
-        return cli.unmountVolumeViaWsl(args.mount_point);
+        await guard.assertDetached({mountPoint:wslPoint});
+        return cli.unmountVolumeViaWsl(wslPoint);
       });
       return text({status:result.unmounted?'unmounted':'failed',...result});
     }
