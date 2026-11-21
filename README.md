@@ -32,6 +32,42 @@ From the VAMP VS Code extension, open a VirtualBox guest and verify that its Deb
 
 [English and Korean video guides](docs/VM_LAB.md) include the 30-second demo, installation and AI connection, architecture, and a hands-on VM lab.
 
+## Build the automation today. Tomorrow, just change the order number.
+
+Today, work with a large model to export an order from your ERP to CSV. Save the steps along with a check that the new file contains the requested order number. Tomorrow, ask a smaller model to **“export order 1042 the same way.”** It finds the workflow in the RPA Library and passes the new order number through MCP. VAMP runs the saved steps on your device and checks the CSV.
+
+**You can share a reviewed workflow with a colleague.** Export a specific version of a GUI RPA as a source ZIP. Your colleague can inspect the code and inputs, then reuse it in a compatible environment on their device with their own order number. Leave passwords and real order data out of the package. Reusing the steps can lower model costs on repeat runs because a large model no longer has to plan each click or command anew.
+
+**This branch adds saved Python and Playwright workflows alongside GUI recordings.** Open the RPA Library to import an order-export example, review its code for your VM and run it with a different order number. The CLI worker supports Linux guests on VirtualBox, KVM and Hyper-V. [GUI RPA guide](docs/WORKFLOWS.md) · [CLI setup and order example](docs/CLI_WORKFLOWS.md)
+
+```mermaid
+flowchart TD
+    A["Define steps and success checks with a large model"] --> G["GUI RPA · available today"]
+    A --> C["Python or Playwright workflow"]
+    G --> L["Review and save a version on your device"]
+    C --> L
+    L --> M["Your small model calls it with its ID and inputs"]
+    L --> P["Share a reviewed version"]
+    P --> T["Colleague reviews and sets it up on their device"]
+    T --> N["Their small model calls it with their own inputs"]
+    M --> R["VAMP runs and verifies the task on each device"]
+    N --> R
+    R --> DB["SQLite audit log for this profile"]
+    V["Vault credential use and volume mounts"] --> DB
+    DB --> Q["MCP search by time, script or agent"]
+    DB --> U["VS Code audit log and run details"]
+```
+
+If an AI provider raises its API prices or discontinues its service, you can keep using the saved workflow by maintaining its execution environment and connecting another small model that supports MCP. You decide how to edit the script and whom to share it with.
+
+**Even if you switch models, the workflows you’ve built stay on your device.**
+
+## Which agent ran a script?
+
+In this branch, **VAMP: Open Audit Log** shows the latest matching event per run over the last 24 hours. Combine a local time range, script name or UUID, agent ID and activity type. Select a row to open its timeline.
+
+Ask your AI to “Find runs of the order export script by `orders-agent` between 9 and 10 this morning and show their verification results.” It can use `audit_search` and `audit_run_details`. For a stable ID across restarts, set `VAMP_AGENT_ID=orders-agent` on that agent’s dedicated MCP server. Otherwise the server automatically assigns a process-session ID. [SQLite location, profiles and query examples](docs/AUDIT_LOG.md)
+
 ### Verify a recorded click
 
 When saving a recording, enter the text on each button or its specific YOLO class. Replay checks the guest before each press. The default minimum score is 90%. In **RPA Library → Recorded click verification**, set 1–100% or turn verification off. You can also tell your agent “Use 95% for this run only.” [Recognition, fallback and MCP examples](docs/RECORDED_CLICKS.md)

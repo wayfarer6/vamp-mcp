@@ -4,7 +4,7 @@ import { resolveConfig } from './config.mjs';
 import { createTools } from './tools.mjs';
 import { normalizeRemoteConfig, RemoteSshClient } from './client.mjs';
 
-const READ = new Set(['remote_env_check','remote_vm_list','remote_vm_status','remote_vm_screenshot','remote_golden_images']);
+const READ = new Set(['remote_audit_search','remote_env_check','remote_vm_list','remote_vm_status','remote_vm_screenshot','remote_golden_images']);
 
 // Convert the finite JSON-schema vocabulary in tools.mjs, rejecting unknown
 // vocabulary instead of silently weakening validation during consolidation.
@@ -111,8 +111,8 @@ export function registerLocalKvmTools(server, options={}) {
     names.push(name);
     server.registerTool(name,{title:tool.title?.replace(/remote/gi,'local KVM'),
       description:'LOCAL LINUX KVM HOST ONLY (not SSH). '+tool.description.replace(/remote_/g,'kvm_'),
-      inputSchema,annotations:{readOnlyHint:READ.has(tool.name)}},async args=>{
-      try{return remoteContent(await local().get(tool.name)(inputSchema.parse(args??{})));}
+      inputSchema,annotations:{readOnlyHint:READ.has(tool.name)}},async (args,extra)=>{
+      try{return remoteContent(await local().get(tool.name)(inputSchema.parse(args??{}),extra));}
       catch(error){return {isError:true,content:[{type:'text',text:JSON.stringify({status:'error',message:String(error?.message||error)})}]};}
     });
   }

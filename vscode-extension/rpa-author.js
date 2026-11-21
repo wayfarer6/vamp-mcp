@@ -11,7 +11,10 @@ async function createMetadata(item,source,context){
  if(!models.length)throw Error('No VS Code AI model is available. Configure a model, use Create to fill in the details yourself, or copy an AI request.');
  const choice=await vscode.window.showQuickPick(models.map(model=>({label:model.name,description:model.vendor,model})),{title:'Choose the AI that will help describe this RPA'});if(!choice)return;
  const consent=await vscode.window.showWarningMessage(`Let ${choice.label} read a structural summary and ask you questions?`,{modal:true,detail:'Original source and recorded values are not sent. A structural report and your answers are sent. Do not put IDs, passwords or other private values in your answers.'},'Continue with AI');if(consent!=='Continue with AI')return;
- const prompt=makePrompt({name:item.name,goal:'Ask me about this task, then write reusable skill metadata.',source,backend:context.globalState.get('vamp.manager.backend','virtualbox')});
+ const cli=item.kind==='cli';
+ const prompt=cli
+   ? 'Help describe a reusable '+item.runner+' workflow. Ask the author what the workflow does, which named inputs it reads from stdin JSON, and how to check the output. You receive only a structural summary and user answers. Do not request credentials or source. Summary: '+JSON.stringify(privacy.summarize([{relative:item.runner==='python'?'main.py':'main.cjs',bytes:Buffer.from(source)}]))
+   : makePrompt({name:item.name,goal:'Ask me about this task, then write reusable skill metadata.',source,backend:context.globalState.get('vamp.manager.backend','virtualbox')});
  async function request(text){
   return vscode.window.withProgress({location:vscode.ProgressLocation.Notification,title:'VAMP: preparing RPA details',cancellable:true},async(progress,token)=>{
    const response=await choice.model.sendRequest([vscode.LanguageModelChatMessage.User(text)],{},token);let output='';
@@ -25,7 +28,7 @@ async function createMetadata(item,source,context){
  for(const [index,question] of first.questions.slice(0,4).entries()){
   const answer=await vscode.window.showInputBox({title:`RPA details · ${index+1}/${Math.min(4,first.questions.length)}`,prompt:String(question).slice(0,500)+" — Do not enter IDs, passwords or tokens.",ignoreFocusOut:true});if(answer===undefined)return;if(privacy.inspectText(answer,'.txt').findings.length)throw Error('Possible private information in your answer. Describe the task without IDs, passwords or tokens. Nothing from this answer was sent to AI.');answers.push({question:String(question),answer});
  }
- const result=await request(prompt+'\nUser answers: '+JSON.stringify(answers)+'\nReturn JSON only: {"title":"short task name","description":"what it does","when_to_use":"when an agent should choose this RPA","expected_result":"observable completion condition","tags":["keyword"],"inputs":["name"]}. Include input names only when the source actually has ${name} placeholders. Do not claim execution has been verified.');
+ const result=await request(prompt+'\nUser answers: '+JSON.stringify(answers)+'\nReturn JSON only: {"title":"short task name","description":"what it does","when_to_use":"when an agent should choose this RPA","expected_result":"observable completion condition","tags":["keyword"],"inputs":["name"]}. Do not claim execution has been verified.'+(cli?' Suggest only input names supported by the author’s answers.':' Include input names only for recorded placeholders.'));
  if(!result)return;
  return {title:String(result.title||item.name).slice(0,120),description:String(result.description||'').slice(0,4000),when_to_use:String(result.when_to_use||'').slice(0,2000),expected_result:String(result.expected_result||'').slice(0,2000),tags:Array.isArray(result.tags)?result.tags.map(String).slice(0,20):[],inputs:Array.isArray(result.inputs)?result.inputs.map(String).slice(0,20):[]};
 }

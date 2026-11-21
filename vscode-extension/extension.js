@@ -73,6 +73,8 @@ function activate(context) {
         VAMP_DESKTOP_IMAGE_IDS:(config().get('podman.desktopImageIds')||[]).join(','),
         RPA_HOST_PYTHON:pythonPath(),RPA_REPLAY_PYTHON:config().get('mousePythonExecutable')||pythonPath(),
         MOUSE_HELPER_PATH:path.join(runtime,'backends/virtualbox/mouse_click.py'),
+        VAMP_AUDIT_PROFILE:require('./dist/audit-panel.cjs').audit.profileFor(context.globalStorageUri.fsPath),
+        ...(process.env.VAMP_AGENT_ID && {VAMP_AGENT_ID:process.env.VAMP_AGENT_ID}),
         VAMP_RPA_REGISTRY:path.join(context.globalStorageUri.fsPath,'rpa-catalog'),
         VAMP_LIBVIRT_URI:config().get('libvirtUri')||'qemu:///session',
         VAMP_REMOTE_REPO:runtime,VAMP_REMOTE_WORKDIR:context.globalStorageUri.fsPath,
@@ -214,6 +216,7 @@ function activate(context) {
     finally{settingUp=false;}
   }));
   context.subscriptions.push(vscode.commands.registerCommand('vamp.openVault',()=>vscode.extensions.getExtension('wayfarer6.vamp-vault')?vscode.commands.executeCommand('vampVault.openBrowser'):vscode.commands.executeCommand('workbench.extensions.search','@id:wayfarer6.vamp-vault')));
+  require('./dist/audit-panel.cjs').register(context,'vamp.openAuditLog',path.join(context.globalStorageUri.fsPath,'rpa-catalog'));
   require('./rpa-library').registerLibrary(context,{runtime,output});
   const remote = require('./remote-backend').registerRemote(context,{runtime,output,version,changes,registerMcp:false});
   require('./vm-manager').registerManager(context,{
@@ -229,7 +232,7 @@ function activate(context) {
       const logo=view.webview.asWebviewUri(vscode.Uri.joinPath(context.extensionUri,'assets/sidebar-brand.png'));
       view.webview.html=containersUI.withContainersSidebar(require('./vm-manager').sidebarHTML(String(logo),view.webview.cspSource));
       view.webview.onDidReceiveMessage(async message=>{
-        const command={library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',containers:'vamp.openContainers',screen:'vamp.openVmScreen',guide:'vamp.openGuide',remote:'vamp.remote.openManager'}[message?.type];
+        const command={audit:'vamp.openAuditLog',library:'vamp.openRpaLibrary',vault:'vamp.openVault',manager:'vamp.openManager',containers:'vamp.openContainers',screen:'vamp.openVmScreen',guide:'vamp.openGuide',remote:'vamp.remote.openManager'}[message?.type];
         if(command){try{await vscode.commands.executeCommand(command);}catch(error){output.appendLine(error.message);}}
       });
     }

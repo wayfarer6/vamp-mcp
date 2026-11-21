@@ -108,7 +108,8 @@ test('real MCP SDK discovery and SSH mock call preserve schemas and content',asy
  registerRemoteTools(server,{remoteConfig:{enabled:true,host:'fixture'},clientFactory:()=>({call:async(name,args)=>{calls++;return {name,args};}}),pythonConfig:{enabled:true,python:'/fixture/python',repo:'/fixture/repo'},connectPython:async()=>({call:async(name,args)=>({content:[{type:'text',text:JSON.stringify({name,args})}]}),close:async()=>{}})});
  const client=new Client({name:'fixture-client',version:'1'});const [a,b]=InMemoryTransport.createLinkedPair();await server.connect(a);await client.connect(b);
  try{
-  const {tools}=await client.listTools();assert.equal(calls,0);assert.equal(tools.length,32);
+  const {tools}=await client.listTools();assert.equal(calls,0);assert.equal(tools.length,34);
+  for(const name of ['remote_audit_search','kvm_audit_search']) assert.equal(tools.find(t=>t.name===name)?.annotations?.readOnlyHint,true);
   const schema=tools.find(t=>t.name==='remote_vm_create').inputSchema;
   assert.deepEqual(schema.properties.guest_os.enum,['debian','windows11']);
   assert.equal(schema.properties.bootstrap_host.format,'ipv4');

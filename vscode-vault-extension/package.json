@@ -72,6 +72,7 @@
       ]
     },
     "commands": [
+      {"command":"vampVault.openAuditLog","title":"VAMP Vault: Open Audit Log","icon":"$(history)"},
       {
         "command": "vampVault.openBrowser",
         "title": "VAMP Vault: Browse Credentials",

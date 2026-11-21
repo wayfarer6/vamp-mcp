@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RPA Library · CLI 설계 시안</title>
+<style>
+:root{color-scheme:dark;font:16px/1.55 "Segoe UI","Malgun Gothic",sans-serif;background:#181b1f;color:#edf0f3}
+*{box-sizing:border-box}body{max-width:1080px;margin:3rem auto;padding:0 1rem}h1,h2,h3,p{margin:0 0 .6rem}h1{font-size:1.8rem}h2{font-size:1.4rem}header,.row{display:flex;gap:.7rem;align-items:center;flex-wrap:wrap}header{justify-content:space-between;margin-bottom:1.5rem}
+small,.muted{color:#bcc6cf}main{display:grid;grid-template-columns:minmax(235px,30%) 1fr;border:1px solid #45505b}aside,article{padding:1.25rem}aside{background:#21262c;border-right:1px solid #45505b}article{background:#1d2227}label{display:grid;gap:.25rem;margin:.7rem 0}
+button,input,select{font:inherit;color:inherit;background:#292f37;border:1px solid #596573;border-radius:4px;padding:.4rem .65rem;max-width:100%}button{cursor:pointer}button:hover{border-color:#9fcaff}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #98caff;outline-offset:2px}button.primary{background:#154c76}button[disabled]{opacity:.55;cursor:default}
+#list button{display:block;text-align:left;width:100%;margin:.6rem 0}#list button[aria-pressed=true]{border-color:#82bbec;background:#283b4a}section{border-top:1px solid #3b444e;padding:1rem 0}pre{background:#15191d;color:#c9e5f6;padding:.8rem;white-space:pre-wrap;overflow-wrap:anywhere}#notice{color:#a7d8f4;min-height:1.55em}#editor{margin-top:1rem}.inline{display:flex;align-items:center;gap:.6rem}input[type=checkbox]{width:1rem;height:1rem}
+@media(max-width:690px){body{margin:1rem auto}main{grid-template-columns:1fr}aside{border-right:none;border-bottom:1px solid #45505b}}
+</style>
+<header><div><h1>RPA Library</h1><small>CLI 설계 시안 · 합성 데이터</small></div><button id="create">CLI 예제 가져오기</button></header>
+<main>
+<aside aria-label="라이브러리"><label>작업 검색<input id="query" type="search"></label><label>실행 방식<select id="kind"><option value="all">전체</option><option value="cli">CLI</option><option value="gui">GUI</option></select></label><div id="list"></div></aside>
+<article><h2 id="title"></h2><p id="description" class="muted"></p>
+<div id="editor">
+<section><h3>코드와 검토</h3><details><summary>검토할 파일</summary><pre>export_orders.py  ·  주문 선택 및 CSV 작성
+verify_csv.py     ·  헤더, 주문 번호, 행 수 검사
+requirements.lock ·  고정 의존성</pre></details>
+<label>작업공간<select id="space"><option>erp-demo</option><option>erp-training</option></select></label>
+<div class="row"><span id="revision"></span><button id="review">이 버전 검토 완료</button><button id="revise">새 버전 가져오기</button></div></section>
+<section><h3>실행 입력</h3><form id="inputs"><label>주문 번호 · order_id<select id="order"><option>ORD-1042</option><option>ORD-1043</option></select></label>
+<label>출력 파일 · output_name<input id="file" value="order-1042.csv" required pattern="[A-Za-z0-9_\-]+\.csv" title="영문, 숫자, 밑줄, 하이픈으로 된 CSV 파일 이름"></label>
+<button class="primary">실행 미리보기</button></form></section>
+<section id="preview" hidden><h3>실행 확인</h3><pre id="summary"></pre><button class="primary" id="run">예시 실행 확인</button></section>
+<section id="result" hidden><h3>검증 결과</h3><pre id="output"></pre></section>
+</div><p aria-live="polite" id="notice"></p></article>
+</main>
+<script>
+const el=id=>document.getElementById(id);
+const entries=[
+ {id:'export',name:'주문 CSV 내보내기',kind:'cli',description:'선택한 주문 한 건을 CSV에 저장하고 내용을 확인합니다.',revision:1},
+ {id:'gui',name:'주문 화면 열기',kind:'gui',description:'기존 GUI 녹화 항목입니다. 화면 해상도와 녹화 동작은 GUI 상세에 표시됩니다.'}
+];
+const approvals=new Set();
+let item=entries[0], previewKey='';
+function binding(){return [item.id,item.revision,el('space').value].join('/')}
+function key(){return JSON.stringify([binding(),el('order').value,el('file').value])}
+function invalidate(){previewKey='';el('preview').hidden=true;el('result').hidden=true;el('notice').textContent=''}
+function detail(){
+ invalidate();el('title').textContent=item.name;el('description').textContent=item.description;
+ el('editor').hidden=item.kind!=='cli';
+ if(item.kind==='cli'){
+  const approved=approvals.has(binding());
+  el('revision').textContent='v'+item.revision+' · '+(approved?'검토 완료':'검토 필요');
+  el('review').disabled=approved;
+ }
+}
+function list(){
+ const rows=entries.filter(e=>(el('kind').value==='all'||e.kind===el('kind').value)&&e.name.includes(el('query').value.trim()));
+ el('list').replaceChildren();
+ if(!rows.length){el('list').textContent='검색 결과 없음';document.querySelector('article').hidden=true;invalidate();return}
+ document.querySelector('article').hidden=false;
+ if(!rows.includes(item))item=rows[0];
+ for(const e of rows){const b=document.createElement('button');b.textContent=e.name+' · '+e.kind.toUpperCase();b.setAttribute('aria-pressed',String(e===item));b.onclick=()=>{item=e;list();detail();el('title').tabIndex=-1;el('title').focus()};el('list').append(b)}
+ detail();
+}
+el('query').oninput=list;el('kind').onchange=list;
+el('space').onchange=detail;el('review').onclick=()=>{approvals.add(binding());detail();el('notice').textContent='이 작업공간에서 현재 버전을 검토했습니다.'};
+el('revise').onclick=()=>{item.revision++;detail()};
+el('create').onclick=()=>{const n=entries.length-1;item={...entries[0],id:'import-'+n,name:'가져온 주문 CSV 작업 '+n,revision:1};entries.push(item);el('query').value='';el('kind').value='cli';list()};
+el('file').oninput=invalidate;el('order').onchange=invalidate;
+el('inputs').onsubmit=e=>{e.preventDefault();invalidate();if(!approvals.has(binding())){el('notice').textContent='이 작업공간에서 현재 버전을 먼저 검토하세요.';el('review').focus();return}
+ previewKey=key();el('summary').textContent=[item.name+' · v'+item.revision,'작업공간 '+el('space').value,'주문 '+el('order').value,'생성할 파일 '+el('file').value].join('\n');el('preview').hidden=false;el('run').focus()};
+el('run').onclick=()=>{if(key()!==previewKey||!approvals.has(binding()))return;
+ const rows=[['ORD-1042','12'],['ORD-1043','24']].filter(row=>row[0]===el('order').value);
+ const csv=['order_id,quantity',...rows.map(row=>row.join(','))].join('\n');
+ const valid=rows.length===1&&csv.split('\n')[1].split(',')[0]===el('order').value;
+ el('output').textContent=(valid?'검증 통과':'검증 실패')+' · 합성 데이터\n'+el('file').value+'\n\n'+csv;
+ el('preview').hidden=true;previewKey='';el('result').hidden=false;el('notice').textContent='예시 결과를 표시했습니다.'};
+list();
+</script>
+</html>
