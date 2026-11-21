@@ -24,7 +24,7 @@
 
 ## See VAMP in 30 seconds
 
-**Try a warehouse close.** Ask “Close the warehouse for the month.” Codex finds a reviewed GUI recording and LibreOffice Calc writes an Excel workbook for four synthetic SKUs. The demo checks all 24 formulas and the closing value after saving. [English video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-prompt-en.mp4) · [Example and setup](examples/warehouse-close/README.md) · [Finished XLSX](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-12.xlsx)
+**Try a warehouse close.** Ask “Close the warehouse for the month.” Codex finds a reviewed GUI recording and LibreOffice Calc writes an Excel workbook for four synthetic SKUs. The demo checks all 24 formulas and the closing value after saving. [English video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-workflow-en.mp4) · [Example and setup](examples/warehouse-close/README.md) · [Finished XLSX](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-12.xlsx)
 
 From the VAMP VS Code extension, open a VirtualBox guest and verify that its Debian desktop is live.
 
