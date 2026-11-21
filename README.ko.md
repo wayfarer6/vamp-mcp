@@ -26,6 +26,8 @@
 
 ## 30초 만에 보는 VAMP
 
+**“월말 창고 결산 해줘”로 실행해 보세요.** Codex가 검토된 GUI RPA를 찾으면 LibreOffice Calc가 가상 품목 네 개의 결산 엑셀을 만듭니다. 데모에서는 파일을 다시 열고 수식 24개와 기말 재고 금액을 확인합니다. [한국어 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-ko.mp4) · [실습·등록 방법](examples/warehouse-close/README.md) · [완성된 엑셀](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-2026-11.xlsx)
+
 VAMP VS Code 확장에서 VirtualBox 게스트를 열고 Debian 화면이 연결되는 과정을 보여 줍니다.
 
 [![데모 미리보기: VAMP에서 VirtualBox 게스트를 이름으로 열고 Debian 화면 연결을 확인](docs/media/vamp-demo-preview-ko.gif)](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-ko.mp4)

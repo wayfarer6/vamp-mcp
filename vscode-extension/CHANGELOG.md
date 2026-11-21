@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.16
+
+- Include a reusable LibreOffice Calc warehouse close example. Search the reviewed GUI recording in Korean or English, run it in a VirtualBox guest, and check the saved Excel formulas and stock valuation.
+
 ## 0.3.15
 
 - Add reviewed Python and Playwright workflows for Linux VM workspaces and a profile-scoped SQLite audit panel with MCP search. Preserve click verification and catalog settings for GUI replay.

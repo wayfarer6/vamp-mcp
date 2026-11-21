@@ -2,6 +2,7 @@
 
 | Guide / 종류 | 한국어 | English |
 | --- | --- | --- |
+| 월말 창고 결산 · LibreOffice / Month-end warehouse close | [한국어 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-ko.mp4) · [자막](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-ko.srt) | [English video](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-en.mp4) · [Captions](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.16/warehouse-close-en.srt) |
 | 결과 미리 보기 / Result demo · 0:30 | [30초 데모](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-ko.mp4) · [자막](media/vamp-result-ko.srt) | [30-second demo](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-result-en.mp4) · [Captions](media/vamp-result-en.srt) |
 | 설치·AI 연결·첫 사용 / Installation, AI connection and first task | [영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-first-run-ko.mp4) · [자막](media/vamp-first-run-ko.srt) | [Video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-first-run-en.mp4) · [Captions](media/vamp-first-run-en.srt) |
 | VirtualBox · KVM · Hyper-V 구조 / Architecture | [영상](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-architecture-ko.mp4) · [자막](media/vamp-architecture-ko.srt) | [Video](https://raw.githubusercontent.com/wayfarer6/vamp-mcp/main/docs/media/vamp-architecture-en.mp4) · [Captions](media/vamp-architecture-en.srt) |

@@ -37,6 +37,10 @@ for(const name of ['backends/packer','backends/common/packer.cjs','backends/comm
   await mkdir(path.dirname(destination),{recursive:true});
   await cp(path.join(root,name),destination,{recursive:true,filter:source=>!source.includes('__pycache__')});
 }
+const warehouseExample = 'examples/warehouse-close';
+await cp(path.join(root,warehouseExample),path.join(runtime,warehouseExample),{
+  recursive:true, filter:source=>!source.includes('__pycache__')
+});
 // A VSIX/npm runtime built on Windows must also execute on Linux/macOS.
 await copyFile(path.join(root,'backends/library/scratch.py'),path.join(runtime,'backends/library/scratch.py'));
 await copyFile(path.join(root,'scripts/download_models.py'),path.join(runtime,'scripts/download_models.py'));
