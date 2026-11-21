@@ -31,6 +31,8 @@ Contributions are welcome. See the [contribution guide](CONTRIBUTING.md) and [AI
 
 Run GUI automation inside a guest while you keep using your host desktop. With saved RPA, local replay can check the screen and output files without sending frames to a model. An external agent can receive screen data if its client requests it during exploration or targeted fallback. Vault-managed secrets can be delivered through the approved guest connection.
 
+For SSH-based remote GUI automation, see the [WSL2 remote MCP worker guide](docs/WSL2_REMOTE_WORKER.md).
+
 Watch the [VAMP overview in English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/14-VAMP-Overview-en.mp4) for the architecture and first steps. The [English installation guide](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/11-VAMP-Install-Guide-X-en.mp4) starts on the Windows host with MCP package and VSIX installation and follows both routes through Debian startup in VirtualBox.
 
 - VAMP MCP and Vault in an AI client ([English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.12/15-VAMP-MCP-Vault-AI-Walkthrough-QHD-en.mp4) · [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.12/15-VAMP-MCP-Vault-AI-Walkthrough-QHD-ko.mp4))

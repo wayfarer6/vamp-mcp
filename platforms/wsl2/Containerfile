@@ -1,0 +1,22 @@
+FROM ubuntu:24.04 AS basic
+RUN apt-get update && apt-get install -y --no-install-recommends xvfb xauth x11-utils python3-venv python3-tk fonts-dejavu-core libgl1 libglib2.0-0 && rm -rf /var/lib/apt/lists/*
+RUN python3 -m venv /opt/venv
+ENV PATH=/opt/venv/bin:$PATH
+RUN pip install --no-cache-dir 'mcp>=1.9,<2' 'robotframework>=7,<8' pyautogui pillow
+RUN useradd --create-home --uid 10001 vamp
+WORKDIR /opt/vamp
+COPY worker.py workflow.py smoke.robot vision.py ./
+USER 10001:10001
+ENV HOME=/home/vamp PYTHONDONTWRITEBYTECODE=1
+ENTRYPOINT ["python", "/opt/vamp/worker.py"]
+
+FROM basic AS vision
+USER root
+RUN pip install --no-cache-dir torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu126
+RUN pip install --no-cache-dir paddlepaddle-gpu==3.3.0 --index-url https://www.paddlepaddle.org.cn/packages/stable/cu126/
+RUN pip install --no-cache-dir "paddleocr>=3.4,<4" "ultralytics>=8.3,<9"
+COPY fetch-icons.py ./
+RUN python fetch-icons.py
+RUN HOME=/tmp/vamp-model-setup python -c "from paddleocr import PaddleOCR; PaddleOCR(device='cpu', text_detection_model_name='PP-OCRv5_mobile_det', text_recognition_model_name='en_PP-OCRv5_mobile_rec', use_doc_orientation_classify=False, use_doc_unwarping=False, use_textline_orientation=False)" && cp -r /tmp/vamp-model-setup/.paddlex/official_models/. /opt/vamp/models/ && rm -rf /tmp/vamp-model-setup
+ENV VAMP_WSL_VISION=gpu
+USER 10001:10001

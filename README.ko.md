@@ -33,6 +33,8 @@
 
 호스트 PC를 계속 사용하면서 게스트에서 GUI 자동화를 실행할 수 있습니다. 저장된 RPA는 화면과 결과 파일을 로컬에서 확인할 수 있으며, 탐색이나 예외 대응 중 외부 에이전트의 클라이언트가 화면을 요청하면 그 데이터가 전달될 수 있습니다. Vault의 비밀값은 승인된 게스트 연결을 통해 전달할 수 있습니다.
 
+SSH를 통한 원격 GUI 자동화는 [WSL2 원격 MCP 워커 가이드](docs/WSL2_REMOTE_WORKER.md)를 참고하세요.
+
 [VAMP 영어 소개 영상](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/14-VAMP-Overview-en.mp4)에서 시스템 구조와 시작 방법을 확인할 수 있습니다. [영어 설치 가이드](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/11-VAMP-Install-Guide-X-en.mp4)는 Windows 호스트에서 MCP 패키지와 VSIX를 설치하는 화면부터 VirtualBox에서 Debian이 부팅되는 과정까지 안내합니다.
 
 - AI에서 VAMP MCP와 Vault 사용 ([영어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.12/15-VAMP-MCP-Vault-AI-Walkthrough-QHD-en.mp4) · [한국어](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.12/15-VAMP-MCP-Vault-AI-Walkthrough-QHD-ko.mp4))
