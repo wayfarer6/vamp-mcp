@@ -459,10 +459,10 @@ async def run(request, dialogue=False):
     wait_seconds = request.get('uac_wait_seconds', 0)
     resume_text = request.get('uac_resume_text')
     if (type(wait_seconds) is not int or not 0 <= wait_seconds <= 120
-            or (wait_seconds and (request.get('pause_on_uac') is not True or metadata['backend'] != 'virtualbox'
+            or (wait_seconds and (request.get('pause_on_uac') is not True or metadata['backend'] not in ('virtualbox', 'kvm')
                                   or not isinstance(resume_text, str) or not 1 <= len(resume_text.strip()) <= 240))
             or (resume_text is not None and not wait_seconds)):
-        raise ValueError('UAC resume requires VirtualBox, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
+        raise ValueError('UAC resume requires VirtualBox or KVM, pause_on_uac, a wait of up to 120 seconds, and exact post-approval screen text.')
     resume_events = []
     wait_events = []
 
@@ -514,44 +514,46 @@ async def run(request, dialogue=False):
     vault_steps={item['action_index']:item for item in references}
     if dialogue and references:
         vault_dialogue({'vault':'preflight','references':references})
-    if metadata['backend']=='virtualbox':
+    async def replay_on(driver):
+        return await replay(driver, actions, metadata['resolution'], vault_steps, start_text=start_text,
+                            pause_on_uac=request.get('pause_on_uac') is True, uac_wait_seconds=wait_seconds,
+                            uac_resume_text=resume_text, on_uac_resume=record_resume, on_uac_wait=record_wait)
+
+    try:
+        if metadata['backend'] == 'virtualbox':
+            completed = await replay_on(VBox(request['vm_id']))
+        elif metadata['backend']=='kvm':
+            import asyncvnc
+            uri=request.get('libvirt_uri','qemu:///session')
+            if uri not in ('qemu:///session','qemu:///system'):raise ValueError('Only local libvirt connections are supported')
+            def virsh(*args):
+                p=subprocess.run(['virsh','-c',uri,*args],capture_output=True,text=True,timeout=30)
+                if p.returncode:raise RuntimeError(p.stderr[:300])
+                return p.stdout
+            if virsh('domstate',request['vm_id']).strip()!='running':raise ValueError('Start the target VM before replay')
+            xml=ET.fromstring(virsh('dumpxml',request['vm_id']));graphics=xml.find("devices/graphics[@type='vnc']")
+            if graphics is None:raise ValueError('The target needs a localhost VNC display')
+            listen=graphics.find('listen');host=graphics.get('listen') or (listen.get('address') if listen is not None else None) or '127.0.0.1';port=int(graphics.get('port','-1'))
+            if host not in ('127.0.0.1','localhost','::1') or not 1<=port<=65535:raise ValueError('Only active localhost VNC is supported')
+            async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
+                completed = await replay_on(VNC(client))
+        else:raise ValueError('This backend has no recorded desktop replay adapter')
+    except ElevationHandoff as error:
+        observed_at=error.observed_at
+        result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
+                'actions_completed':error.completed,'phase':error.phase,
+                'program_identity':'unverified','replay_commit':metadata['replay_commit'],
+                'at':observed_at,'message':str(error)}
+        if error.program_name is not None:
+            result['program_name_ocr'] = error.program_name
+        if error.prompt_kind is not None:
+            result['prompt_kind'] = error.prompt_kind
         try:
-            completed=await replay(VBox(request['vm_id']),actions,metadata['resolution'],vault_steps,start_text=start_text,
-                                   pause_on_uac=request.get('pause_on_uac') is True, uac_wait_seconds=wait_seconds,
-                                   uac_resume_text=resume_text, on_uac_resume=record_resume,
-                                   on_uac_wait=record_wait)
-        except ElevationHandoff as error:
-            observed_at=error.observed_at
-            result={'status':'operator_handoff','reason':error.reason,'rpa_id':metadata['id'],
-                    'actions_completed':error.completed,'phase':error.phase,
-                    'program_identity':'unverified','replay_commit':metadata['replay_commit'],
-                    'at':observed_at,'message':str(error)}
-            if error.program_name is not None:
-                result['program_name_ocr'] = error.program_name
-            if error.prompt_kind is not None:
-                result['prompt_kind'] = error.prompt_kind
-            try:
-                result['run_id'] = record_handoff(error)
-            except (OSError, sqlite3.Error):
-                result['history_status']='unavailable'
-            attach_elevation_history(result)
-            return result
-    elif metadata['backend']=='kvm':
-        import asyncvnc
-        uri=request.get('libvirt_uri','qemu:///session')
-        if uri not in ('qemu:///session','qemu:///system'):raise ValueError('Only local libvirt connections are supported')
-        def virsh(*args):
-            p=subprocess.run(['virsh','-c',uri,*args],capture_output=True,text=True,timeout=30)
-            if p.returncode:raise RuntimeError(p.stderr[:300])
-            return p.stdout
-        if virsh('domstate',request['vm_id']).strip()!='running':raise ValueError('Start the target VM before replay')
-        xml=ET.fromstring(virsh('dumpxml',request['vm_id']));graphics=xml.find("devices/graphics[@type='vnc']")
-        if graphics is None:raise ValueError('The target needs a localhost VNC display')
-        listen=graphics.find('listen');host=graphics.get('listen') or (listen.get('address') if listen is not None else None) or '127.0.0.1';port=int(graphics.get('port','-1'))
-        if host not in ('127.0.0.1','localhost','::1') or not 1<=port<=65535:raise ValueError('Only active localhost VNC is supported')
-        async with asyncvnc.connect(host,port,password=os.environ.get('VAMP_VNC_PASSWORD')) as client:
-            completed=await replay(VNC(client),actions,metadata['resolution'],vault_steps,start_text=start_text)
-    else:raise ValueError('This backend has no recorded desktop replay adapter')
+            result['run_id'] = record_handoff(error)
+        except (OSError, sqlite3.Error):
+            result['history_status']='unavailable'
+        attach_elevation_history(result)
+        return result
     result = {'status':'completed_unverified','rpa_id':metadata['id'],'actions_completed':completed,'resolved':len(references),'expected_result':metadata['expected_result'],'message':'Replay completed. Verify the expected application result.'}
     attach_elevation_history(result)
     return result

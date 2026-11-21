@@ -5,7 +5,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from backends.library.replay import ElevationHandoff, OutcomeScreenBlocked, StartScreenBlocked, VNC, VBox, replay, run
 from backends.virtualbox.history import detail
@@ -37,6 +37,34 @@ class FixtureDriver:
 
 
 class StartScreenTest(unittest.IsolatedAsyncioTestCase):
+    async def test_kvm_saved_replay_waits_for_verified_uac_resume(self):
+        driver = FixtureDriver()
+        metadata = {'id': 'fixture-rpa', 'backend': 'kvm', 'resolution': [1920, 1080],
+                    'replay_commit': 'a' * 40, 'expected_result': 'Ready'}
+        actions = [{'op': 'click', 'x': 10, 'y': 20, 'button': 'left', 'clicks': 1, 'interval': 0}]
+        connect = MagicMock()
+        client = connect.return_value.__aenter__.return_value
+        outputs = ['running', '<domain><devices><graphics type="vnc" port="5901"/></devices></domain>']
+        prompt = SimpleNamespace(program_name='Fixture Setup', kind='consent')
+        with TemporaryDirectory() as folder, patch.dict(os.environ, {'VAMP_DATA_DIR': folder}), \
+             patch.dict('sys.modules', {'asyncvnc': SimpleNamespace(connect=connect)}), \
+             patch('backends.library.replay.load', return_value=(metadata, actions)), \
+             patch('backends.library.replay.subprocess.run',
+                   side_effect=[SimpleNamespace(returncode=0, stdout=value) for value in outputs]), \
+             patch('backends.library.replay.VNC', return_value=driver) as adapter, \
+             patch('backends.library.replay.asyncio.sleep'), \
+             patch('backends.library.replay.inspect_elevation_screen',
+                   side_effect=[prompt, False, False, False]) as inspect:
+            result = await run({'vm_id': 'fixture-vm', 'pause_on_uac': True, 'uac_wait_seconds': 10,
+                                'uac_resume_text': 'Installed'})
+        adapter.assert_called_once_with(client)
+        self.assertEqual([call.args[1] for call in inspect.call_args_list],
+                         [None, 'Installed', 'Installed', None])
+        self.assertEqual(driver.events, ['move', 'left'])
+        self.assertEqual(result['actions_completed'], 1)
+        self.assertEqual(len(result['elevation_wait_run_ids']), 1)
+        self.assertEqual(len(result['elevation_resume_run_ids']), 1)
+
     async def test_virtualbox_captures_before_any_input(self):
         await self.check_capture_before_input('virtualbox')
 
