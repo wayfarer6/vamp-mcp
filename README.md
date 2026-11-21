@@ -21,6 +21,18 @@
 
 ---
 
+## Ask your AI to install VAMP
+
+In Claude Code or Codex with terminal access to your Windows PC, paste this request:
+
+```text
+https://github.com/wayfarer6/vamp-mcp
+Install VAMP MCP on my Windows PC from the latest official release. Verify the package
+checksum, connect it to this AI client, and list my VirtualBox VMs to confirm it works.
+```
+
+[Download the Korean walkthrough with narration and captions (3:51)](https://github.com/wayfarer6/vamp-mcp/raw/refs/heads/main/docs/media/vamp-first-run-ko.mp4) · [Copy the web-chat prompt, follow the install commands, and try the order CSV demo (Korean)](docs/FIRST_RUN.ko.md)
+
 ## How to use
 
 **Supported hosts:** Windows and Linux. macOS is outside the supported host scope.
