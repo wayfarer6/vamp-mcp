@@ -159,7 +159,7 @@ After installing, check the VAMP entries with `code --list-extensions --show-ver
 3. Replay the reviewed workflow on the selected guest. Check the expected screen or output file before treating it as successful.
 4. If the screen changed, inspect the affected area and propose a targeted repair. Test the repair in a separate VirtualBox guest, then review the verified revision before using it again. See the [recording and repair workflow](docs/WORKFLOWS.md).
 
-For Windows replay on VirtualBox or KVM with a local VNC display that may encounter a guest UAC prompt, enable `pause_on_uac`. VAMP checks the guest screen with local OCR and stops for operator review. To continue the same run after approval in the guest console, also set `uac_wait_seconds` and a unique `uac_resume_text` that appears in the expected app. See the [guest UAC replay workflow](docs/WORKFLOWS.md#guest-uac-replay).
+For Windows replay on VirtualBox or KVM with a local VNC display that may encounter a guest UAC prompt, enable `pause_on_uac`. The recording and guest display must both be 1920×1080. VAMP checks the guest screen with local OCR and stops for operator review. To continue the same run after approval in the guest console, also set `uac_wait_seconds` and a unique `uac_resume_text` that appears in the expected app. See the [guest UAC replay workflow](docs/WORKFLOWS.md#guest-uac-replay).
 
 ---
 

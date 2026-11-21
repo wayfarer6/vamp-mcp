@@ -159,7 +159,7 @@ Windows 호스트 PowerShell 실행 정책 및 별도의 Hyper-V/CIM 권한 확�
 3. 선택한 게스트에서 검토된 작업을 재생합니다. 기대 화면이나 결과 파일을 확인한 뒤 성공 여부를 판단합니다.
 4. 화면이 달라졌다면 관련 영역을 확인하고 필요한 동작만 수정합니다. 별도 VirtualBox 게스트에서 수정본을 시험한 뒤 검증된 버전을 검토하고 다시 사용합니다. [기록 및 수정 흐름](docs/WORKFLOWS.md)을 참고하세요.
 
-Windows VirtualBox 또는 로컬 VNC를 사용하는 KVM 게스트에서 UAC 창이 나타날 수 있는 작업을 재생할 때는 `pause_on_uac`를 켜세요. VAMP는 로컬 OCR로 게스트 화면을 확인하고 운영자 확인이 필요하면 재생을 멈춥니다. 게스트 콘솔에서 승인한 뒤 같은 실행을 이어가려면 `uac_wait_seconds`와 대상 앱에서만 보이는 고유한 `uac_resume_text`도 설정하세요. [게스트 UAC 재생 절차](docs/WORKFLOWS.md#guest-uac-replay)를 참고하세요.
+Windows VirtualBox 또는 로컬 VNC를 사용하는 KVM 게스트에서 UAC 창이 나타날 수 있는 작업을 재생할 때는 `pause_on_uac`를 켜세요. 기록 해상도와 게스트 화면은 모두 1920×1080이어야 합니다. VAMP는 로컬 OCR로 게스트 화면을 확인하고 운영자 확인이 필요하면 재생을 멈춥니다. 게스트 콘솔에서 승인한 뒤 같은 실행을 이어가려면 `uac_wait_seconds`와 대상 앱에서만 보이는 고유한 `uac_resume_text`도 설정하세요. [게스트 UAC 재생 절차](docs/WORKFLOWS.md#guest-uac-replay)를 참고하세요.
 
 ---
 

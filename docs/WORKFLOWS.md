@@ -51,7 +51,7 @@ sequenceDiagram
 
 <a name="guest-uac-replay"></a>
 
-KVM Windows 게스트에서도 로컬 VNC 화면을 통해 같은 UAC 정지 및 재개 검사를 수행합니다. 실제 Secure Desktop 검증은 VirtualBox Windows 11에서 수행했습니다.
+게스트 UAC 재생은 기록 해상도와 게스트 화면이 모두 1920×1080일 때만 실행됩니다. KVM Windows 게스트에서도 로컬 VNC 화면을 통해 같은 UAC 정지 및 재개 검사를 수행합니다. 실제 Secure Desktop 검증은 VirtualBox Windows 11에서 수행했습니다.
 
 초기 설정을 마친 Windows VirtualBox 게스트는 1920×1080에서 기록과 재생을 진행합니다. `rpa_run_saved`에 `pause_on_uac: true`를 지정하면 각 기록 동작 직전과 마지막 동작 직후에 호스트 OCR로 화면을 확인합니다. UAC가 감지되거나 화면을 읽을 수 없으면 `operator_handoff`와 완료된 동작 수를 반환합니다. 대화 상자가 화면 검사 이후에 나타날 수 있으므로 UAC를 요청한 동작 다음에는 앱 상태를 확인할 여유를 두세요. 사용자가 게스트 콘솔의 프롬프트와 앱 상태를 확인한 뒤 다음 실행을 결정합니다.
 
