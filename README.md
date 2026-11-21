@@ -50,6 +50,7 @@ Watch the [Windows VirtualBox Notepad verification in English](https://github.co
 - Scratch repair verification in VirtualBox ([English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/06-VirtualBox-Scratch-Repair-QHD-en.mp4) · [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.10/06-VirtualBox-Scratch-Repair-QHD-ko.mp4))
 - Codex ERP rehearsal, edited from actual guest captures and the reviewed source ([English](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/07-ERP-Rehearsal-QHD-en.mp4) · [Korean](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/07-ERP-Rehearsal-QHD-ko.mp4))
 - [Codex ERP Robot Framework evidence](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/vamp-erp-codex-scratch-evidence.zip) includes the verification suite, reports, and sample CSVs.
+- Installed MCP replay after the ERP layout change ([English labels](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/08-Installed-MCP-ERP-v2-QHD-en.mp4) · [Korean labels](https://github.com/wayfarer6/vamp-mcp/releases/download/v0.3.11/08-Installed-MCP-ERP-v2-QHD-ko.mp4)).
 - [ERP run results and comparison method](docs/ROADMAP.md#observed-erp-run)
 - [Run a reviewed VirtualBox scenario and get its CSV in MCP chat](docs/USER_GUIDE.md#get-an-erp-csv-in-chat) (current source build)
 - [Export a decrypted copy of a file from a mounted VeraCrypt container with Vault MCP or VS Code](vscode-vault-extension/README.md#export-a-file-from-a-mounted-container) (current source build)
